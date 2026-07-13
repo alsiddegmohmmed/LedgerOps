@@ -2,21 +2,27 @@ package com.ledgerops;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Import;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 
 @SpringBootTest
-@Testcontainers
+@Import(LedgerOpsApplicationTests.PostgresTestConfiguration.class)
 class LedgerOpsApplicationTests {
-
-    @Container
-    @ServiceConnection
-    static final PostgreSQLContainer postgres =
-            new PostgreSQLContainer("postgres:17-alpine");
 
     @Test
     void contextLoads() {
+    }
+
+    @TestConfiguration(proxyBeanMethods = false)
+    static class PostgresTestConfiguration {
+
+        @Bean
+        @ServiceConnection
+        PostgreSQLContainer postgresContainer() {
+            return new PostgreSQLContainer("postgres:17-alpine");
+        }
     }
 }
