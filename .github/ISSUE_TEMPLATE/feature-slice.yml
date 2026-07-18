@@ -1,0 +1,61 @@
+name: Feature slice
+description: Propose one bounded LedgerOps vertical slice.
+title: "[Feature]: "
+labels:
+  - feature
+body:
+  - type: markdown
+    attributes:
+      value: Read `AGENTS.md` and the active release plan before completing this form.
+  - type: input
+    id: outcome
+    attributes:
+      label: Observable outcome
+      description: What will be true for a user or operator when this slice is complete?
+    validations:
+      required: true
+  - type: input
+    id: requirements
+    attributes:
+      label: Requirement mapping
+      description: Product requirement IDs and technical specification sections.
+      placeholder: "PAY-02; Technical Specification §5.7"
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: Included scope
+      description: Keep this to one reviewable vertical slice.
+    validations:
+      required: true
+  - type: textarea
+    id: exclusions
+    attributes:
+      label: Explicit exclusions
+      description: Name later-release or adjacent work that will not be included.
+    validations:
+      required: true
+  - type: textarea
+    id: risks
+    attributes:
+      label: Correctness risks
+      description: Consider financial invariants, concurrency, tenancy, transactions, and failure behaviour.
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Acceptance and verification evidence
+      description: List the tests, constraints, contracts, logs, and documentation that will prove completion.
+    validations:
+      required: true
+  - type: checkboxes
+    id: control
+    attributes:
+      label: Scope control
+      options:
+        - label: This work belongs to the active release.
+          required: true
+        - label: Any material architecture change will be proposed and approved through an ADR before coding.
+          required: true

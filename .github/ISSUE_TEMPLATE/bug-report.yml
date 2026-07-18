@@ -1,0 +1,59 @@
+name: Bug report
+description: Report incorrect LedgerOps behaviour or broken engineering evidence.
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: textarea
+    id: observed
+    attributes:
+      label: Observed behaviour
+      description: What happened? Include the exact error without secrets.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behaviour
+      description: Cite a requirement, rule, API contract, or test expectation when possible.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Minimal reproduction
+      description: Provide the shortest deterministic steps or command.
+    validations:
+      required: true
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Severity
+      options:
+        - Blocker — financial correctness, tenant disclosure, security bypass, or unrecoverable migration
+        - Critical — wrong terminal state or unsafe failure handling
+        - Major — material workflow or performance failure
+        - Minor — non-blocking defect
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence
+      description: Relevant logs, failing test, request/response, database state, or screenshots. Remove secrets.
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Commit, branch, Java version, operating system, and PostgreSQL/Testcontainers details.
+    validations:
+      required: true
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Safety checks
+      options:
+        - label: I removed secrets and real personal or financial data.
+          required: true
+        - label: I checked for an existing issue describing the same failure.
+          required: true

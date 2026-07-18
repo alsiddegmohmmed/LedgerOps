@@ -1,0 +1,98 @@
+# LedgerOps agent instructions
+
+## Mission and authority
+
+LedgerOps is a production-style portfolio project for learning and demonstrating Java, Spring Boot, PostgreSQL, domain-driven design, modular monoliths, and financial correctness.
+
+Read these documents before making implementation decisions:
+
+1. `docs/product/LedgerOps_Product_Definition_Official_v1.1.docx` defines what the product must do.
+2. `docs/architecture/LedgerOps_Technical_Design_and_Architecture_Specification_v1.0.docx` defines the approved design.
+3. `docs/plans/release-0.1-transactional-core.md` defines the current sequence and status.
+4. `docs/requirements/TRACEABILITY.md` maps requirements to evidence.
+
+Precedence is product definition, technical specification, approved ADRs, then implementation plans. Code and plans must not silently contradict a higher-authority source.
+
+If implementation evidence exposes a conflict or impractical decision, stop before changing the design. Describe the exact conflict, recommend one replacement with trade-offs, and wait for approval. Record an approved material change as an ADR.
+
+## Current scope
+
+The active milestone is **Release 0.1 — Transactional Core**.
+
+Allowed now:
+
+- Java 21, Spring Boot, Spring Modulith, Gradle Kotlin DSL
+- PostgreSQL, Flyway, Spring Data JPA
+- tenant, merchant, and customer foundations
+- payment creation, idempotency, and controlled state transitions
+- synchronous deterministic risk rules
+- strict double-entry ledger and atomic payment completion
+- HTTP APIs, OpenAPI, RFC 7807 problems, structured logs
+- JUnit, Testcontainers with PostgreSQL, ArchUnit, and Spring Modulith tests
+
+Do not add Release 0.2 or later capabilities yet: Kafka, transactional outbox/inbox, Redis, Keycloak, Kubernetes, reconciliation, a polished frontend, or applied AI. Do not add a technology because it appears in the eventual 1.0 baseline; the release plan controls when it is introduced.
+
+## Non-negotiable correctness rules
+
+- PostgreSQL is the transactional source of truth.
+- A payment becomes `COMPLETED` only when exactly one corresponding balanced ledger transaction is posted in the same database transaction.
+- Every posted ledger transaction balances by currency and has at least one debit and one credit.
+- Posted ledger entries are immutable. Corrections use compensating transactions.
+- Duplicate requests must not create duplicate payments or financial effects.
+- Tenant context is mandatory for tenant-owned data. Suspended tenants retain readable history but cannot create new activity.
+- Money uses `BigDecimal` plus an explicit currency; never use floating point.
+- External network calls never occur inside long database transactions.
+- Provider timeouts are ambiguous outcomes, not automatic failures.
+- Time-dependent domain behaviour receives an injected `Clock`.
+
+## Architecture and coding rules
+
+- Keep one Spring Boot modular monolith with explicit Spring Modulith boundaries.
+- Each module owns its schema and tables. Cross-module table access is forbidden.
+- Organize modules using `api`, `application`, `domain`, and `infrastructure` packages as those layers become necessary.
+- Domain code must not depend on Spring, JPA, HTTP, messaging, or infrastructure implementations.
+- Use explicit domain models, value objects, small cohesive classes, constructor injection, typed errors, and deterministic behaviour.
+- Prefer database constraints for critical invariants in addition to Java validation.
+- Avoid generic base services/repositories, God classes, anemic models, shared mutable entities, broad exception swallowing, and speculative abstractions.
+- Released Flyway migrations are immutable. Correct them with a later migration.
+
+## How to perform a task
+
+Before substantial implementation:
+
+1. Inspect the repository and read the applicable requirements and plan.
+2. State the exact scope, expected files, assumptions, risks, and dependencies.
+3. Propose the smallest correct sequence. Keep user guidance to at most four steps at a time and explain the Java or architecture lesson in plain language.
+
+During implementation:
+
+- Work in small, reviewable slices and do not modify unrelated files.
+- One implementation owner controls a vertical slice. Parallel agents may review or investigate independent concerns only when their contracts do not overlap.
+- A vertical slice is not complete until domain rules, persistence, migration, API contract, failure behaviour, observability, tests, and relevant documentation are covered.
+- Never present placeholders or unverified claims as complete.
+
+After implementation, report:
+
+- what changed and why
+- exact verification commands and their results
+- what remains incomplete
+- any deviation from the authoritative documents (normally `None`)
+
+## Verification
+
+Use the Gradle wrapper:
+
+```bash
+./gradlew test
+./gradlew check
+```
+
+Run narrower tests while iterating, then the relevant full suite before completion. Tests that depend on PostgreSQL behaviour must use Testcontainers; do not substitute H2. Prioritize invariant, lifecycle, idempotency, concurrency, tenant-isolation, migration, and module-boundary tests. Do not mock infrastructure when the real behaviour is the subject of the test.
+
+## Git and documentation
+
+- Keep commits small and intentional. Do not rewrite unrelated history.
+- Do not push, publish, merge, or open a pull request unless explicitly requested.
+- Update `docs/requirements/TRACEABILITY.md` and the active plan when a slice changes requirement status.
+- Use `docs/plans/PLAN_TEMPLATE.md`, `docs/adr/ADR_TEMPLATE.md`, and `docs/reviews/CODE_REVIEW_CHECKLIST.md`.
+- Correctness blockers include ledger imbalance, duplicate financial posting, payment completion without a ledger posting, cross-tenant disclosure, authorization bypass, and an unrecoverable migration.
