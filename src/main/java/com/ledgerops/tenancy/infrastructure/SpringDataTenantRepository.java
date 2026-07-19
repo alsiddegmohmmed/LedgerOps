@@ -6,4 +6,6 @@ import java.util.UUID;
 
 interface SpringDataTenantRepository
         extends JpaRepository<TenantJpaEntity, UUID> {
+
+    boolean existsByName(String name);
 }

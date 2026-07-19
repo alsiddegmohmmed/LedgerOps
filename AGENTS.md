@@ -6,8 +6,8 @@ LedgerOps is a production-style portfolio project for learning and demonstrating
 
 Read these documents before making implementation decisions:
 
-1. `docs/product/LedgerOps_Product_Definition_Official_v1.1.docx` defines what the product must do.
-2. `docs/architecture/LedgerOps_Technical_Design_and_Architecture_Specification_v1.0.docx` defines the approved design.
+1. `docs/product/LedgerOps_Product_Definition_Official_v1.3.docx` defines what the product must do.
+2. `docs/architecture/LedgerOps_Technical_Design_and_Architecture_Specification_v1.2.docx` defines the approved design.
 3. `docs/plans/release-0.1-transactional-core.md` defines the current sequence and status.
 4. `docs/requirements/TRACEABILITY.md` maps requirements to evidence.
 
@@ -30,7 +30,7 @@ Allowed now:
 - HTTP APIs, OpenAPI, RFC 7807 problems, structured logs
 - JUnit, Testcontainers with PostgreSQL, ArchUnit, and Spring Modulith tests
 
-Do not add Release 0.2 or later capabilities yet: Kafka, transactional outbox/inbox, Redis, Keycloak, Kubernetes, reconciliation, a polished frontend, or applied AI. Do not add a technology because it appears in the eventual 1.0 baseline; the release plan controls when it is introduced.
+Do not add Release 0.2 or later capabilities yet: Kafka, transactional outbox/inbox, Redis, Keycloak, Kubernetes, reconciliation, a polished frontend, or applied AI. Release 0.3 introduces Keycloak, identity, tenant membership, permissions, merchant scope, authorization, and tenant-isolation enforcement. Release 1.0 completes security hardening and release evidence. Do not add a technology because it appears in the eventual 1.0 baseline; the release plan controls when it is introduced.
 
 ## Non-negotiable correctness rules
 
@@ -39,6 +39,7 @@ Do not add Release 0.2 or later capabilities yet: Kafka, transactional outbox/in
 - Every posted ledger transaction balances by currency and has at least one debit and one credit.
 - Posted ledger entries are immutable. Corrections use compensating transactions.
 - Duplicate requests must not create duplicate payments or financial effects.
+- Payment API idempotency is tenant-wide. The uniqueness boundary is exactly `tenantId + idempotencyKey`; `merchantId` is request content, not part of that boundary.
 - Tenant context is mandatory for tenant-owned data. Suspended tenants retain readable history but cannot create new activity.
 - Money uses `BigDecimal` plus an explicit currency; never use floating point.
 - External network calls never occur inside long database transactions.
@@ -56,27 +57,27 @@ Do not add Release 0.2 or later capabilities yet: Kafka, transactional outbox/in
 - Avoid generic base services/repositories, God classes, anemic models, shared mutable entities, broad exception swallowing, and speculative abstractions.
 - Released Flyway migrations are immutable. Correct them with a later migration.
 
-## How to perform a task
+## Task workflow
 
 Before substantial implementation:
 
 1. Inspect the repository and read the applicable requirements and plan.
 2. State the exact scope, expected files, assumptions, risks, and dependencies.
-3. Propose the smallest correct sequence. Keep user guidance to at most four steps at a time and explain the Java or architecture lesson in plain language.
+3. Propose the smallest correct sequence. Limit user guidance to four steps at a time and explain the Java or architecture lesson in plain language.
 
 During implementation:
 
 - Work in small, reviewable slices and do not modify unrelated files.
-- One implementation owner controls a vertical slice. Parallel agents may review or investigate independent concerns only when their contracts do not overlap.
+- One implementation owner controls each vertical slice. Parallel agents may review or investigate independent concerns only when their contracts do not overlap.
 - A vertical slice is not complete until domain rules, persistence, migration, API contract, failure behaviour, observability, tests, and relevant documentation are covered.
 - Never present placeholders or unverified claims as complete.
 
 After implementation, report:
 
-- what changed and why
-- exact verification commands and their results
-- what remains incomplete
-- any deviation from the authoritative documents (normally `None`)
+- What changed and why.
+- Exact verification commands and their results.
+- What remains incomplete.
+- Any deviation from the authoritative documents, normally `None`.
 
 ## Verification
 

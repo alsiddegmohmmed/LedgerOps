@@ -1,9 +1,11 @@
 package com.ledgerops.tenancy.infrastructure;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.ledgerops.support.PostgresTestConfiguration;
+import com.ledgerops.tenancy.application.DuplicateTenantNameException;
 import com.ledgerops.tenancy.domain.Tenant;
 import com.ledgerops.tenancy.domain.TenantId;
 import com.ledgerops.tenancy.domain.TenantRepository;
@@ -81,8 +83,28 @@ class TenantPersistenceIntegrationTests {
         assertEquals(tenant.id(), loadedTenant.id());
         assertEquals("Status Update Payments", loadedTenant.name());
         assertEquals(TenantStatus.ACTIVE, loadedTenant.status());
-        }
+    }
 
+    @Test
+    void translatesDatabaseNameConstraintToTypedFailure() {
+        Tenant firstTenant = tenantNamed("Database Constraint Payments");
+        Tenant duplicateTenant = tenantNamed("Database Constraint Payments");
 
+        tenantRepository.save(firstTenant);
 
+        assertThrows(
+                DuplicateTenantNameException.class,
+                () -> tenantRepository.save(duplicateTenant)
+        );
+    }
+
+    private Tenant tenantNamed(String name) {
+        return new Tenant(
+                TenantId.newId(),
+                name,
+                Currency.getInstance("SAR"),
+                Locale.forLanguageTag("en-SA"),
+                TenantStatus.PENDING_ACTIVATION
+        );
+    }
 }

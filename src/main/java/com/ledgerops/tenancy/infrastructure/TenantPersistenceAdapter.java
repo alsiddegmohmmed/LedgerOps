@@ -1,11 +1,14 @@
 package com.ledgerops.tenancy.infrastructure;
 
+import com.ledgerops.tenancy.application.DuplicateTenantNameException;
 import com.ledgerops.tenancy.domain.Tenant;
 import com.ledgerops.tenancy.domain.TenantId;
 import com.ledgerops.tenancy.domain.TenantRepository;
 import com.ledgerops.tenancy.domain.TenantStatus;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.hibernate.exception.ConstraintViolationException;
 
 import java.time.Clock;
 import java.time.Instant;
@@ -36,7 +39,15 @@ class TenantPersistenceAdapter implements TenantRepository {
                 .map(existing -> update(existing, tenant, now))
                 .orElseGet(() -> create(tenant, now));
 
-        return toDomain(repository.save(entity));
+        try {
+            return toDomain(repository.saveAndFlush(entity));
+        } catch (DataIntegrityViolationException exception) {
+            if (causedByTenantNameConstraint(exception)) {
+                throw new DuplicateTenantNameException(tenant.name(), exception);
+            }
+
+            throw exception;
+        }
     }
 
     @Override
@@ -44,6 +55,26 @@ class TenantPersistenceAdapter implements TenantRepository {
     public Optional<Tenant> findById(TenantId tenantId) {
         return repository.findById(tenantId.value())
                 .map(this::toDomain);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public boolean existsByName(String name) {
+        return repository.existsByName(name);
+    }
+
+    private boolean causedByTenantNameConstraint(Throwable exception) {
+        Throwable cause = exception;
+
+        while (cause != null) {
+            if (cause instanceof ConstraintViolationException violation) {
+                return "uk_tenants_name".equals(violation.getConstraintName());
+            }
+
+            cause = cause.getCause();
+        }
+
+        return false;
     }
 
     private TenantJpaEntity create(Tenant tenant, Instant now) {

@@ -7,4 +7,6 @@ public interface TenantRepository {
     Tenant save(Tenant tenant);
 
     Optional<Tenant> findById(TenantId tenantId);
+
+    boolean existsByName(String name);
 }

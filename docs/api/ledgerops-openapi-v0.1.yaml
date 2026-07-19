@@ -1,0 +1,218 @@
+openapi: 3.1.0
+info:
+  title: LedgerOps Transactional Core API
+  version: 0.1.0
+  description: >-
+    Release 0.1 tenant lifecycle contract. Authentication, tenant membership,
+    role authorization, and the designated initial Merchant Admin are Release
+    0.3 responsibilities and are not represented as complete by this contract.
+servers:
+  - url: http://localhost:8080
+paths:
+  /api/v1/tenants:
+    post:
+      operationId: createTenant
+      summary: Create a pending tenant
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateTenantRequest'
+      responses:
+        '201':
+          description: Tenant created
+          headers:
+            Location:
+              schema:
+                type: string
+                format: uri
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Tenant'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /api/v1/tenants/{tenantId}:
+    parameters:
+      - $ref: '#/components/parameters/TenantId'
+    get:
+      operationId: getTenant
+      summary: Read tenant history, including suspended tenants
+      responses:
+        '200':
+          description: Tenant found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Tenant'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/v1/tenants/{tenantId}/activate:
+    parameters:
+      - $ref: '#/components/parameters/TenantId'
+    post:
+      operationId: activateTenant
+      summary: Activate or reactivate a tenant
+      responses:
+        '200':
+          $ref: '#/components/responses/TenantResult'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /api/v1/tenants/{tenantId}/suspend:
+    parameters:
+      - $ref: '#/components/parameters/TenantId'
+    post:
+      operationId: suspendTenant
+      summary: Suspend an active tenant
+      responses:
+        '200':
+          $ref: '#/components/responses/TenantResult'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /api/v1/tenants/{tenantId}/archive:
+    parameters:
+      - $ref: '#/components/parameters/TenantId'
+    post:
+      operationId: archiveTenant
+      summary: Archive a tenant
+      responses:
+        '200':
+          $ref: '#/components/responses/TenantResult'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+components:
+  parameters:
+    TenantId:
+      name: tenantId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+  schemas:
+    CreateTenantRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - name
+        - defaultCurrency
+        - defaultLocale
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        defaultCurrency:
+          type: string
+          pattern: '^[A-Z]{3}$'
+          examples:
+            - SAR
+        defaultLocale:
+          type: string
+          maxLength: 35
+          examples:
+            - en-SA
+    Tenant:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - name
+        - defaultCurrency
+        - defaultLocale
+        - status
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        defaultCurrency:
+          type: string
+        defaultLocale:
+          type: string
+        status:
+          type: string
+          enum:
+            - PENDING_ACTIVATION
+            - ACTIVE
+            - SUSPENDED
+            - ARCHIVED
+    Problem:
+      type: object
+      required:
+        - type
+        - title
+        - status
+        - detail
+        - code
+        - traceId
+      properties:
+        type:
+          type: string
+          format: uri
+        title:
+          type: string
+        status:
+          type: integer
+        detail:
+          type: string
+        code:
+          type: string
+        traceId:
+          type: string
+        tenantId:
+          type: string
+          format: uuid
+        tenantName:
+          type: string
+        targetStatus:
+          type: string
+        errors:
+          type: object
+          additionalProperties:
+            type: string
+  responses:
+    TenantResult:
+      description: Tenant lifecycle transition completed
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Tenant'
+    BadRequest:
+      description: Request validation failed
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    NotFound:
+      description: Tenant does not exist
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Conflict:
+      description: Tenant name or lifecycle conflict
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          examples:
+            tenantNameConflict:
+              value:
+                type: urn:ledgerops:problem:tenant-name-conflict
+                title: Tenant name conflict
+                status: 409
+                detail: 'Tenant name already exists: Acme Payments'
+                code: TENANT_NAME_CONFLICT
+                traceId: 8a1cb024-e768-4c23-949e-2725cfc22a25
+                tenantName: Acme Payments
