@@ -3,9 +3,11 @@ info:
   title: LedgerOps Transactional Core API
   version: 0.1.0
   description: >-
-    Release 0.1 tenant lifecycle contract. Authentication, tenant membership,
-    role authorization, and the designated initial Merchant Admin are Release
-    0.3 responsibilities and are not represented as complete by this contract.
+    Release 0.1 tenant lifecycle and Payment creation contract. Payment API
+    idempotency is tenant-wide on tenantId plus idempotencyKey. Authentication,
+    tenant membership, role authorization, and the designated initial Merchant
+    Admin are Release 0.3 responsibilities and are not represented as complete
+    by this contract.
 servers:
   - url: http://localhost:8080
 paths:
@@ -89,6 +91,48 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
+  /api/v1/payments:
+    post:
+      operationId: createPayment
+      summary: Create or replay a Payment request
+      description: >-
+        The idempotency namespace is tenant-wide. An equivalent request with the
+        same tenantId and idempotencyKey returns the original Payment. Reusing
+        the pair with materially different content, including another
+        merchantId, returns an explicit conflict.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePaymentRequest'
+      responses:
+        '201':
+          description: Payment created in CREATED state
+          headers:
+            Location:
+              schema:
+                type: string
+                format: uri
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Payment'
+        '200':
+          description: Equivalent request replayed with the original logical result
+          headers:
+            Location:
+              schema:
+                type: string
+                format: uri
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Payment'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          $ref: '#/components/responses/PaymentConflict'
 components:
   parameters:
     TenantId:
@@ -147,6 +191,92 @@ components:
             - ACTIVE
             - SUSPENDED
             - ARCHIVED
+    CreatePaymentRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - tenantId
+        - merchantId
+        - customerId
+        - amount
+        - currency
+        - paymentMethodCategory
+        - idempotencyKey
+      properties:
+        tenantId:
+          type: string
+          format: uuid
+        merchantId:
+          type: string
+          format: uuid
+          description: >-
+            Material request content. merchantId is not part of the uniqueness
+            boundary.
+        customerId:
+          type: string
+          format: uuid
+        amount:
+          type: number
+          exclusiveMinimum: 0
+        currency:
+          type: string
+          pattern: '^[A-Z]{3}$'
+          examples:
+            - SAR
+        paymentMethodCategory:
+          type: string
+          minLength: 1
+          examples:
+            - card
+        idempotencyKey:
+          type: string
+          minLength: 1
+          description: Unique across the tenant Payment API namespace.
+          examples:
+            - checkout-2026-0001
+    Payment:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - tenantId
+        - merchantId
+        - customerId
+        - amount
+        - currency
+        - paymentMethodCategory
+        - status
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenantId:
+          type: string
+          format: uuid
+        merchantId:
+          type: string
+          format: uuid
+        customerId:
+          type: string
+          format: uuid
+        amount:
+          type: number
+        currency:
+          type: string
+        paymentMethodCategory:
+          type: string
+        status:
+          type: string
+          enum:
+            - CREATED
+            - VALIDATING
+            - RISK_REVIEW
+            - APPROVED
+            - REJECTED
+            - PROCESSING
+            - COMPLETED
+            - FAILED
+            - REVERSED
     Problem:
       type: object
       required:
@@ -177,6 +307,17 @@ components:
           type: string
         targetStatus:
           type: string
+        referenceType:
+          type: string
+          enum:
+            - TENANT
+            - MERCHANT
+            - CUSTOMER
+        reason:
+          type: string
+          enum:
+            - INACTIVE
+            - NOT_FOUND
         errors:
           type: object
           additionalProperties:
@@ -216,3 +357,23 @@ components:
                 code: TENANT_NAME_CONFLICT
                 traceId: 8a1cb024-e768-4c23-949e-2725cfc22a25
                 tenantName: Acme Payments
+    PaymentConflict:
+      description: >-
+        The tenant idempotency key has different request content, or a required
+        tenant, merchant, or customer reference cannot accept new activity.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          examples:
+            idempotencyConflict:
+              value:
+                type: urn:ledgerops:problem:payment-idempotency-conflict
+                title: Payment idempotency conflict
+                status: 409
+                detail: >-
+                  An existing payment uses this tenant idempotency key with
+                  different request content
+                code: PAYMENT_IDEMPOTENCY_CONFLICT
+                traceId: 8a1cb024-e768-4c23-949e-2725cfc22a25
+                tenantId: 9d492ac1-cf66-41cc-a82d-96f8a6d22e93

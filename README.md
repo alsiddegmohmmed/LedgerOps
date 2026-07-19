@@ -34,9 +34,12 @@ Selected verified foundations:
 - explicit mapping between the domain model and JPA persistence model
 - optimistic versioning and database constraints
 - PostgreSQL integration tests using Testcontainers
+- immutable Payment domain aggregate with the exact approved lifecycle and exhaustive transition tests
+- tenant-wide Payment creation idempotency enforced by PostgreSQL, including coordinated concurrency and cross-merchant conflict tests
+- validated Payment creation HTTP/OpenAPI contract with RFC 7807 failures and trace correlation
 - Codex operating rules, implementation plans, ADR workflow, review checklist, and requirement traceability
 
-ADR-016 reconciles the Payment lifecycle documentation. ADR-017 establishes the tenant-wide Payment API idempotency boundary. The Payment aggregate and ledger posting remain planned and are not presented as implemented.
+ADR-016 reconciles the Payment lifecycle documentation. ADR-017 establishes the tenant-wide Payment API idempotency boundary. The Payment domain, creation API, persistence, and idempotency boundary are implemented. Risk orchestration, provider attempts, ledger posting, and atomic completion remain planned and are not presented as complete.
 
 See the [Release 0.1 implementation plan](docs/plans/release-0.1-transactional-core.md) for the live sequence and current evidence.
 

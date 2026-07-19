@@ -51,8 +51,20 @@ Release 0.1 may provide foundations for a broader product requirement without cl
 ### Payment foundation
 
 - explicit Payment module foundation with `Money` using `BigDecimal`, explicit currency, currency-defined precision, non-negative values, and same-currency arithmetic only
+- immutable `Payment` aggregate with stable identity, tenant/merchant ownership, customer identifier, positive amount, payment-method category, idempotency key, and initial `CREATED` status
+- exact ADR-016 `PaymentStatus` vocabulary and transition rules, with exhaustive tests for every exposed source/target pair and terminal-state enforcement
 
-**Implementation limit:** This evidence is a foundation, not a complete TEN-01 implementation. Cross-module suspended-write enforcement is added with tenant-owned merchant, customer, and payment writes. Identity, membership, authorization, and the designated initial Merchant Admin remain Release 0.3 evidence under the Technical Specification.
+### Payment creation and idempotency
+
+- Flyway-owned `payment.payments` table with positive-amount, currency, exact-status, fingerprint, ownership, and tenant-wide idempotency constraints
+- transactional Payment creation service using published tenant, merchant, and customer activity checks instead of cross-module table access
+- PostgreSQL `ON CONFLICT` arbitration on `(tenant_id, idempotency_key)` so concurrent equivalent requests return one logical Payment
+- SHA-256 request fingerprint covering merchant, customer, normalized amount, currency, and payment-method category
+- explicit conflicts for changed content, including a different merchant under the same tenant and key
+- validated HTTP contract with `201` creation, `200` equivalent replay, RFC 7807 validation/reference/idempotency failures, correlated trace IDs, and structured lifecycle logs
+- sequential, cross-tenant, cross-merchant, suspended-tenant, database-constraint, coordinated-concurrency, and HTTP integration tests using PostgreSQL Testcontainers
+
+**Implementation limit:** This evidence is a foundation, not a complete TEN-01 implementation. Payment creation now blocks new activity for inactive tenants through a published Tenancy check. Merchant and Customer application write use cases must apply the same rule when those use cases are introduced. Identity, membership, authorization, and the designated initial Merchant Admin remain Release 0.3 evidence under the Technical Specification.
 
 ## Ordered implementation slices
 
@@ -62,8 +74,8 @@ Release 0.1 may provide foundations for a broader product requirement without cl
 | 1 | Tenant lifecycle foundation | application use cases, API/OpenAPI contract, correlated RFC 7807 failures, and PostgreSQL integration tests; TEN-01 remains Partial | Completed |
 | 2 | Merchant foundation | tenant-owned aggregate, schema, tenant-scoped repository, module-boundary and isolation tests | Completed |
 | 3 | Customer foundation | data-minimized aggregate, tenant/merchant-owned schema, scoped repository, module-boundary and isolation tests | Completed |
-| 4 | Money and payment domain | Money value object and invariants complete; documentation reconciled through ADR-016; Payment aggregate implementation pending | In progress |
-| 5 | Payment creation and idempotency | complete PAY-01 request fields; unique `(tenant_id, idempotency_key)` constraint; merchant-aware request fingerprint; repeat, conflict, and concurrent PostgreSQL tests | Planned |
+| 4 | Money and payment domain | Money and required value objects, immutable Payment aggregate, exact state machine, invariant and exhaustive transition tests | Completed |
+| 5 | Payment creation and idempotency | complete PAY-01 request fields; unique `(tenant_id, idempotency_key)` constraint; merchant-aware request fingerprint; repeat, conflict, and concurrent PostgreSQL tests | Completed |
 | 6 | Synchronous risk rules | evaluated and triggered rules, score contributions, bounded thresholds, approve/reject/review evidence | Planned |
 | 7 | Double-entry ledger | tenant-scoped accounts, balanced immutable postings, database constraints, property/integration tests | Planned |
 | 8 | Atomic payment completion | one PostgreSQL transaction, narrow locking, forced-failure rollback and concurrency tests | Planned |
@@ -118,7 +130,14 @@ Completed Money work:
 2. Enforced currency-defined decimal precision, prohibited negative values, and prohibited cross-currency arithmetic.
 3. Added invariant tests for SAR, JPY, and KWD precision, zero/positive semantics, arithmetic, currency mismatch, and negative-result rejection.
 
-Documentation reconciliation is complete through ADR-016, ADR-017, Product Definition v1.3, and Technical Specification v1.2. Payment implementation has not started and remains pending.
+Documentation reconciliation is complete through ADR-016, ADR-017, Product Definition v1.3, and Technical Specification v1.2.
+
+Completed Payment-domain work:
+
+1. Added stable Payment and Customer identifiers, a validated idempotency key, and an open payment-method category value object without inventing unsupported category values.
+2. Added an immutable Payment aggregate containing every PAY-01 domain field and deriving tenant ownership from the published merchant reference.
+3. Enforced positive payment amounts and `CREATED` as the only creation state.
+4. Implemented and exhaustively tested every approved transition, every rejected exposed transition, and all terminal states.
 
 Payment implementation must follow this contract:
 
@@ -128,6 +147,19 @@ Payment implementation must follow this contract:
 - Provider-attempt, Reversal, and Reconciliation progress remain separate from `PaymentStatus`.
 - `COMPLETED` requires provider `SUCCESS` and exactly one corresponding balanced ledger transaction committed atomically; reconciliation completion is independent.
 - Reversal remains a separate, full-only aggregate introduced in its scheduled release, not Release 0.1.
+
+Risk records, provider attempts, ledger posting, and cross-aggregate completion/reversal transaction boundaries remain in their scheduled slices.
+
+## Slice 5 — Payment creation and idempotency
+
+Completed work:
+
+1. Added the Payment-owned PostgreSQL schema and an atomic insert-or-find store using the exact tenant-wide `(tenant_id, idempotency_key)` boundary.
+2. Added published read-only activity checks for tenant, merchant, and customer references, preserving module ownership while preventing new Payment activity for inactive or wrongly scoped records.
+3. Added a transactional creation service that returns the original Payment for equivalent repeats and rejects materially different content, including a different merchant.
+4. Added the Payment HTTP/OpenAPI contract, correlated RFC 7807 failures, structured logs, and PostgreSQL-backed sequential, concurrent, conflict, isolation, reference, and schema tests.
+
+Risk evaluation remains the next slice. Payment completion still cannot be claimed until the ledger and atomic-completion slices provide their required evidence.
 
 ## Release-wide verification targets
 
