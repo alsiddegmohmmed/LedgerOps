@@ -1,22 +1,22 @@
 package com.ledgerops.payment.api;
 
-import com.ledgerops.RequestCorrelationFilter;
+import com.ledgerops.ApiProblemFactory;
 import com.ledgerops.payment.application.PaymentIdempotencyConflictException;
 import com.ledgerops.payment.application.PaymentReferenceUnavailableException;
-import org.slf4j.MDC;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
+import org.springframework.core.Ordered;
+import org.springframework.core.annotation.Order;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
-import java.net.URI;
 import java.util.LinkedHashMap;
-import java.util.Locale;
 import java.util.Map;
 
 @RestControllerAdvice(assignableTypes = PaymentController.class)
+@Order(Ordered.HIGHEST_PRECEDENCE)
 class PaymentProblemHandler {
 
     @ExceptionHandler(PaymentIdempotencyConflictException.class)
@@ -27,7 +27,10 @@ class PaymentProblemHandler {
                 HttpStatus.CONFLICT,
                 "Payment idempotency conflict",
                 exception.getMessage(),
-                "payment-idempotency-conflict"
+                "payment-idempotency-conflict",
+                "The existing Payment was unchanged and no new Payment was created.",
+                false,
+                "Reuse the original request content or choose a new idempotency key."
         );
         problem.setProperty("tenantId", exception.tenantId());
         return problem;
@@ -41,7 +44,10 @@ class PaymentProblemHandler {
                 HttpStatus.CONFLICT,
                 "Payment reference unavailable",
                 exception.getMessage(),
-                "payment-reference-unavailable"
+                "payment-reference-unavailable",
+                "No Payment was created.",
+                false,
+                "Use active tenant, merchant, and customer references before retrying."
         );
         problem.setProperty("referenceType", exception.referenceType());
         problem.setProperty("reason", exception.reason());
@@ -54,7 +60,10 @@ class PaymentProblemHandler {
                 HttpStatus.BAD_REQUEST,
                 "Invalid payment request",
                 exception.getMessage(),
-                "invalid-payment-request"
+                "invalid-payment-request",
+                "No Payment was created.",
+                false,
+                "Correct the request values and submit it again."
         );
     }
 
@@ -64,7 +73,10 @@ class PaymentProblemHandler {
                 HttpStatus.BAD_REQUEST,
                 "Invalid payment request",
                 "The request contains malformed JSON or an invalid value",
-                "invalid-payment-request"
+                "invalid-payment-request",
+                "No Payment was created.",
+                false,
+                "Correct the JSON and submit the request again."
         );
     }
 
@@ -74,7 +86,10 @@ class PaymentProblemHandler {
                 HttpStatus.BAD_REQUEST,
                 "Payment request validation failed",
                 "One or more request fields are invalid",
-                "payment-request-validation"
+                "payment-request-validation",
+                "No Payment was created.",
+                false,
+                "Correct the listed fields and submit the request again."
         );
         Map<String, String> errors = new LinkedHashMap<>();
         exception.getBindingResult().getFieldErrors().forEach(
@@ -88,13 +103,19 @@ class PaymentProblemHandler {
             HttpStatus status,
             String title,
             String detail,
-            String type
+            String type,
+            String effect,
+            boolean retryable,
+            String nextAction
     ) {
-        ProblemDetail problem = ProblemDetail.forStatusAndDetail(status, detail);
-        problem.setTitle(title);
-        problem.setType(URI.create("urn:ledgerops:problem:" + type));
-        problem.setProperty("code", type.replace('-', '_').toUpperCase(Locale.ROOT));
-        problem.setProperty("traceId", MDC.get(RequestCorrelationFilter.TRACE_ID));
-        return problem;
+        return ApiProblemFactory.create(
+                status,
+                title,
+                detail,
+                type,
+                effect,
+                retryable,
+                nextAction
+        );
     }
 }

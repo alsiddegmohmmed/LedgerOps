@@ -7,6 +7,8 @@ import com.ledgerops.risk.api.RiskDecision;
 import com.ledgerops.risk.api.RiskEvaluationRequest;
 import com.ledgerops.risk.api.RiskEvaluationResult;
 import com.ledgerops.risk.api.RiskEvaluationUseCase;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -15,6 +17,10 @@ import java.util.UUID;
 
 @Service
 public class PaymentRiskDecisionService {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(
+            PaymentRiskDecisionService.class
+    );
 
     private final PaymentLifecycleStore lifecycleStore;
     private final RiskEvaluationUseCase riskEvaluationUseCase;
@@ -64,10 +70,22 @@ public class PaymentRiskDecisionService {
             );
         }
 
-        return new PaymentRiskDecisionResult(
+        PaymentRiskDecisionResult result = new PaymentRiskDecisionResult(
                 new VersionedPayment(decided, Math.addExact(current.version(), 1)),
                 riskResult
         );
+        LOGGER.info(
+                "Payment risk decision applied tenantId={} paymentId={} decision={} status={} evaluationId={} profileId={} profileVersion={} finalScore={}",
+                payment.tenantId(),
+                payment.id().value(),
+                riskResult.decision(),
+                decided.status(),
+                riskResult.evaluationId(),
+                riskResult.profileId(),
+                riskResult.profileVersion(),
+                riskResult.finalScore()
+        );
+        return result;
     }
 
     private Payment applyDecision(Payment payment, RiskDecision decision) {

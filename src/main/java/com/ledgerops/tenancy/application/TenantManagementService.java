@@ -4,6 +4,8 @@ import com.ledgerops.tenancy.domain.Tenant;
 import com.ledgerops.tenancy.domain.TenantId;
 import com.ledgerops.tenancy.domain.TenantRepository;
 import com.ledgerops.tenancy.domain.TenantStatus;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -11,6 +13,10 @@ import java.util.function.UnaryOperator;
 
 @Service
 public class TenantManagementService {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(
+            TenantManagementService.class
+    );
 
     private final TenantRepository tenantRepository;
 
@@ -34,7 +40,15 @@ public class TenantManagementService {
                 TenantStatus.PENDING_ACTIVATION
         );
 
-        return tenantRepository.save(tenant);
+        Tenant saved = tenantRepository.save(tenant);
+        LOGGER.info(
+                "Tenant created tenantId={} status={} defaultCurrency={} defaultLocale={}",
+                saved.id().value(),
+                saved.status(),
+                saved.defaultCurrency().getCurrencyCode(),
+                saved.defaultLocale().toLanguageTag()
+        );
+        return saved;
     }
 
     @Transactional(readOnly = true)
@@ -71,7 +85,14 @@ public class TenantManagementService {
             throw new TenantLifecycleException(tenantId, targetStatus, exception);
         }
 
-        return tenantRepository.save(transitionedTenant);
+        Tenant saved = tenantRepository.save(transitionedTenant);
+        LOGGER.info(
+                "Tenant status changed tenantId={} previousStatus={} status={}",
+                saved.id().value(),
+                tenant.status(),
+                saved.status()
+        );
+        return saved;
     }
 
     private Tenant findTenant(TenantId tenantId) {

@@ -61,7 +61,7 @@ class PaymentHttpIntegrationTests {
                         .content(request(fixture, fixture.merchantId(), "http-create", "125.00")))
                 .andExpect(status().isCreated())
                 .andExpect(header().exists("Location"))
-                .andExpect(header().exists("X-Trace-Id"))
+                .andExpect(header().exists("X-Correlation-Id"))
                 .andExpect(jsonPath("$.tenantId").value(fixture.tenantId().toString()))
                 .andExpect(jsonPath("$.merchantId").value(fixture.merchantId().toString()))
                 .andExpect(jsonPath("$.customerId").value(fixture.customerId().toString()))
@@ -134,7 +134,12 @@ class PaymentHttpIntegrationTests {
                         "urn:ledgerops:problem:payment-idempotency-conflict"
                 ))
                 .andExpect(jsonPath("$.code").value("PAYMENT_IDEMPOTENCY_CONFLICT"))
-                .andExpect(jsonPath("$.traceId").isNotEmpty());
+                .andExpect(jsonPath("$.correlationId").isNotEmpty())
+                .andExpect(jsonPath("$.effect").value(
+                        "The existing Payment was unchanged and no new Payment was created."
+                ))
+                .andExpect(jsonPath("$.retryable").value(false))
+                .andExpect(jsonPath("$.nextAction").isNotEmpty());
     }
 
     @Test

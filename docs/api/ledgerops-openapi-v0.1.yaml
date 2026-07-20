@@ -3,13 +3,17 @@ info:
   title: LedgerOps Transactional Core API
   version: 0.1.0
   description: >-
-    Release 0.1 tenant lifecycle and Payment creation contract. Payment API
-    idempotency is tenant-wide on tenantId plus idempotencyKey. Authentication,
-    tenant membership, role authorization, and the designated initial Merchant
-    Admin are Release 0.3 responsibilities and are not represented as complete
-    by this contract.
+    Release 0.1 tenant lifecycle and Payment creation sandbox contract. Payment
+    API idempotency is tenant-wide on tenantId plus idempotencyKey. Release 0.1
+    intentionally runs without authentication for local demonstration only; do
+    not expose it to an untrusted network. Authentication, tenant membership,
+    role authorization, and the designated initial Merchant Admin arrive in
+    Release 0.3 and are not represented as complete by this contract. Every
+    response includes X-Correlation-Id. Error responses use RFC 7807 problem
+    details and state the effect, retry policy, and next action.
 servers:
   - url: http://localhost:8080
+security: []
 paths:
   /api/v1/tenants:
     post:
@@ -29,6 +33,8 @@ paths:
               schema:
                 type: string
                 format: uri
+            X-Correlation-Id:
+              $ref: '#/components/headers/CorrelationId'
           content:
             application/json:
               schema:
@@ -37,6 +43,8 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '409':
           $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /api/v1/tenants/{tenantId}:
     parameters:
       - $ref: '#/components/parameters/TenantId'
@@ -46,12 +54,17 @@ paths:
       responses:
         '200':
           description: Tenant found
+          headers:
+            X-Correlation-Id:
+              $ref: '#/components/headers/CorrelationId'
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Tenant'
         '404':
           $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /api/v1/tenants/{tenantId}/activate:
     parameters:
       - $ref: '#/components/parameters/TenantId'
@@ -65,6 +78,8 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /api/v1/tenants/{tenantId}/suspend:
     parameters:
       - $ref: '#/components/parameters/TenantId'
@@ -78,6 +93,8 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /api/v1/tenants/{tenantId}/archive:
     parameters:
       - $ref: '#/components/parameters/TenantId'
@@ -91,6 +108,8 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /api/v1/payments:
     post:
       operationId: createPayment
@@ -106,6 +125,17 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/CreatePaymentRequest'
+            examples:
+              release01Payment:
+                summary: Synthetic SAR Payment
+                value:
+                  tenantId: 10000000-0000-0000-0000-000000000001
+                  merchantId: 20000000-0000-0000-0000-000000000001
+                  customerId: 30000000-0000-0000-0000-000000000001
+                  amount: 125.00
+                  currency: SAR
+                  paymentMethodCategory: card
+                  idempotencyKey: demo-payment-001
       responses:
         '201':
           description: Payment created in CREATED state
@@ -114,10 +144,15 @@ paths:
               schema:
                 type: string
                 format: uri
+            X-Correlation-Id:
+              $ref: '#/components/headers/CorrelationId'
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Payment'
+              examples:
+                createdPayment:
+                  $ref: '#/components/examples/CreatedPayment'
         '200':
           description: Equivalent request replayed with the original logical result
           headers:
@@ -125,15 +160,28 @@ paths:
               schema:
                 type: string
                 format: uri
+            X-Correlation-Id:
+              $ref: '#/components/headers/CorrelationId'
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Payment'
+              examples:
+                replayedPayment:
+                  $ref: '#/components/examples/CreatedPayment'
         '400':
           $ref: '#/components/responses/BadRequest'
         '409':
           $ref: '#/components/responses/PaymentConflict'
+        '500':
+          $ref: '#/components/responses/InternalError'
 components:
+  headers:
+    CorrelationId:
+      description: Identifier used to correlate the response with logs and support evidence.
+      schema:
+        type: string
+        format: uuid
   parameters:
     TenantId:
       name: tenantId
@@ -285,7 +333,10 @@ components:
         - status
         - detail
         - code
-        - traceId
+        - correlationId
+        - effect
+        - retryable
+        - nextAction
       properties:
         type:
           type: string
@@ -298,8 +349,18 @@ components:
           type: string
         code:
           type: string
-        traceId:
+        correlationId:
           type: string
+          format: uuid
+        effect:
+          type: string
+          description: What the failed operation changed, or confirmation that it changed nothing.
+        retryable:
+          type: boolean
+          description: Whether LedgerOps will retry the operation automatically.
+        nextAction:
+          type: string
+          description: The next action permitted for the API client or operator.
         tenantId:
           type: string
           format: uuid
@@ -325,24 +386,36 @@ components:
   responses:
     TenantResult:
       description: Tenant lifecycle transition completed
+      headers:
+        X-Correlation-Id:
+          $ref: '#/components/headers/CorrelationId'
       content:
         application/json:
           schema:
             $ref: '#/components/schemas/Tenant'
     BadRequest:
       description: Request validation failed
+      headers:
+        X-Correlation-Id:
+          $ref: '#/components/headers/CorrelationId'
       content:
         application/problem+json:
           schema:
             $ref: '#/components/schemas/Problem'
     NotFound:
       description: Tenant does not exist
+      headers:
+        X-Correlation-Id:
+          $ref: '#/components/headers/CorrelationId'
       content:
         application/problem+json:
           schema:
             $ref: '#/components/schemas/Problem'
     Conflict:
       description: Tenant name or lifecycle conflict
+      headers:
+        X-Correlation-Id:
+          $ref: '#/components/headers/CorrelationId'
       content:
         application/problem+json:
           schema:
@@ -355,7 +428,10 @@ components:
                 status: 409
                 detail: 'Tenant name already exists: Acme Payments'
                 code: TENANT_NAME_CONFLICT
-                traceId: 8a1cb024-e768-4c23-949e-2725cfc22a25
+                correlationId: 8a1cb024-e768-4c23-949e-2725cfc22a25
+                effect: No tenant was created.
+                retryable: false
+                nextAction: Choose another tenant name or read the existing tenant.
                 tenantName: Acme Payments
     PaymentConflict:
       description: >-
@@ -375,5 +451,40 @@ components:
                   An existing payment uses this tenant idempotency key with
                   different request content
                 code: PAYMENT_IDEMPOTENCY_CONFLICT
-                traceId: 8a1cb024-e768-4c23-949e-2725cfc22a25
+                correlationId: 8a1cb024-e768-4c23-949e-2725cfc22a25
+                effect: The existing Payment was unchanged and no new Payment was created.
+                retryable: false
+                nextAction: Reuse the original request content or choose a new idempotency key.
                 tenantId: 9d492ac1-cf66-41cc-a82d-96f8a6d22e93
+    InternalError:
+      description: An unexpected error was handled without exposing internal details
+      headers:
+        X-Correlation-Id:
+          $ref: '#/components/headers/CorrelationId'
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          examples:
+            unexpectedFailure:
+              value:
+                type: urn:ledgerops:problem:unexpected-internal-error
+                title: Unexpected internal error
+                status: 500
+                detail: The request could not be completed safely
+                code: UNEXPECTED_INTERNAL_ERROR
+                correlationId: 8a1cb024-e768-4c23-949e-2725cfc22a25
+                effect: The final effect could not be confirmed from this response.
+                retryable: false
+                nextAction: Verify the resource state, then contact support with the correlationId.
+  examples:
+    CreatedPayment:
+      value:
+        id: 40000000-0000-0000-0000-000000000001
+        tenantId: 10000000-0000-0000-0000-000000000001
+        merchantId: 20000000-0000-0000-0000-000000000001
+        customerId: 30000000-0000-0000-0000-000000000001
+        amount: 125.00
+        currency: SAR
+        paymentMethodCategory: card
+        status: CREATED

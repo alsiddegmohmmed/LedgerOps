@@ -1,6 +1,6 @@
 # Release 0.1 plan: Transactional Core
 
-Status: Active  
+Status: Completed
 Last updated: 2026-07-21
 Authority: LedgerOps Product Definition v1.6 and LedgerOps Technical Design and Architecture Specification v1.5 only
 
@@ -61,7 +61,7 @@ Release 0.1 may provide foundations for a broader product requirement without cl
 - PostgreSQL `ON CONFLICT` arbitration on `(tenant_id, idempotency_key)` so concurrent equivalent requests return one logical Payment
 - SHA-256 request fingerprint covering merchant, customer, normalized amount, currency, and payment-method category
 - explicit conflicts for changed content, including a different merchant under the same tenant and key
-- validated HTTP contract with `201` creation, `200` equivalent replay, RFC 7807 validation/reference/idempotency failures, correlated trace IDs, and structured lifecycle logs
+- validated HTTP contract with `201` creation, `200` equivalent replay, RFC 7807 validation/reference/idempotency failures, correlated request IDs, and structured lifecycle logs
 - sequential, cross-tenant, cross-merchant, suspended-tenant, database-constraint, coordinated-concurrency, and HTTP integration tests using PostgreSQL Testcontainers
 
 **Implementation limit:** This evidence is a foundation, not a complete TEN-01 implementation. Payment creation now blocks new activity for inactive tenants through a published Tenancy check. Merchant and Customer application write use cases must apply the same rule when those use cases are introduced. Identity, membership, authorization, and the designated initial Merchant Admin remain Release 0.3 evidence under the Technical Specification.
@@ -79,7 +79,7 @@ Release 0.1 may provide foundations for a broader product requirement without cl
 | 6 | Synchronous risk rules | evaluated and triggered rules, score contributions, bounded thresholds, approve/reject/review evidence | Completed |
 | 7 | Double-entry ledger | tenant-scoped accounts, balanced immutable postings, database constraints, property/integration tests | Completed |
 | 8 | Atomic payment completion | accepted ADR-020 exact two-entry template, full replay validation, one joined PostgreSQL transaction, forced-failure rollback, and concurrency tests | Completed |
-| 9 | Release API and evidence hardening | OpenAPI, structured logs, architecture tests, README/demo instructions, traceability audit | Planned |
+| 9 | Release API and evidence hardening | OpenAPI, structured logs, architecture tests, README/demo instructions, traceability audit | Completed |
 
 Only one implementation slice should change shared domain contracts or schemas at a time. Reviews of architecture, persistence/concurrency, or tests may run independently after a stable diff exists.
 
@@ -159,7 +159,7 @@ Completed work:
 3. Added a transactional creation service that returns the original Payment for equivalent repeats and rejects materially different content, including a different merchant.
 4. Added the Payment HTTP/OpenAPI contract, correlated RFC 7807 failures, structured logs, and PostgreSQL-backed sequential, concurrent, conflict, isolation, reference, and schema tests.
 
-Risk evaluation, the standalone Ledger slice, and Slice 8 Payment-success posting are complete under accepted ADR-020. Slice 9 release API and evidence hardening is next.
+Risk evaluation, the standalone Ledger slice, Slice 8 Payment-success posting, and Slice 9 release evidence are complete under the approved Release 0.1 baseline.
 
 ## Slice 6 — synchronous deterministic Risk evaluation
 
@@ -311,6 +311,23 @@ Implementation evidence:
 - Boundary tests prove there is no public completion endpoint, Payment owns the transaction, Ledger joins it, and Spring Modulith accepts only the `ledger::api` dependency.
 
 Slice 8 completion evidence: `./gradlew test --console=plain` executed 211 tests successfully, and `./gradlew check --console=plain` passed on 2026-07-21.
+
+## Slice 9 — release API and evidence hardening
+
+Status: Completed. The Release 0.1 API, error, logging, architecture, demo, and traceability evidence is synchronized and executable.
+
+Completed work:
+
+1. Expanded the OpenAPI contract with deterministic examples, tenant-wide idempotency semantics, authentication scope, response correlation headers, and the stable RFC 7807 fields `code`, `correlationId`, `effect`, `retryable`, and `nextAction`.
+2. Standardized `X-Correlation-Id` propagation, added safe problems for unsupported routes, methods, media types, and unexpected failures, and kept internal exception details out of responses.
+3. Added correlation-aware operational log formatting and lifecycle logs that use stable identifiers without request payloads or secrets.
+4. Added executable OpenAPI/controller alignment, error-contract, health, logging-safety, domain-independence, published-API, controller-location, and constructor-injection architecture tests.
+5. Added an idempotent synthetic PostgreSQL seed and a local walkthrough for health, creation, equivalent replay, conflict, concurrency, and final-state verification.
+6. Audited this plan, the README, and requirement traceability against Product Definition v1.6, Technical Specification v1.5, and ADR-016 through ADR-020.
+
+No public Payment-success endpoint or Release 0.2 infrastructure was introduced. Release 0.2 implementation remains pending its own approved plan.
+
+Slice 9 completion evidence: `./gradlew test --console=plain` executed 224 tests with zero failures, errors, or skips; `./gradlew check --console=plain`, OpenAPI YAML parsing, repository terminology/version searches, and `git diff --check` passed on 2026-07-21.
 
 ## Release-wide verification targets
 

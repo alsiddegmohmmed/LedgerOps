@@ -66,7 +66,7 @@ class TenantHttpIntegrationTests {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(request))
                 .andExpect(status().isConflict())
-                .andExpect(header().exists("X-Trace-Id"))
+                .andExpect(header().exists("X-Correlation-Id"))
                 .andExpect(content().contentTypeCompatibleWith(
                         MediaType.APPLICATION_PROBLEM_JSON
                 ))
@@ -74,7 +74,10 @@ class TenantHttpIntegrationTests {
                         .value("urn:ledgerops:problem:tenant-name-conflict"))
                 .andExpect(jsonPath("$.title").value("Tenant name conflict"))
                 .andExpect(jsonPath("$.code").value("TENANT_NAME_CONFLICT"))
-                .andExpect(jsonPath("$.traceId").isNotEmpty())
+                .andExpect(jsonPath("$.correlationId").isNotEmpty())
+                .andExpect(jsonPath("$.effect").value("No tenant was created."))
+                .andExpect(jsonPath("$.retryable").value(false))
+                .andExpect(jsonPath("$.nextAction").isNotEmpty())
                 .andExpect(jsonPath("$.tenantName").value("HTTP Duplicate Payments"));
     }
 
@@ -124,7 +127,7 @@ class TenantHttpIntegrationTests {
         mockMvc.perform(get("/api/v1/tenants/not-a-uuid"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("INVALID_TENANT_REQUEST"))
-                .andExpect(jsonPath("$.traceId").isNotEmpty());
+                .andExpect(jsonPath("$.correlationId").isNotEmpty());
     }
 
     @Test

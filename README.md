@@ -23,7 +23,7 @@ Every component must solve a documented business or failure problem. Technology 
 
 ## Current status
 
-**Active milestone:** Release 0.1 — Transactional Core
+**Latest completed milestone:** Release 0.1 — Transactional Core
 
 Selected verified foundations:
 
@@ -36,10 +36,12 @@ Selected verified foundations:
 - PostgreSQL integration tests using Testcontainers
 - immutable Payment domain aggregate with the exact approved lifecycle and exhaustive transition tests
 - tenant-wide Payment creation idempotency enforced by PostgreSQL, including coordinated concurrency and cross-merchant conflict tests
-- validated Payment creation HTTP/OpenAPI contract with RFC 7807 failures and trace correlation
+- validated tenant and Payment HTTP/OpenAPI contracts with stable RFC 7807 failures and request correlation
+- safe fallback API errors, health smoke checks, structured operational logs, and executable OpenAPI/architecture contracts
+- reproducible local PostgreSQL demo data and a step-by-step Release 0.1 walkthrough
 - Codex operating rules, implementation plans, ADR workflow, review checklist, and requirement traceability
 
-ADR-016 reconciles the Payment lifecycle documentation. ADR-017 establishes the tenant-wide Payment API idempotency boundary. ADR-018 defines the minimal deterministic synchronous Risk model for Release 0.1. ADR-019 defines the Release 0.1 Ledger account model. Accepted ADR-020 defines the exact Payment-success posting and replay boundary. The Payment domain, creation API, persistence, idempotency boundary, version-aware lifecycle persistence, both Risk-orchestration transactions, standalone Ledger slice, and atomic Payment-success completion are implemented. Release API and evidence hardening is the next Slice 9 work.
+ADR-016 reconciles the Payment lifecycle documentation. ADR-017 establishes the tenant-wide Payment API idempotency boundary. ADR-018 defines the minimal deterministic synchronous Risk model for Release 0.1. ADR-019 defines the Release 0.1 Ledger account model. Accepted ADR-020 defines the exact Payment-success posting and replay boundary. All nine Release 0.1 implementation slices are complete, including API and evidence hardening. Release 0.2 implementation has not started.
 
 Slice 7 includes the immutable journal and account domains, V6/V7 persistence, atomic account validation, append-only postings, duplicate-source prevention, deferred database balance verification, and tenant-scoped balance and statement queries. Statements have explicit time boundaries, bounded stable pagination, separate debit/credit totals, and immutable source evidence. Slice 8 adds the internal, joined PostgreSQL transaction that posts exactly `DEBIT PROVIDER_CLEARING` and `CREDIT MERCHANT_PAYABLE` for the full Payment amount and currency, then completes the Payment. Exact replay validation, inconsistency detection, forced-failure rollback, concurrency, tenant isolation, and Modulith boundary tests pass.
 
@@ -93,7 +95,7 @@ The [requirement traceability matrix](docs/requirements/TRACEABILITY.md) records
 
 | Release | Outcome | Status |
 |---|---|---|
-| 0.1 | Transactional core: tenancy, payments, idempotency, synchronous risk, ledger, and atomic completion | In progress |
+| 0.1 | Transactional core: tenancy, payments, idempotency, synchronous risk, ledger, and atomic completion | Completed |
 | 0.2 | Distributed processing with Kafka, transactional outbox, and idempotent consumers | Planned |
 | 0.3 | Keycloak, identity, tenant membership, permissions, merchant scope, authorization, tenant isolation, reconciliation, corrections, and financial operations | Planned |
 | 1.0 | Security hardening and release evidence: deployment controls, scanning, secrets, operational verification, documentation, observability, and portfolio release | Planned |
@@ -122,9 +124,12 @@ The approved technology baseline is documented in the [Technical Design and Arch
 ```text
 .
 ├── src/main/java/com/ledgerops
-│   └── tenancy
-│       ├── domain
-│       └── infrastructure
+│   ├── tenancy
+│   ├── merchant
+│   ├── customer
+│   ├── payment
+│   ├── risk
+│   └── ledger
 ├── src/main/resources/db/migration
 ├── src/test/java/com/ledgerops
 ├── docs
@@ -133,6 +138,8 @@ The approved technology baseline is documented in the [Technical Design and Arch
 │   ├── plans
 │   ├── requirements
 │   ├── adr
+│   ├── api
+│   ├── demo
 │   └── reviews
 ├── AGENTS.md
 └── CONTRIBUTING.md
@@ -161,7 +168,7 @@ Windows:
 .\gradlew.bat check
 ```
 
-The standalone local application runtime is not yet documented as complete. The repository currently provides a verified Testcontainers development path. A later vertical slice will add the reproducible local runtime when it is required.
+For a local PostgreSQL runtime, deterministic synthetic seed data, health check, Payment creation, idempotent replay, conflict, and concurrency demonstration, follow the [Release 0.1 demo](docs/demo/release-0.1.md). The executable HTTP contract is [OpenAPI v0.1](docs/api/ledgerops-openapi-v0.1.yaml). This local sandbox intentionally has no authentication and must not be exposed to an untrusted network; identity and authorization begin in Release 0.3.
 
 ## Engineering workflow
 

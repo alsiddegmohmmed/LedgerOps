@@ -19,7 +19,7 @@ If implementation evidence exposes a conflict or impractical decision, stop befo
 
 ## Current scope
 
-The active milestone is **Release 0.1 — Transactional Core**.
+The latest completed milestone is **Release 0.1 — Transactional Core**. Release 0.2 implementation has not started; reconcile its first slice with the authoritative documents and record an approved implementation plan before adding distributed-processing infrastructure.
 
 Allowed now:
 

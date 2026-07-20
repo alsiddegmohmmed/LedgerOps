@@ -14,8 +14,8 @@ import java.util.UUID;
 @Component
 public class RequestCorrelationFilter extends OncePerRequestFilter {
 
-    public static final String TRACE_ID = "traceId";
-    public static final String TRACE_HEADER = "X-Trace-Id";
+    public static final String CORRELATION_ID = "correlationId";
+    public static final String CORRELATION_HEADER = "X-Correlation-Id";
 
     @Override
     protected void doFilterInternal(
@@ -23,10 +23,13 @@ public class RequestCorrelationFilter extends OncePerRequestFilter {
             HttpServletResponse response,
             FilterChain filterChain
     ) throws ServletException, IOException {
-        String traceId = UUID.randomUUID().toString();
-        response.setHeader(TRACE_HEADER, traceId);
+        String correlationId = UUID.randomUUID().toString();
+        response.setHeader(CORRELATION_HEADER, correlationId);
 
-        try (MDC.MDCCloseable ignored = MDC.putCloseable(TRACE_ID, traceId)) {
+        try (MDC.MDCCloseable ignored = MDC.putCloseable(
+                CORRELATION_ID,
+                correlationId
+        )) {
             filterChain.doFilter(request, response);
         }
     }

@@ -3,6 +3,8 @@ package com.ledgerops.payment.application;
 import com.ledgerops.payment.domain.Payment;
 import com.ledgerops.payment.domain.PaymentId;
 import com.ledgerops.payment.domain.PaymentStatus;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -11,6 +13,10 @@ import java.util.UUID;
 
 @Service
 public class PaymentValidationStartService {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(
+            PaymentValidationStartService.class
+    );
 
     private final PaymentLifecycleStore lifecycleStore;
 
@@ -46,6 +52,17 @@ public class PaymentValidationStartService {
             );
         }
 
-        return new VersionedPayment(validating, Math.addExact(current.version(), 1));
+        VersionedPayment result = new VersionedPayment(
+                validating,
+                Math.addExact(current.version(), 1)
+        );
+        LOGGER.info(
+                "Payment validation started tenantId={} paymentId={} status={} version={}",
+                validating.tenantId(),
+                validating.id().value(),
+                validating.status(),
+                result.version()
+        );
+        return result;
     }
 }
