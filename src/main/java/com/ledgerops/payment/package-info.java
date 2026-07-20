@@ -3,6 +3,7 @@
         allowedDependencies = {
             "customer::api",
             "merchant::api",
+            "risk::api",
             "tenancy::api"
         }
 )

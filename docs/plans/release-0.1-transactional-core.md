@@ -2,7 +2,7 @@
 
 Status: Active  
 Last updated: 2026-07-20
-Authority: LedgerOps Product Definition v1.4 and LedgerOps Technical Design and Architecture Specification v1.3 only
+Authority: LedgerOps Product Definition v1.5 and LedgerOps Technical Design and Architecture Specification v1.4 only
 
 This plan derives its scope and sequence from those two fixed documents. It does not amend, replace, or reinterpret product requirements, module ownership rules, correctness rules, or release boundaries.
 
@@ -76,8 +76,8 @@ Release 0.1 may provide foundations for a broader product requirement without cl
 | 3 | Customer foundation | data-minimized aggregate, tenant/merchant-owned schema, scoped repository, module-boundary and isolation tests | Completed |
 | 4 | Money and payment domain | Money and required value objects, immutable Payment aggregate, exact state machine, invariant and exhaustive transition tests | Completed |
 | 5 | Payment creation and idempotency | complete PAY-01 request fields; unique `(tenant_id, idempotency_key)` constraint; merchant-aware request fingerprint; repeat, conflict, and concurrent PostgreSQL tests | Completed |
-| 6 | Synchronous risk rules | evaluated and triggered rules, score contributions, bounded thresholds, approve/reject/review evidence | Planned |
-| 7 | Double-entry ledger | tenant-scoped accounts, balanced immutable postings, database constraints, property/integration tests | Planned |
+| 6 | Synchronous risk rules | evaluated and triggered rules, score contributions, bounded thresholds, approve/reject/review evidence | Completed |
+| 7 | Double-entry ledger | tenant-scoped accounts, balanced immutable postings, database constraints, property/integration tests | In progress |
 | 8 | Atomic payment completion | one PostgreSQL transaction, narrow locking, forced-failure rollback and concurrency tests | Planned |
 | 9 | Release API and evidence hardening | OpenAPI, structured logs, architecture tests, README/demo instructions, traceability audit | Planned |
 
@@ -130,7 +130,7 @@ Completed Money work:
 2. Enforced currency-defined decimal precision, prohibited negative values, and prohibited cross-currency arithmetic.
 3. Added invariant tests for SAR, JPY, and KWD precision, zero/positive semantics, arithmetic, currency mismatch, and negative-result rejection.
 
-Documentation reconciliation is complete through ADR-016, ADR-017, ADR-018, Product Definition v1.4, and Technical Specification v1.3.
+Documentation reconciliation is complete through ADR-016, ADR-017, ADR-018, ADR-019, Product Definition v1.5, and Technical Specification v1.4.
 
 Completed Payment-domain work:
 
@@ -159,11 +159,11 @@ Completed work:
 3. Added a transactional creation service that returns the original Payment for equivalent repeats and rejects materially different content, including a different merchant.
 4. Added the Payment HTTP/OpenAPI contract, correlated RFC 7807 failures, structured logs, and PostgreSQL-backed sequential, concurrent, conflict, isolation, reference, and schema tests.
 
-Risk evaluation is the active slice. Payment completion still cannot be claimed until the ledger and atomic-completion slices provide their required evidence.
+Risk evaluation is complete. The active work is Slice 7 Ledger implementation; Payment completion still cannot be claimed until the Ledger and atomic-completion slices provide their required evidence.
 
 ## Slice 6 — synchronous deterministic Risk evaluation
 
-Status: In progress. The deterministic Risk domain model, published `risk::api`, V5 PostgreSQL schema, Risk-owned JDBC persistence adapter, and version-aware Payment lifecycle persistence port are implemented. Domain and application tests pass; PostgreSQL/Testcontainers verification awaits an available Docker environment. Payment orchestration remains pending.
+Status: Completed. The deterministic Risk domain model, published `risk::api`, V5 PostgreSQL schema, Risk-owned JDBC persistence adapter, version-aware Payment lifecycle persistence, and both Payment-owned transaction services are implemented. Domain, application, PostgreSQL/Testcontainers, concurrency, rollback, and Modulith tests pass.
 
 Outcome: evaluate every eligible Payment synchronously against the tenant's explicitly persisted active Risk profile, preserve reproducible append-only evidence, and move the Payment from `VALIDATING` through exactly one approved transition.
 
@@ -178,7 +178,7 @@ Implementation boundary:
 
 - Risk owns profiles, versions, rules, scoring, decisions, evaluations, and evaluated-rule results.
 - Payment owns lifecycle persistence and cross-module orchestration and calls only the published `risk::api` interface.
-- The current creation-only Payment store must not absorb lifecycle orchestration. Add a focused version-aware lifecycle persistence port during implementation.
+- The creation-only Payment store remains separate; the focused version-aware lifecycle port handles orchestration updates.
 - Do not add Risk behavior to `PaymentCreationService`, query another module's tables, create cross-schema foreign keys, or introduce pessimistic locking without demonstrated contention evidence.
 - Missing or invalid configuration, evaluation failure, and concurrency failure leave Payment `VALIDATING` and preserve no partial Risk evidence.
 - Merchant configuration UI/workflows, configuration audit, manual-review queues, human decisions, Kafka, and asynchronous Risk processing remain out of scope.
@@ -213,14 +213,52 @@ Completed published-API increment:
 - Published the exact Risk decisions and typed configuration/processing failures without exposing Risk domain or persistence types to callers.
 - Added an application service that returns an existing evaluation before loading configuration, evaluates new requests with the injected `Clock`, and preserves typed configuration failures while translating unexpected failures to a typed processing error.
 - Changed Risk persistence to atomically append the initial evaluation or return the concurrent winner through PostgreSQL `ON CONFLICT`, avoiding exception-driven replay and transaction rollback-only state.
-- Added application tests for contract fields, fixed-time evaluation, sequential replay, simulated concurrent-winner resolution, typed configuration failures, and unexpected-failure cause preservation. Added a coordinated PostgreSQL concurrency test; it compiles but awaits Docker execution.
+- Added application tests for contract fields, fixed-time evaluation, sequential replay, simulated concurrent-winner resolution, typed configuration failures, and unexpected-failure cause preservation. The coordinated PostgreSQL concurrency test passes.
 
 Completed Payment lifecycle-persistence prerequisite:
 
 - Added a focused lifecycle persistence port separate from the creation-only Payment store. It loads a Payment with its persistence version inside tenant scope.
 - Added a JDBC compare-and-set update guarded by `(tenant_id, payment_id, version)`. A successful transition updates only `status`, increments `version` once, and records `updated_at`; a stale or missing row returns `false` for typed handling by Payment orchestration.
 - Reused the existing non-null Payment `version` column; no migration or lifecycle-state change was required.
-- Added PostgreSQL tests for versioned loading, tenant isolation, immutable business fields, stale-writer rejection, and coordinated writers producing exactly one version increment. The tests compile but await Docker execution.
+- Added passing PostgreSQL tests for versioned loading, tenant isolation, immutable business fields, stale-writer rejection, and coordinated writers producing exactly one version increment.
+
+Completed Transaction 1 increment:
+
+- Added a dedicated Payment-owned transactional service for validation start; it is separate from `PaymentCreationService` and from the future Transaction 2 service.
+- Transaction 1 loads the tenant-scoped Payment and persistence version, requires `CREATED`, applies the existing `startValidation()` domain method, and updates through compare-and-set before committing `VALIDATING` at the next version.
+- Added typed not-found, invalid-state, and optimistic-concurrency failures. Invalid state and failed compare-and-set do not return a successful transition.
+- Added passing plain application and PostgreSQL tests for the exact transition, every typed failure, committed state, invalid repeat behavior, and concurrent starts producing one transition.
+
+Completed Transaction 2 implementation increment:
+
+- Authorized Payment to depend on `risk::api` only. No Payment code imports Risk domain, application, infrastructure, or persistence types.
+- Added a Payment-owned transactional service that loads a versioned `VALIDATING` Payment, calls Risk with only tenant ID, Payment ID, amount, and currency, and maps `APPROVE`, `MANUAL_REVIEW`, and `REJECT` to `approve()`, `requestRiskReview()`, and `reject()` respectively.
+- Transaction 2 joins Risk evidence persistence and the Payment compare-and-set in one PostgreSQL transaction. Risk configuration/processing errors escape without a Payment update; a failed Payment compare-and-set raises the typed concurrency error and rolls back newly inserted Risk evidence.
+- Added plain tests for every decision mapping, the neutral request boundary, invalid Payment state, typed Risk failure, and optimistic-concurrency failure.
+- Added passing PostgreSQL tests for all three decisions, missing configuration, repeat behavior, Risk-evidence failure rollback, Payment compare-and-set rollback, and coordinated concurrent evaluation producing exactly one evaluation, one rule-result set, and one Payment transition.
+
+Slice 6 completion evidence: `./gradlew test --console=plain` executed 141 tests successfully, and `./gradlew check --console=plain` passed on 2026-07-20.
+
+## Slice 7 — strict double-entry Ledger
+
+Status: In progress. The immutable journal-posting domain core is implemented and its plain-Java invariant tests pass. ADR-019, Product Definition v1.5, and Technical Specification v1.4 now define the Ledger account contract. Account persistence remains pending review and has not started.
+
+Implemented journal-domain increment:
+
+- Added the explicit Ledger Modulith boundary and plain-Java identifiers, account/source references, `AccountCode`, entry direction, positive currency-aware `LedgerAmount`, immutable `LedgerEntry`, and immutable `LedgerTransaction`.
+- A posted transaction requires at least two entries, at least one debit and one credit, one tenant, one currency, account/amount currency agreement, and exactly equal debit and credit totals.
+- Every transaction records a tenant-scoped source category and identifier for Payment, Reversal, settlement adjustment, or authorised correction. A compensating transaction is a new posting with an explicit original-transaction reference and cannot compensate itself.
+- Entries use positive amounts with explicit `DEBIT` or `CREDIT` direction; zero, negative, and over-precision amounts are rejected.
+- Tests cover immutability, tenant and source ownership, currency precision, account-currency mismatch, entry-count/direction/balance failures, mixed-currency rejection, compensation references, and 500 deterministically generated balanced posting shapes.
+
+Approved account contract for the next Ledger increment:
+
+- `LedgerAccountStatus` contains exactly `ACTIVE`; every account is created `ACTIVE`, Release 0.1 defines no status transition, and accounts cannot be deleted.
+- The account-code catalog contains exactly `CUSTOMER_RECEIVABLE`, `MERCHANT_PAYABLE`, `PROVIDER_CLEARING`, `PLATFORM_FEE_REVENUE`, `REVERSAL_PAYABLE`, and `SETTLEMENT_RECEIVABLE`.
+- Each account contains immutable `accountId`, `tenantId`, `accountCode`, `currency`, `status`, and `createdAt`. PostgreSQL must enforce unique `(tenant_id, account_code, currency)`.
+- Account history is queried from immutable entries by `accountId`; the account aggregate does not embed an unbounded collection.
+- Posting must atomically reject missing, cross-tenant, currency-mismatched, or non-`ACTIVE` accounts without persisting a transaction or partial entry set.
+- Account UI, status transitions, deletion, manual administration, authorization workflows, status-change auditing, and additional account codes remain outside Release 0.1.
 
 ## Release-wide verification targets
 
@@ -231,6 +269,7 @@ Completed Payment lifecycle-persistence prerequisite:
 - Reusing a tenant and idempotency key with materially different content, including a different merchant, returns an explicit idempotency conflict. The request fingerprint includes merchant identity.
 - Spring Modulith and architecture tests preventing forbidden dependencies and cross-module access
 - Deterministic Risk tests proving the ADR-018 rule, score, boundary, rollback, uniqueness, optimistic-concurrency, and repeat semantics
+- Ledger account tests proving ACTIVE-only creation/posting, exact account codes, mandatory tenant/currency, immutable identity, non-deletion, tenant/code/currency uniqueness, atomic validation failure, derived immutable history, and PostgreSQL constraints
 - OpenAPI contract and RFC 7807 error examples
 - Structured logs for release API operations without secrets or sensitive payloads
 - `./gradlew test` and `./gradlew check` passing
@@ -244,6 +283,7 @@ Completed Payment lifecycle-persistence prerequisite:
 - Risk evidence and the Payment decision can diverge if Transaction 2 is split or owned by Risk; Payment orchestration must commit both effects atomically.
 - A hidden or global Risk fallback could silently change tenant decisions; require one explicitly persisted active profile and typed configuration failures.
 - Tenant IDs can be forgotten in later tables; enforce non-null ownership and tenant-scoped uniqueness from the first migration for each module.
+- Ledger posting can cross tenant or currency boundaries if account lookup is treated as a reference-only check; validate every account inside the posting transaction and roll back the complete posting on any violation.
 - Broad parallel coding could create incompatible payment/ledger contracts; serialize those shared boundaries.
 
 ## Release 0.1 definition of done

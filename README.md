@@ -39,7 +39,9 @@ Selected verified foundations:
 - validated Payment creation HTTP/OpenAPI contract with RFC 7807 failures and trace correlation
 - Codex operating rules, implementation plans, ADR workflow, review checklist, and requirement traceability
 
-ADR-016 reconciles the Payment lifecycle documentation. ADR-017 establishes the tenant-wide Payment API idempotency boundary. ADR-018 defines the minimal deterministic synchronous Risk model for Release 0.1. The Payment domain, creation API, persistence, idempotency boundary, and version-aware lifecycle persistence prerequisite are implemented. The Risk rule/scoring domain, published API and application service, V5 schema, and JDBC persistence adapter are implemented; PostgreSQL verification and Payment orchestration, provider attempts, ledger posting, and atomic completion remain incomplete.
+ADR-016 reconciles the Payment lifecycle documentation. ADR-017 establishes the tenant-wide Payment API idempotency boundary. ADR-018 defines the minimal deterministic synchronous Risk model for Release 0.1. ADR-019 defines the Release 0.1 Ledger account model. The Payment domain, creation API, persistence, idempotency boundary, version-aware lifecycle persistence, and both Risk-orchestration transactions are implemented. The Risk rule/scoring domain, published API, V5 schema, JDBC persistence, rollback, and concurrency behavior are verified. Provider attempts, Ledger account persistence and posting, and atomic completion remain incomplete.
+
+Slice 7 has started with the immutable balanced journal domain and invariant tests. The authoritative documents now define the ACTIVE-only Ledger account model, exact account-code catalog, tenant/code/currency uniqueness, immutable history, and posting validation. Account persistence remains pending review and has not started.
 
 See the [Release 0.1 implementation plan](docs/plans/release-0.1-transactional-core.md) for the live sequence and current evidence.
 
@@ -83,6 +85,7 @@ These are release-blocking invariants, not optional design preferences:
 7. Money uses `BigDecimal` with an explicit currency—never floating point.
 8. Provider timeouts are ambiguous outcomes, not automatic failures.
 9. Release 0.1 Risk evaluation uses only `PAYMENT_AMOUNT_THRESHOLD`, versioned tenant profiles, integer scores capped at 100, and the exact ADR-018 decision boundaries. Missing or invalid configuration cannot silently approve or reject a Payment.
+10. Release 0.1 Ledger accounts are tenant-owned, use exactly `ACTIVE`, and are unique by `tenantId + accountCode + currency`. Posting rejects a missing, cross-tenant, currency-mismatched, or non-`ACTIVE` account atomically.
 
 The [requirement traceability matrix](docs/requirements/TRACEABILITY.md) records how each implemented requirement is verified.
 
@@ -112,7 +115,7 @@ Current Release 0.1 stack:
 - JUnit 5
 - Testcontainers
 
-The approved long-term technology baseline is documented in the [Technical Design and Architecture Specification](docs/architecture/LedgerOps_Technical_Design_and_Architecture_Specification_v1.3.docx), but technologies are introduced only in their approved release.
+The approved long-term technology baseline is documented in the [Technical Design and Architecture Specification](docs/architecture/LedgerOps_Technical_Design_and_Architecture_Specification_v1.4.docx), but technologies are introduced only in their approved release.
 
 ## Key repository paths
 
@@ -168,8 +171,8 @@ Every meaningful change should connect four kinds of evidence:
 Requirement → design decision → implementation → executable verification
 ```
 
-- [Product Definition](docs/product/LedgerOps_Product_Definition_Official_v1.4.docx) — what the system must do
-- [Technical Specification](docs/architecture/LedgerOps_Technical_Design_and_Architecture_Specification_v1.3.docx) — how the approved system is designed
+- [Product Definition](docs/product/LedgerOps_Product_Definition_Official_v1.5.docx) — what the system must do
+- [Technical Specification](docs/architecture/LedgerOps_Technical_Design_and_Architecture_Specification_v1.4.docx) — how the approved system is designed
 - [Release 0.1 plan](docs/plans/release-0.1-transactional-core.md) — current implementation order and status
 - [Requirement traceability](docs/requirements/TRACEABILITY.md) — requirements mapped to evidence
 - [ADR process](docs/adr/README.md) — controlled architectural change

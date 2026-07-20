@@ -6,8 +6,8 @@ LedgerOps is a production-style portfolio project for learning and demonstrating
 
 Read these documents before making implementation decisions:
 
-1. `docs/product/LedgerOps_Product_Definition_Official_v1.4.docx` defines what the product must do.
-2. `docs/architecture/LedgerOps_Technical_Design_and_Architecture_Specification_v1.3.docx` defines the approved design.
+1. `docs/product/LedgerOps_Product_Definition_Official_v1.5.docx` defines what the product must do.
+2. `docs/architecture/LedgerOps_Technical_Design_and_Architecture_Specification_v1.4.docx` defines the approved design.
 3. `docs/plans/release-0.1-transactional-core.md` defines the current sequence and status.
 4. `docs/requirements/TRACEABILITY.md` maps requirements to evidence.
 
@@ -47,6 +47,8 @@ Do not add Release 0.2 or later capabilities yet: Kafka, transactional outbox/in
 - Time-dependent domain behaviour receives an injected `Clock`.
 - Release 0.1 Risk scoring uses versioned tenant profiles, integer scores from 0 through 100, and the exact ADR-018 thresholds and decision boundaries.
 - Risk configuration or processing failure leaves Payment `VALIDATING` and persists no partial Risk evidence or Payment decision.
+- Release 0.1 Ledger accounts use exactly `ACTIVE` and the ADR-019 account-code catalog. They have no lifecycle or deletion.
+- Ledger account uniqueness is exactly `tenantId + accountCode + currency`; every posting validates account existence, tenant, currency, and `ACTIVE` status atomically.
 
 ## Architecture and coding rules
 
