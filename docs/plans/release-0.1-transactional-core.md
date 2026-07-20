@@ -1,8 +1,8 @@
 # Release 0.1 plan: Transactional Core
 
 Status: Active  
-Last updated: 2026-07-19
-Authority: LedgerOps Product Definition v1.3 and LedgerOps Technical Design and Architecture Specification v1.2 only
+Last updated: 2026-07-20
+Authority: LedgerOps Product Definition v1.4 and LedgerOps Technical Design and Architecture Specification v1.3 only
 
 This plan derives its scope and sequence from those two fixed documents. It does not amend, replace, or reinterpret product requirements, module ownership rules, correctness rules, or release boundaries.
 
@@ -130,7 +130,7 @@ Completed Money work:
 2. Enforced currency-defined decimal precision, prohibited negative values, and prohibited cross-currency arithmetic.
 3. Added invariant tests for SAR, JPY, and KWD precision, zero/positive semantics, arithmetic, currency mismatch, and negative-result rejection.
 
-Documentation reconciliation is complete through ADR-016, ADR-017, Product Definition v1.3, and Technical Specification v1.2.
+Documentation reconciliation is complete through ADR-016, ADR-017, ADR-018, Product Definition v1.4, and Technical Specification v1.3.
 
 Completed Payment-domain work:
 
@@ -159,7 +159,68 @@ Completed work:
 3. Added a transactional creation service that returns the original Payment for equivalent repeats and rejects materially different content, including a different merchant.
 4. Added the Payment HTTP/OpenAPI contract, correlated RFC 7807 failures, structured logs, and PostgreSQL-backed sequential, concurrent, conflict, isolation, reference, and schema tests.
 
-Risk evaluation remains the next slice. Payment completion still cannot be claimed until the ledger and atomic-completion slices provide their required evidence.
+Risk evaluation is the active slice. Payment completion still cannot be claimed until the ledger and atomic-completion slices provide their required evidence.
+
+## Slice 6 — synchronous deterministic Risk evaluation
+
+Status: In progress. The deterministic Risk domain model, published `risk::api`, V5 PostgreSQL schema, Risk-owned JDBC persistence adapter, and version-aware Payment lifecycle persistence port are implemented. Domain and application tests pass; PostgreSQL/Testcontainers verification awaits an available Docker environment. Payment orchestration remains pending.
+
+Outcome: evaluate every eligible Payment synchronously against the tenant's explicitly persisted active Risk profile, preserve reproducible append-only evidence, and move the Payment from `VALIDATING` through exactly one approved transition.
+
+Approved implementation contract:
+
+1. Support exactly `PAYMENT_AMOUNT_THRESHOLD`. A profile may contain multiple instances; an enabled rule is eligible only for the Payment currency and triggers when `paymentAmount >= amountThreshold`.
+2. Persist versioned tenant profiles, profile-owned rules, one append-only initial evaluation per Payment, and every eligible rule result. Do not use a global fallback profile or `evaluation_kind`.
+3. Sum triggered contributions into `uncappedScore`, cap `finalScore` at 100, and apply the exact thresholds `1 <= reviewThreshold < rejectThreshold <= 100` to produce `APPROVE`, `MANUAL_REVIEW`, or `REJECT`.
+4. Let Payment orchestrate two short PostgreSQL transactions. Transaction 1 commits `CREATED -> VALIDATING`. Transaction 2 atomically persists the Risk evidence and applies `approve()`, `requestRiskReview()`, or `reject()` through optimistic compare-and-set.
+
+Implementation boundary:
+
+- Risk owns profiles, versions, rules, scoring, decisions, evaluations, and evaluated-rule results.
+- Payment owns lifecycle persistence and cross-module orchestration and calls only the published `risk::api` interface.
+- The current creation-only Payment store must not absorb lifecycle orchestration. Add a focused version-aware lifecycle persistence port during implementation.
+- Do not add Risk behavior to `PaymentCreationService`, query another module's tables, create cross-schema foreign keys, or introduce pessimistic locking without demonstrated contention evidence.
+- Missing or invalid configuration, evaluation failure, and concurrency failure leave Payment `VALIDATING` and preserve no partial Risk evidence.
+- Merchant configuration UI/workflows, configuration audit, manual-review queues, human decisions, Kafka, and asynchronous Risk processing remain out of scope.
+
+Required evidence before Slice 6 can be marked completed:
+
+- threshold equality and amounts below, equal to, and above the rule threshold
+- multiple triggered contributions, clean zero, uncapped score, and the 100-point cap
+- exact approve, manual-review lower/upper, and reject boundaries
+- invalid thresholds/contributions, missing or multiple profiles, and no eligible currency rule
+- rollback after Risk persistence failure and Payment optimistic-concurrency conflict
+- one evaluation and one transition under coordinated concurrency; repeat returns the existing outcome
+- append-only evidence, PostgreSQL migration/constraints, Modulith boundaries, and prohibited cross-module access
+
+Completed domain increment:
+
+- Added the Risk module with exactly `PAYMENT_AMOUNT_THRESHOLD`, versioned profiles, typed configuration failures, deterministic evaluation, exact score aggregation and capping, approved decisions, and immutable evaluated-rule evidence.
+- Added plain-Java tests for amount below/equal/above the threshold, clean zero, contribution aggregation, score cap, exact decision boundaries, invalid thresholds and contributions, rule/profile ownership, currency eligibility, inactive and cross-tenant profiles, and evidence immutability.
+- No persistence, migration, published `risk::api`, Payment module dependency, or Payment orchestration was introduced in this increment.
+
+Completed persistence increment:
+
+- Added the V5 Risk schema for tenant-owned versioned profiles, `PAYMENT_AMOUNT_THRESHOLD` rules, evaluations, and evaluated-rule results without any cross-schema foreign key.
+- Added database validation for profile thresholds, rule values, score capping, decisions, applied contributions, one active profile per tenant, and one evaluation per `(tenant_id, payment_id)`.
+- Protected versioned profiles, rules, evaluations, and evaluated-rule results from destructive history changes while permitting profile deactivation.
+- Added Risk-owned profile/evaluation persistence ports and a transactional JDBC adapter for profile provisioning, active-profile loading, append-only evaluation storage, and tenant-scoped repeat lookup.
+- Added PostgreSQL schema and persistence tests for constraints, ownership, round trips, uniqueness, immutability, and rollback. The tests compile but cannot execute until Testcontainers can reach Docker.
+
+Completed published-API increment:
+
+- Added the named `risk::api` interface with neutral tenant, Payment, amount, and currency inputs and the approved profile, score, decision, and evaluation result fields.
+- Published the exact Risk decisions and typed configuration/processing failures without exposing Risk domain or persistence types to callers.
+- Added an application service that returns an existing evaluation before loading configuration, evaluates new requests with the injected `Clock`, and preserves typed configuration failures while translating unexpected failures to a typed processing error.
+- Changed Risk persistence to atomically append the initial evaluation or return the concurrent winner through PostgreSQL `ON CONFLICT`, avoiding exception-driven replay and transaction rollback-only state.
+- Added application tests for contract fields, fixed-time evaluation, sequential replay, simulated concurrent-winner resolution, typed configuration failures, and unexpected-failure cause preservation. Added a coordinated PostgreSQL concurrency test; it compiles but awaits Docker execution.
+
+Completed Payment lifecycle-persistence prerequisite:
+
+- Added a focused lifecycle persistence port separate from the creation-only Payment store. It loads a Payment with its persistence version inside tenant scope.
+- Added a JDBC compare-and-set update guarded by `(tenant_id, payment_id, version)`. A successful transition updates only `status`, increments `version` once, and records `updated_at`; a stale or missing row returns `false` for typed handling by Payment orchestration.
+- Reused the existing non-null Payment `version` column; no migration or lifecycle-state change was required.
+- Added PostgreSQL tests for versioned loading, tenant isolation, immutable business fields, stale-writer rejection, and coordinated writers producing exactly one version increment. The tests compile but await Docker execution.
 
 ## Release-wide verification targets
 
@@ -169,6 +230,7 @@ Risk evaluation remains the next slice. Payment completion still cannot be claim
 - The database enforces one Payment per `(tenant_id, idempotency_key)`; `merchant_id` is not part of that uniqueness constraint.
 - Reusing a tenant and idempotency key with materially different content, including a different merchant, returns an explicit idempotency conflict. The request fingerprint includes merchant identity.
 - Spring Modulith and architecture tests preventing forbidden dependencies and cross-module access
+- Deterministic Risk tests proving the ADR-018 rule, score, boundary, rollback, uniqueness, optimistic-concurrency, and repeat semantics
 - OpenAPI contract and RFC 7807 error examples
 - Structured logs for release API operations without secrets or sensitive payloads
 - `./gradlew test` and `./gradlew check` passing
@@ -179,6 +241,8 @@ Risk evaluation remains the next slice. Payment completion still cannot be claim
 - Payment implementation must preserve the exact ADR-016 lifecycle and ownership boundaries; provider, Reversal, and Reconciliation progress must not expand `PaymentStatus`.
 - Idempotency comparison must distinguish equivalent request replay from materially different content. In particular, changing the merchant under the same tenant and key must return a conflict rather than create another Payment.
 - Payment completion and ledger posting can diverge if transaction ownership is unclear; one application service must own the atomic boundary.
+- Risk evidence and the Payment decision can diverge if Transaction 2 is split or owned by Risk; Payment orchestration must commit both effects atomically.
+- A hidden or global Risk fallback could silently change tenant decisions; require one explicitly persisted active profile and typed configuration failures.
 - Tenant IDs can be forgotten in later tables; enforce non-null ownership and tenant-scoped uniqueness from the first migration for each module.
 - Broad parallel coding could create incompatible payment/ledger contracts; serialize those shared boundaries.
 

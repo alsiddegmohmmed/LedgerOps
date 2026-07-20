@@ -6,8 +6,8 @@ LedgerOps is a production-style portfolio project for learning and demonstrating
 
 Read these documents before making implementation decisions:
 
-1. `docs/product/LedgerOps_Product_Definition_Official_v1.3.docx` defines what the product must do.
-2. `docs/architecture/LedgerOps_Technical_Design_and_Architecture_Specification_v1.2.docx` defines the approved design.
+1. `docs/product/LedgerOps_Product_Definition_Official_v1.4.docx` defines what the product must do.
+2. `docs/architecture/LedgerOps_Technical_Design_and_Architecture_Specification_v1.3.docx` defines the approved design.
 3. `docs/plans/release-0.1-transactional-core.md` defines the current sequence and status.
 4. `docs/requirements/TRACEABILITY.md` maps requirements to evidence.
 
@@ -25,7 +25,7 @@ Allowed now:
 - PostgreSQL, Flyway, Spring Data JPA
 - tenant, merchant, and customer foundations
 - payment creation, idempotency, and controlled state transitions
-- synchronous deterministic risk rules
+- synchronous deterministic Risk evaluation using only the ADR-018 `PAYMENT_AMOUNT_THRESHOLD` model
 - strict double-entry ledger and atomic payment completion
 - HTTP APIs, OpenAPI, RFC 7807 problems, structured logs
 - JUnit, Testcontainers with PostgreSQL, ArchUnit, and Spring Modulith tests
@@ -45,11 +45,14 @@ Do not add Release 0.2 or later capabilities yet: Kafka, transactional outbox/in
 - External network calls never occur inside long database transactions.
 - Provider timeouts are ambiguous outcomes, not automatic failures.
 - Time-dependent domain behaviour receives an injected `Clock`.
+- Release 0.1 Risk scoring uses versioned tenant profiles, integer scores from 0 through 100, and the exact ADR-018 thresholds and decision boundaries.
+- Risk configuration or processing failure leaves Payment `VALIDATING` and persists no partial Risk evidence or Payment decision.
 
 ## Architecture and coding rules
 
 - Keep one Spring Boot modular monolith with explicit Spring Modulith boundaries.
 - Each module owns its schema and tables. Cross-module table access is forbidden.
+- Payment owns Risk orchestration and calls only the published `risk::api`; Risk never reads or mutates Payment data directly.
 - Organize modules using `api`, `application`, `domain`, and `infrastructure` packages as those layers become necessary.
 - Domain code must not depend on Spring, JPA, HTTP, messaging, or infrastructure implementations.
 - Use explicit domain models, value objects, small cohesive classes, constructor injection, typed errors, and deterministic behaviour.
