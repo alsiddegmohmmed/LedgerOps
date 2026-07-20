@@ -77,7 +77,7 @@ Release 0.1 may provide foundations for a broader product requirement without cl
 | 4 | Money and payment domain | Money and required value objects, immutable Payment aggregate, exact state machine, invariant and exhaustive transition tests | Completed |
 | 5 | Payment creation and idempotency | complete PAY-01 request fields; unique `(tenant_id, idempotency_key)` constraint; merchant-aware request fingerprint; repeat, conflict, and concurrent PostgreSQL tests | Completed |
 | 6 | Synchronous risk rules | evaluated and triggered rules, score contributions, bounded thresholds, approve/reject/review evidence | Completed |
-| 7 | Double-entry ledger | tenant-scoped accounts, balanced immutable postings, database constraints, property/integration tests | In progress |
+| 7 | Double-entry ledger | tenant-scoped accounts, balanced immutable postings, database constraints, property/integration tests | Completed |
 | 8 | Atomic payment completion | one PostgreSQL transaction, narrow locking, forced-failure rollback and concurrency tests | Planned |
 | 9 | Release API and evidence hardening | OpenAPI, structured logs, architecture tests, README/demo instructions, traceability audit | Planned |
 
@@ -241,7 +241,7 @@ Slice 6 completion evidence: `./gradlew test --console=plain` executed 141 tests
 
 ## Slice 7 — strict double-entry Ledger
 
-Status: In progress. The immutable journal-posting domain core is implemented and its plain-Java invariant tests pass. ADR-019, Product Definition v1.5, and Technical Specification v1.4 now define the Ledger account contract. Account persistence remains pending review and has not started.
+Status: Completed. The immutable journal and account domains, account/posting persistence, atomic validation, append-only enforcement, and tenant-scoped balance and statement queries have passing domain and PostgreSQL tests. Atomic Payment completion remains correctly isolated in Slice 8.
 
 Implemented journal-domain increment:
 
@@ -251,14 +251,39 @@ Implemented journal-domain increment:
 - Entries use positive amounts with explicit `DEBIT` or `CREDIT` direction; zero, negative, and over-precision amounts are rejected.
 - Tests cover immutability, tenant and source ownership, currency precision, account-currency mismatch, entry-count/direction/balance failures, mixed-currency rejection, compensation references, and 500 deterministically generated balanced posting shapes.
 
-Approved account contract for the next Ledger increment:
+Completed account-domain increment:
 
-- `LedgerAccountStatus` contains exactly `ACTIVE`; every account is created `ACTIVE`, Release 0.1 defines no status transition, and accounts cannot be deleted.
-- The account-code catalog contains exactly `CUSTOMER_RECEIVABLE`, `MERCHANT_PAYABLE`, `PROVIDER_CLEARING`, `PLATFORM_FEE_REVENUE`, `REVERSAL_PAYABLE`, and `SETTLEMENT_RECEIVABLE`.
-- Each account contains immutable `accountId`, `tenantId`, `accountCode`, `currency`, `status`, and `createdAt`. PostgreSQL must enforce unique `(tenant_id, account_code, currency)`.
-- Account history is queried from immutable entries by `accountId`; the account aggregate does not embed an unbounded collection.
-- Posting must atomically reject missing, cross-tenant, currency-mismatched, or non-`ACTIVE` accounts without persisting a transaction or partial entry set.
-- Account UI, status transitions, deletion, manual administration, authorization workflows, status-change auditing, and additional account codes remain outside Release 0.1.
+- Replaced the open string account code with exactly `CUSTOMER_RECEIVABLE`, `MERCHANT_PAYABLE`, `PROVIDER_CLEARING`, `PLATFORM_FEE_REVENUE`, `REVERSAL_PAYABLE`, and `SETTLEMENT_RECEIVABLE`.
+- Added `LedgerAccountStatus` with exactly `ACTIVE` and no lifecycle methods.
+- Added an immutable `LedgerAccount` containing `accountId`, `tenantId`, `accountCode`, `currency`, `status`, and `createdAt`; creation always assigns `ACTIVE`.
+- Added plain-Java tests for exact status/code vocabularies, valid catalog parsing, ACTIVE-only creation, immutable field exposure, and mandatory account identity, ownership, currency, and creation time.
+- Updated journal-domain tests to use only approved account codes; no placeholder account codes remain.
+
+Completed account-persistence increment:
+
+- Added the Ledger-owned V6 PostgreSQL account schema and an explicit JDBC mapping behind a create-only repository port.
+- Enforced unique `(tenant_id, account_code, currency)`, exact code/status checks, required ownership and currency format, immutable account records, and non-deletion.
+- Added tenant-scoped lookup by account ID and deterministic account identity. No lookup discloses another tenant's account.
+- Added PostgreSQL/Testcontainers tests for the exact schema and catalog, uniqueness boundaries, immutable storage, tenant isolation, independent tenant/currency identities, and adapter round trips.
+
+Completed posting-persistence increment:
+
+- Added the Ledger-owned V7 transaction and entry tables with tenant-aware, same-schema foreign keys to accounts and transactions.
+- Added a short transactional posting service that validates every account through the tenant-scoped repository before persisting a transaction or any entry.
+- Missing, cross-tenant, currency-mismatched, or account-code-mismatched references return typed validation failures and persist no posting data. ACTIVE-only eligibility remains explicit and is protected by the V6 account constraint.
+- Added unique `(tenant_id, source_type, source_id)` enforcement so one financial source cannot create duplicate postings.
+- Added append-only transaction/entry triggers and a deferred PostgreSQL verification that compares the persisted entry count, debit/credit presence, and entry totals with the balanced transaction header before commit.
+- PostgreSQL/Testcontainers tests prove atomic success, account relationships, validation rollback, duplicate-source rejection, database-level balance rejection, compensation-reference integrity, append-only history, and Ledger-only foreign keys.
+
+Completed account-query increment:
+
+- Added tenant-scoped balance and statement queries derived from immutable Ledger entries. `LedgerAccount` still contains no entry or transaction collection.
+- Balance and statement results expose separate debit and credit totals because the authoritative baseline does not define normal-balance presentation by account code.
+- Statements use explicit `[fromInclusive, toExclusive)` boundaries, a maximum page size of 100, stable posting/transaction/entry ordering, full-period totals, and immutable result lists.
+- A single PostgreSQL statement returns each page and its full-period summary from one database snapshot, preventing concurrent commits from producing internally inconsistent statement results.
+- PostgreSQL/Testcontainers tests prove exact time boundaries, arithmetic, empty results, pagination, source traceability, tenant isolation, and immutable query results.
+
+Slice 7 completion evidence: the focused Ledger suite, `./gradlew test --console=plain`, and `./gradlew check --console=plain` pass. Slice 8 must reuse this Ledger-owned posting boundary while making Payment completion and exactly one Ledger posting atomic.
 
 ## Release-wide verification targets
 

@@ -24,12 +24,12 @@ class LedgerTransactionTests {
     void postsAnImmutableBalancedTransactionWithDebitAndCreditEvidence() {
         UUID tenantId = UUID.randomUUID();
         List<LedgerEntry> mutableEntries = new ArrayList<>(List.of(
-                debit(tenantId, "CUSTOMER_RECEIVABLE", "125.00", SAR),
-                credit(tenantId, "MERCHANT_PAYABLE", "125.00", SAR)
+                debit(tenantId, AccountCode.CUSTOMER_RECEIVABLE, "125.00", SAR),
+                credit(tenantId, AccountCode.MERCHANT_PAYABLE, "125.00", SAR)
         ));
 
         LedgerTransaction transaction = post(tenantId, mutableEntries);
-        mutableEntries.add(debit(tenantId, "LATE_MUTATION", "1.00", SAR));
+        mutableEntries.add(debit(tenantId, AccountCode.PROVIDER_CLEARING, "1.00", SAR));
 
         assertEquals(2, transaction.entries().size());
         assertEquals(new BigDecimal("125.00"), transaction.totalDebits());
@@ -40,7 +40,7 @@ class LedgerTransactionTests {
         assertThrows(
                 UnsupportedOperationException.class,
                 () -> transaction.entries().add(
-                        debit(tenantId, "MUTATION", "1.00", SAR)
+                        debit(tenantId, AccountCode.PLATFORM_FEE_REVENUE, "1.00", SAR)
                 )
         );
     }
@@ -53,7 +53,12 @@ class LedgerTransactionTests {
                 IllegalArgumentException.class,
                 () -> post(
                         tenantId,
-                        List.of(debit(tenantId, "ONLY_ENTRY", "10.00", SAR))
+                        List.of(debit(
+                                tenantId,
+                                AccountCode.CUSTOMER_RECEIVABLE,
+                                "10.00",
+                                SAR
+                        ))
                 )
         );
     }
@@ -65,8 +70,8 @@ class LedgerTransactionTests {
         IllegalArgumentException exception = assertThrows(
                 IllegalArgumentException.class,
                 () -> post(tenantId, List.of(
-                        debit(tenantId, "FIRST", "5.00", SAR),
-                        debit(tenantId, "SECOND", "5.00", SAR)
+                        debit(tenantId, AccountCode.CUSTOMER_RECEIVABLE, "5.00", SAR),
+                        debit(tenantId, AccountCode.PROVIDER_CLEARING, "5.00", SAR)
                 ))
         );
 
@@ -83,8 +88,8 @@ class LedgerTransactionTests {
         IllegalArgumentException exception = assertThrows(
                 IllegalArgumentException.class,
                 () -> post(tenantId, List.of(
-                        debit(tenantId, "RECEIVABLE", "10.00", SAR),
-                        credit(tenantId, "PAYABLE", "9.99", SAR)
+                        debit(tenantId, AccountCode.CUSTOMER_RECEIVABLE, "10.00", SAR),
+                        credit(tenantId, AccountCode.MERCHANT_PAYABLE, "9.99", SAR)
                 ))
         );
 
@@ -101,10 +106,10 @@ class LedgerTransactionTests {
         IllegalArgumentException exception = assertThrows(
                 IllegalArgumentException.class,
                 () -> post(tenantId, List.of(
-                        debit(tenantId, "SAR_ACCOUNT", "10.00", SAR),
+                        debit(tenantId, AccountCode.CUSTOMER_RECEIVABLE, "10.00", SAR),
                         credit(
                                 tenantId,
-                                "USD_ACCOUNT",
+                                AccountCode.MERCHANT_PAYABLE,
                                 "10.00",
                                 Currency.getInstance("USD")
                         )
@@ -117,7 +122,11 @@ class LedgerTransactionTests {
     @Test
     void rejectsAnEntryWhoseCurrencyDiffersFromItsAccount() {
         UUID tenantId = UUID.randomUUID();
-        LedgerAccountReference sarAccount = account(tenantId, "SAR_ACCOUNT", SAR);
+        LedgerAccountReference sarAccount = account(
+                tenantId,
+                AccountCode.CUSTOMER_RECEIVABLE,
+                SAR
+        );
 
         IllegalArgumentException exception = assertThrows(
                 IllegalArgumentException.class,
@@ -141,8 +150,13 @@ class LedgerTransactionTests {
         assertThrows(
                 IllegalArgumentException.class,
                 () -> post(tenantId, List.of(
-                        debit(otherTenantId, "FOREIGN", "10.00", SAR),
-                        credit(tenantId, "LOCAL", "10.00", SAR)
+                        debit(
+                                otherTenantId,
+                                AccountCode.CUSTOMER_RECEIVABLE,
+                                "10.00",
+                                SAR
+                        ),
+                        credit(tenantId, AccountCode.MERCHANT_PAYABLE, "10.00", SAR)
                 ))
         );
         assertThrows(
@@ -153,8 +167,18 @@ class LedgerTransactionTests {
                         source(otherTenantId),
                         POSTED_AT,
                         List.of(
-                                debit(tenantId, "DEBIT", "10.00", SAR),
-                                credit(tenantId, "CREDIT", "10.00", SAR)
+                                debit(
+                                        tenantId,
+                                        AccountCode.CUSTOMER_RECEIVABLE,
+                                        "10.00",
+                                        SAR
+                                ),
+                                credit(
+                                        tenantId,
+                                        AccountCode.MERCHANT_PAYABLE,
+                                        "10.00",
+                                        SAR
+                                )
                         )
                 )
         );
@@ -175,8 +199,8 @@ class LedgerTransactionTests {
                 originalId,
                 POSTED_AT,
                 List.of(
-                        debit(tenantId, "MERCHANT_PAYABLE", "25.00", SAR),
-                        credit(tenantId, "CUSTOMER_RECEIVABLE", "25.00", SAR)
+                        debit(tenantId, AccountCode.MERCHANT_PAYABLE, "25.00", SAR),
+                        credit(tenantId, AccountCode.CUSTOMER_RECEIVABLE, "25.00", SAR)
                 )
         );
 
@@ -202,8 +226,18 @@ class LedgerTransactionTests {
                         transactionId,
                         POSTED_AT,
                         List.of(
-                                debit(tenantId, "DEBIT", "10.00", SAR),
-                                credit(tenantId, "CREDIT", "10.00", SAR)
+                                debit(
+                                        tenantId,
+                                        AccountCode.CUSTOMER_RECEIVABLE,
+                                        "10.00",
+                                        SAR
+                                ),
+                                credit(
+                                        tenantId,
+                                        AccountCode.MERCHANT_PAYABLE,
+                                        "10.00",
+                                        SAR
+                                )
                         )
                 )
         );
@@ -222,10 +256,30 @@ class LedgerTransactionTests {
             long secondCredit = totalMinorUnits - firstCredit;
 
             LedgerTransaction transaction = post(tenantId, List.of(
-                    debit(tenantId, "DEBIT_A", minorUnits(firstDebit), SAR),
-                    debit(tenantId, "DEBIT_B", minorUnits(secondDebit), SAR),
-                    credit(tenantId, "CREDIT_A", minorUnits(firstCredit), SAR),
-                    credit(tenantId, "CREDIT_B", minorUnits(secondCredit), SAR)
+                    debit(
+                            tenantId,
+                            AccountCode.CUSTOMER_RECEIVABLE,
+                            minorUnits(firstDebit),
+                            SAR
+                    ),
+                    debit(
+                            tenantId,
+                            AccountCode.PROVIDER_CLEARING,
+                            minorUnits(secondDebit),
+                            SAR
+                    ),
+                    credit(
+                            tenantId,
+                            AccountCode.MERCHANT_PAYABLE,
+                            minorUnits(firstCredit),
+                            SAR
+                    ),
+                    credit(
+                            tenantId,
+                            AccountCode.PLATFORM_FEE_REVENUE,
+                            minorUnits(secondCredit),
+                            SAR
+                    )
             ));
 
             assertEquals(transaction.totalDebits(), transaction.totalCredits());
@@ -265,7 +319,7 @@ class LedgerTransactionTests {
 
     private LedgerEntry debit(
             UUID tenantId,
-            String code,
+            AccountCode code,
             String value,
             Currency currency
     ) {
@@ -277,7 +331,7 @@ class LedgerTransactionTests {
 
     private LedgerEntry credit(
             UUID tenantId,
-            String code,
+            AccountCode code,
             String value,
             Currency currency
     ) {
@@ -289,13 +343,13 @@ class LedgerTransactionTests {
 
     private LedgerAccountReference account(
             UUID tenantId,
-            String code,
+            AccountCode code,
             Currency currency
     ) {
         return new LedgerAccountReference(
                 tenantId,
                 LedgerAccountId.newId(),
-                AccountCode.from(code),
+                code,
                 currency
         );
     }

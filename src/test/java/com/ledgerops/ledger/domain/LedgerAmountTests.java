@@ -55,11 +55,6 @@ class LedgerAmountTests {
         );
     }
 
-    @Test
-    void rejectsBlankAccountCodes() {
-        assertThrows(IllegalArgumentException.class, () -> AccountCode.from("  "));
-    }
-
     private LedgerAmount sar(String value) {
         return LedgerAmount.of(
                 new BigDecimal(value),

@@ -2,16 +2,27 @@ package com.ledgerops.ledger.domain;
 
 import java.util.Objects;
 
-public record AccountCode(String value) {
+public enum AccountCode {
+    CUSTOMER_RECEIVABLE,
+    MERCHANT_PAYABLE,
+    PROVIDER_CLEARING,
+    PLATFORM_FEE_REVENUE,
+    REVERSAL_PAYABLE,
+    SETTLEMENT_RECEIVABLE;
 
-    public AccountCode {
+    public static AccountCode from(String value) {
         Objects.requireNonNull(value, "Account code must not be null");
-        if (value.isBlank()) {
-            throw new IllegalArgumentException("Account code must not be blank");
+        try {
+            return valueOf(value);
+        } catch (IllegalArgumentException exception) {
+            throw new IllegalArgumentException(
+                    "Unsupported Release 0.1 account code: " + value,
+                    exception
+            );
         }
     }
 
-    public static AccountCode from(String value) {
-        return new AccountCode(value);
+    public String value() {
+        return name();
     }
 }
