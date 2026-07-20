@@ -6,12 +6,14 @@ LedgerOps is a production-style portfolio project for learning and demonstrating
 
 Read these documents before making implementation decisions:
 
-1. `docs/product/LedgerOps_Product_Definition_Official_v1.5.docx` defines what the product must do.
-2. `docs/architecture/LedgerOps_Technical_Design_and_Architecture_Specification_v1.4.docx` defines the approved design.
+1. `docs/product/LedgerOps_Product_Definition_Official_v1.6.docx` defines what the product must do.
+2. `docs/architecture/LedgerOps_Technical_Design_and_Architecture_Specification_v1.5.docx` defines the approved design.
 3. `docs/plans/release-0.1-transactional-core.md` defines the current sequence and status.
 4. `docs/requirements/TRACEABILITY.md` maps requirements to evidence.
 
 Precedence is product definition, technical specification, approved ADRs, then implementation plans. Code and plans must not silently contradict a higher-authority source.
+
+ADR-020 is accepted and authorizes Slice 8 Payment-success posting and completion orchestration.
 
 If implementation evidence exposes a conflict or impractical decision, stop before changing the design. Describe the exact conflict, recommend one replacement with trade-offs, and wait for approval. Record an approved material change as an ADR.
 
@@ -26,7 +28,7 @@ Allowed now:
 - tenant, merchant, and customer foundations
 - payment creation, idempotency, and controlled state transitions
 - synchronous deterministic Risk evaluation using only the ADR-018 `PAYMENT_AMOUNT_THRESHOLD` model
-- strict double-entry ledger and atomic payment completion
+- strict double-entry ledger and an internal atomic Payment-success completion using exactly full-amount `DEBIT PROVIDER_CLEARING` and `CREDIT MERCHANT_PAYABLE` in the Payment currency
 - HTTP APIs, OpenAPI, RFC 7807 problems, structured logs
 - JUnit, Testcontainers with PostgreSQL, ArchUnit, and Spring Modulith tests
 

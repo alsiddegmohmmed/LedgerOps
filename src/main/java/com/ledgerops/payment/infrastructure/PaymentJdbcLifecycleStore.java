@@ -1,6 +1,7 @@
 package com.ledgerops.payment.infrastructure;
 
 import com.ledgerops.merchant.api.MerchantReference;
+import com.ledgerops.payment.application.PaymentCompletionStore;
 import com.ledgerops.payment.application.PaymentLifecycleStore;
 import com.ledgerops.payment.application.VersionedPayment;
 import com.ledgerops.payment.domain.CustomerId;
@@ -23,7 +24,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 @Repository
-class PaymentJdbcLifecycleStore implements PaymentLifecycleStore {
+class PaymentJdbcLifecycleStore implements PaymentLifecycleStore, PaymentCompletionStore {
 
     private static final String FIND_SQL = """
             SELECT id,
@@ -51,6 +52,23 @@ class PaymentJdbcLifecycleStore implements PaymentLifecycleStore {
                AND version = ?
             """;
 
+    private static final String FIND_FOR_UPDATE_SQL = """
+            SELECT id,
+                   tenant_id,
+                   merchant_id,
+                   customer_id,
+                   amount,
+                   currency,
+                   payment_method_category,
+                   idempotency_key,
+                   status,
+                   version
+              FROM payment.payments
+             WHERE tenant_id = ?
+               AND id = ?
+               FOR UPDATE
+            """;
+
     private final JdbcTemplate jdbcTemplate;
     private final Clock clock;
 
@@ -68,6 +86,23 @@ class PaymentJdbcLifecycleStore implements PaymentLifecycleStore {
         Objects.requireNonNull(paymentId, "Payment ID must not be null");
         return jdbcTemplate.query(
                         FIND_SQL,
+                        this::mapVersionedPayment,
+                        tenantId,
+                        paymentId.value()
+                )
+                .stream()
+                .findFirst();
+    }
+
+    @Override
+    public Optional<VersionedPayment> lockByTenantAndId(
+            UUID tenantId,
+            PaymentId paymentId
+    ) {
+        Objects.requireNonNull(tenantId, "Tenant ID must not be null");
+        Objects.requireNonNull(paymentId, "Payment ID must not be null");
+        return jdbcTemplate.query(
+                        FIND_FOR_UPDATE_SQL,
                         this::mapVersionedPayment,
                         tenantId,
                         paymentId.value()

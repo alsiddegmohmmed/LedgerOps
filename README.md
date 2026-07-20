@@ -39,9 +39,9 @@ Selected verified foundations:
 - validated Payment creation HTTP/OpenAPI contract with RFC 7807 failures and trace correlation
 - Codex operating rules, implementation plans, ADR workflow, review checklist, and requirement traceability
 
-ADR-016 reconciles the Payment lifecycle documentation. ADR-017 establishes the tenant-wide Payment API idempotency boundary. ADR-018 defines the minimal deterministic synchronous Risk model for Release 0.1. ADR-019 defines the Release 0.1 Ledger account model. The Payment domain, creation API, persistence, idempotency boundary, version-aware lifecycle persistence, and both Risk-orchestration transactions are implemented. The Risk model and persistence are verified. The standalone Ledger slice is complete; provider attempts and atomic Payment completion remain incomplete.
+ADR-016 reconciles the Payment lifecycle documentation. ADR-017 establishes the tenant-wide Payment API idempotency boundary. ADR-018 defines the minimal deterministic synchronous Risk model for Release 0.1. ADR-019 defines the Release 0.1 Ledger account model. Accepted ADR-020 defines the exact Payment-success posting and replay boundary. The Payment domain, creation API, persistence, idempotency boundary, version-aware lifecycle persistence, both Risk-orchestration transactions, standalone Ledger slice, and atomic Payment-success completion are implemented. Release API and evidence hardening is the next Slice 9 work.
 
-Slice 7 includes the immutable journal and account domains, V6/V7 persistence, atomic account validation, append-only postings, duplicate-source prevention, deferred database balance verification, and tenant-scoped balance and statement queries. Statements have explicit time boundaries, bounded stable pagination, separate debit/credit totals, and immutable source evidence. Slice 8 is next and will atomically join Payment completion to exactly one Ledger posting.
+Slice 7 includes the immutable journal and account domains, V6/V7 persistence, atomic account validation, append-only postings, duplicate-source prevention, deferred database balance verification, and tenant-scoped balance and statement queries. Statements have explicit time boundaries, bounded stable pagination, separate debit/credit totals, and immutable source evidence. Slice 8 adds the internal, joined PostgreSQL transaction that posts exactly `DEBIT PROVIDER_CLEARING` and `CREDIT MERCHANT_PAYABLE` for the full Payment amount and currency, then completes the Payment. Exact replay validation, inconsistency detection, forced-failure rollback, concurrency, tenant isolation, and Modulith boundary tests pass.
 
 See the [Release 0.1 implementation plan](docs/plans/release-0.1-transactional-core.md) for the live sequence and current evidence.
 
@@ -115,7 +115,7 @@ Current Release 0.1 stack:
 - JUnit 5
 - Testcontainers
 
-The approved long-term technology baseline is documented in the [Technical Design and Architecture Specification](docs/architecture/LedgerOps_Technical_Design_and_Architecture_Specification_v1.4.docx), but technologies are introduced only in their approved release.
+The approved technology baseline is documented in the [Technical Design and Architecture Specification](docs/architecture/LedgerOps_Technical_Design_and_Architecture_Specification_v1.5.docx). Technologies are introduced only in their approved release.
 
 ## Key repository paths
 
@@ -171,8 +171,8 @@ Every meaningful change should connect four kinds of evidence:
 Requirement → design decision → implementation → executable verification
 ```
 
-- [Product Definition](docs/product/LedgerOps_Product_Definition_Official_v1.5.docx) — what the system must do
-- [Technical Specification](docs/architecture/LedgerOps_Technical_Design_and_Architecture_Specification_v1.4.docx) — how the approved system is designed
+- [Product Definition](docs/product/LedgerOps_Product_Definition_Official_v1.6.docx) — approved product baseline
+- [Technical Specification](docs/architecture/LedgerOps_Technical_Design_and_Architecture_Specification_v1.5.docx) — approved design
 - [Release 0.1 plan](docs/plans/release-0.1-transactional-core.md) — current implementation order and status
 - [Requirement traceability](docs/requirements/TRACEABILITY.md) — requirements mapped to evidence
 - [ADR process](docs/adr/README.md) — controlled architectural change

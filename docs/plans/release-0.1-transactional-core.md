@@ -1,8 +1,8 @@
 # Release 0.1 plan: Transactional Core
 
 Status: Active  
-Last updated: 2026-07-20
-Authority: LedgerOps Product Definition v1.5 and LedgerOps Technical Design and Architecture Specification v1.4 only
+Last updated: 2026-07-21
+Authority: LedgerOps Product Definition v1.6 and LedgerOps Technical Design and Architecture Specification v1.5 only
 
 This plan derives its scope and sequence from those two fixed documents. It does not amend, replace, or reinterpret product requirements, module ownership rules, correctness rules, or release boundaries.
 
@@ -78,7 +78,7 @@ Release 0.1 may provide foundations for a broader product requirement without cl
 | 5 | Payment creation and idempotency | complete PAY-01 request fields; unique `(tenant_id, idempotency_key)` constraint; merchant-aware request fingerprint; repeat, conflict, and concurrent PostgreSQL tests | Completed |
 | 6 | Synchronous risk rules | evaluated and triggered rules, score contributions, bounded thresholds, approve/reject/review evidence | Completed |
 | 7 | Double-entry ledger | tenant-scoped accounts, balanced immutable postings, database constraints, property/integration tests | Completed |
-| 8 | Atomic payment completion | one PostgreSQL transaction, narrow locking, forced-failure rollback and concurrency tests | Planned |
+| 8 | Atomic payment completion | accepted ADR-020 exact two-entry template, full replay validation, one joined PostgreSQL transaction, forced-failure rollback, and concurrency tests | Completed |
 | 9 | Release API and evidence hardening | OpenAPI, structured logs, architecture tests, README/demo instructions, traceability audit | Planned |
 
 Only one implementation slice should change shared domain contracts or schemas at a time. Reviews of architecture, persistence/concurrency, or tests may run independently after a stable diff exists.
@@ -130,7 +130,7 @@ Completed Money work:
 2. Enforced currency-defined decimal precision, prohibited negative values, and prohibited cross-currency arithmetic.
 3. Added invariant tests for SAR, JPY, and KWD precision, zero/positive semantics, arithmetic, currency mismatch, and negative-result rejection.
 
-Documentation reconciliation is complete through ADR-016, ADR-017, ADR-018, ADR-019, Product Definition v1.5, and Technical Specification v1.4.
+Documentation reconciliation is complete through accepted ADR-016, ADR-017, ADR-018, ADR-019, and ADR-020. Product Definition v1.6 and Technical Specification v1.5 authorize the completed Slice 8 implementation.
 
 Completed Payment-domain work:
 
@@ -159,7 +159,7 @@ Completed work:
 3. Added a transactional creation service that returns the original Payment for equivalent repeats and rejects materially different content, including a different merchant.
 4. Added the Payment HTTP/OpenAPI contract, correlated RFC 7807 failures, structured logs, and PostgreSQL-backed sequential, concurrent, conflict, isolation, reference, and schema tests.
 
-Risk evaluation is complete. The active work is Slice 7 Ledger implementation; Payment completion still cannot be claimed until the Ledger and atomic-completion slices provide their required evidence.
+Risk evaluation, the standalone Ledger slice, and Slice 8 Payment-success posting are complete under accepted ADR-020. Slice 9 release API and evidence hardening is next.
 
 ## Slice 6 — synchronous deterministic Risk evaluation
 
@@ -283,7 +283,34 @@ Completed account-query increment:
 - A single PostgreSQL statement returns each page and its full-period summary from one database snapshot, preventing concurrent commits from producing internally inconsistent statement results.
 - PostgreSQL/Testcontainers tests prove exact time boundaries, arithmetic, empty results, pagination, source traceability, tenant isolation, and immutable query results.
 
-Slice 7 completion evidence: the focused Ledger suite, `./gradlew test --console=plain`, and `./gradlew check --console=plain` pass. Slice 8 must reuse this Ledger-owned posting boundary while making Payment completion and exactly one Ledger posting atomic.
+Slice 7 completion evidence: the focused Ledger suite, `./gradlew test --console=plain`, and `./gradlew check --console=plain` pass. Slice 8 reuses this Ledger-owned posting boundary while making Payment completion and exactly one Ledger posting atomic.
+
+## Slice 8 — atomic Payment-success completion
+
+Status: Completed. ADR-020 is accepted, and the implementation and required verification evidence pass.
+
+Implemented boundary:
+
+1. The internal `CompletePaymentAfterProviderSuccess` use case represents already-confirmed provider `SUCCESS`; Release 0.1 exposes no public arbitrary-success endpoint.
+2. Payment owns one short PostgreSQL transaction and locks the tenant-scoped Payment row. Ledger joins that transaction through `ledger::api`; neither module accesses the other's tables, and Ledger must not use `REQUIRES_NEW`.
+3. Ledger resolves ACTIVE tenant accounts for the Payment currency and posts exactly two full-amount entries: `DEBIT PROVIDER_CLEARING` and `CREDIT MERCHANT_PAYABLE`. It posts no fee, settlement movement, Reversal, correction, or partial amount.
+4. The source identity is exactly `tenantId + PAYMENT + paymentId`, backed by `UNIQUE (tenant_id, source_type, source_id)`. A valid replay must verify tenant, source, currency, totals, exactly two entries, exact accounts and directions, and no compensation reference.
+
+The state/posting matrix is exact: `PROCESSING` without a posting performs one atomic completion; `PROCESSING` with a posting is a critical inconsistency; `COMPLETED` with the exact posting returns the existing result; `COMPLETED` with no posting or a mismatched posting is a critical inconsistency; every other status is a lifecycle error. Inconsistent state is never normalized, replaced, or repaired by a late posting.
+
+Required evidence includes the exact template, full amount and currency, missing-account rollback, Ledger-insertion rollback, Payment-update rollback, all inconsistent matrix cases, exact replay, duplicate-source prevention, coordinated concurrent completion, tenant isolation, Spring Modulith boundaries, no public completion endpoint, one joined transaction without `REQUIRES_NEW`, and no Release 0.2 infrastructure.
+
+Release 0.2 later adds durable provider evidence, attempts, result deduplication, callbacks, inbox, outbox, and Kafka around this boundary without weakening its atomicity or replay identity.
+
+Implementation evidence:
+
+- `CompletePaymentAfterProviderSuccess` owns one short transaction, locks the tenant-scoped Payment row, applies the complete state/posting matrix, and updates Payment with its expected version.
+- The published `ledger::api` exposes only neutral request and posting-evidence records. Ledger resolves the two required ACTIVE accounts, constructs the exact template, validates it, persists it, and supports tenant-and-source lookup without exposing internal types.
+- Ledger methods require an existing transaction with `MANDATORY`; no `REQUIRES_NEW` or Release 0.2 infrastructure was added.
+- PostgreSQL tests prove the exact full-amount/currency posting, missing-account rollback, injected Ledger-entry failure rollback, injected Payment-update failure rollback, exact replay, mismatch rejection, duplicate-source prevention, row-lock serialization, concurrent completion, and tenant isolation.
+- Boundary tests prove there is no public completion endpoint, Payment owns the transaction, Ledger joins it, and Spring Modulith accepts only the `ledger::api` dependency.
+
+Slice 8 completion evidence: `./gradlew test --console=plain` executed 211 tests successfully, and `./gradlew check --console=plain` passed on 2026-07-21.
 
 ## Release-wide verification targets
 
@@ -295,6 +322,7 @@ Slice 7 completion evidence: the focused Ledger suite, `./gradlew test --console
 - Spring Modulith and architecture tests preventing forbidden dependencies and cross-module access
 - Deterministic Risk tests proving the ADR-018 rule, score, boundary, rollback, uniqueness, optimistic-concurrency, and repeat semantics
 - Ledger account tests proving ACTIVE-only creation/posting, exact account codes, mandatory tenant/currency, immutable identity, non-deletion, tenant/code/currency uniqueness, atomic validation failure, derived immutable history, and PostgreSQL constraints
+- Slice 8 tests proving the exact full-amount two-entry Payment-success template, complete replay evidence, every state/posting matrix branch, joined-transaction rollback, source uniqueness, coordinated concurrency, tenant isolation, and module boundaries
 - OpenAPI contract and RFC 7807 error examples
 - Structured logs for release API operations without secrets or sensitive payloads
 - `./gradlew test` and `./gradlew check` passing
@@ -304,7 +332,8 @@ Slice 7 completion evidence: the focused Ledger suite, `./gradlew test --console
 - Idempotency implemented only in Java would race; a PostgreSQL unique constraint on `(tenant_id, idempotency_key)` and concurrency tests are mandatory.
 - Payment implementation must preserve the exact ADR-016 lifecycle and ownership boundaries; provider, Reversal, and Reconciliation progress must not expand `PaymentStatus`.
 - Idempotency comparison must distinguish equivalent request replay from materially different content. In particular, changing the merchant under the same tenant and key must return a conflict rather than create another Payment.
-- Payment completion and ledger posting can diverge if transaction ownership is unclear; one application service must own the atomic boundary.
+- Payment completion and Ledger posting can diverge if transaction ownership is unclear; Payment must own one transaction and Ledger must join it through `ledger::api` without `REQUIRES_NEW`.
+- Treating source existence as a valid replay can conceal a wrong posting; validate the complete ADR-020 posting shape and raise a typed critical consistency error on any mismatch.
 - Risk evidence and the Payment decision can diverge if Transaction 2 is split or owned by Risk; Payment orchestration must commit both effects atomically.
 - A hidden or global Risk fallback could silently change tenant decisions; require one explicitly persisted active profile and typed configuration failures.
 - Tenant IDs can be forgotten in later tables; enforce non-null ownership and tenant-scoped uniqueness from the first migration for each module.
