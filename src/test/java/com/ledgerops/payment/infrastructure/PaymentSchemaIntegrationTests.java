@@ -2,6 +2,7 @@ package com.ledgerops.payment.infrastructure;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.ledgerops.support.PostgresTestConfiguration;
 import org.junit.jupiter.api.Test;
@@ -105,6 +106,39 @@ class PaymentSchemaIntegrationTests {
                         "PROVIDER_SUBMISSION_PENDING"
                 )
         );
+    }
+
+    @Test
+    void acceptedFinalResultUsesExactPaymentOwnedIdentityAndAttemptRelationship() {
+        List<String> columns = jdbcTemplate.queryForList("""
+                SELECT column_name
+                  FROM information_schema.columns
+                 WHERE table_schema = 'payment'
+                   AND table_name = 'accepted_final_provider_results'
+                 ORDER BY ordinal_position
+                """, String.class);
+        String primaryKey = constraint("accepted_final_provider_results_pkey");
+        String attemptForeignKey = constraint("fk_accepted_final_attempt");
+        String categoryCheck = constraint("ck_accepted_final_category");
+
+        assertEquals(List.of(
+                "tenant_id", "payment_id", "attempt_id", "provider_evidence_id",
+                "provider_result_id", "final_category", "provider_reference", "applied_at"
+        ), columns);
+        assertEquals("PRIMARY KEY (tenant_id, payment_id)", primaryKey);
+        assertEquals("FOREIGN KEY (tenant_id, payment_id, attempt_id) REFERENCES "
+                + "payment.payment_attempts(tenant_id, payment_id, id)", attemptForeignKey);
+        assertTrue(categoryCheck.contains("SUCCESS"));
+        assertTrue(categoryCheck.contains("DECLINED"));
+        assertTrue(categoryCheck.contains("PERMANENT_FAILURE"));
+    }
+
+    private String constraint(String name) {
+        return jdbcTemplate.queryForObject("""
+                SELECT pg_get_constraintdef(oid)
+                  FROM pg_constraint
+                 WHERE conname = ?
+                """, String.class, name);
     }
 
     private void insertPayment(

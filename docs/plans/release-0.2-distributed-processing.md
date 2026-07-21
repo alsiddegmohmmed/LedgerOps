@@ -270,11 +270,11 @@ Implemented evidence:
 - Added the approved 1-second connection, 3-second read, and 5-second total limits; exact circuit-breaker and bulkhead policies; and fenced deferral that does not consume an execution count when no call occurs.
 - Added bounded Provider HTTP duration, result-category, timeout, ambiguity, retry-backlog, recovery-backlog, and circuit-state metrics without business identifiers as labels.
 - PostgreSQL and Simulator tests verify separate schemas, durable acceptance, idempotent replay/conflict, timeout recovery, result/outbox uniqueness, duplicate observations, lease fencing, safe-retry proof, no network call in a transaction, HMAC compatibility, and version-1 result contracts.
-- Payment result application, intentional retry/status scheduling, webhooks, dashboards, and runbooks remain pending in Slices 4–7.
+- Slice 3 deliberately excluded Payment result application and later recovery/webhook work. Slice 4 now completes result application; intentional retry/status scheduling, webhooks, dashboards, and runbooks remain Slices 5–7.
 
 ### Slice 4 — Provider result application
 
-Status: Pending
+Status: Completed
 
 Authority: Product PAY-03, PRV-02–PRV-04, BR-05, and §§10–11; Technical §§5.3, 5.6–5.7, 7.6, 9.2–9.3, 13, and 17.2; ADR-016, ADR-020, and accepted ADR-021.
 
@@ -286,6 +286,17 @@ Authority: Product PAY-03, PRV-02–PRV-04, BR-05, and §§10–11; Technical §
 - Typed failures and observability: Cover missing/mismatched evidence, lifecycle/final conflicts, Ledger inconsistency, rollback, duplicate financial effect, and result traces/metrics.
 - Verification: PostgreSQL/Kafka tests prove duplicate and conflicting results, exact success posting, failure path, no terminal regression, full rollback, concurrent result handling, and no public completion endpoint.
 - Completion: Durable Provider evidence causes at most one terminal Payment transition and one ADR-020 financial effect.
+
+Implemented evidence:
+
+- Added the inbox-backed `payment-provider-result-consumer-v1` for `ProviderResultObserved` on `ledgerops.provider.results.v1`, including valid-envelope, transport-invalid, unsupported-version, bounded-failure, and permanent-consistency handling.
+- Added Payment-owned immutable accepted-final-result evidence through forward migration V11. The table is unique by `(tenant_id, payment_id)`, preserves the exact attempt relationship, and rejects update or deletion.
+- Added neutral `provider::api` evidence verification and exact tenant, Payment, attempt, Provider, result, disposition, reference, origin, and observation matching before any Payment effect.
+- Implemented every approved result category: non-final results leave Payment `PROCESSING`; `DECLINED` and definitive `PERMANENT_FAILURE` use `Payment.fail()`; `SUCCESS` invokes the unchanged ADR-020 completion service.
+- Added `PaymentCompleted` and `PaymentFailed` version-1 JSON Schemas and the exact shared `payment-final:<paymentId>` outbox identity.
+- PostgreSQL and Kafka tests prove exact replay, changed-final conflict preservation, late non-final no-regression, tenant isolation, concurrent final delivery, one accepted result, one lifecycle event, and one exact Ledger effect.
+- Forced missing-account, Ledger-entry, Payment-update, accepted-evidence, and lifecycle-outbox failures prove that inbox, accepted evidence, Payment, Ledger, and outbox effects roll back together.
+- No retry scheduling, webhook reception, Reversal, correction, public completion endpoint, or Release 0.3 capability was added.
 
 ### Slice 5 — safe retry and ambiguity/status recovery
 
@@ -358,16 +369,16 @@ The exact file list is finalized at the start of each slice. The planned ownersh
 | Submission, attempt, PROCESSING, and command outbox commit atomically | PostgreSQL integration and forced-failure tests | `./gradlew test --tests '*PaymentSubmission*' --console=plain` | Passed — Slice 1 |
 | Every Payment Attempt uses SIMULATOR and the exact request-intent hash | Canonical JSON fixtures, SHA-256 vectors, and unsupported-provider tests | Payment Attempt and contract suites | Passed — Slice 1 |
 | Rollback leaves no attempt, transition, or message | Injected persistence failures and final-row assertions | Same focused suite | Passed — Slice 1 |
-| Equivalent business outbox appends reuse one stable message | PostgreSQL uniqueness, content-hash, and replay tests for all four logical keys | Messaging and producing-module suites | Partial — submission identity passes; later producer identities remain scheduled |
+| Equivalent business outbox appends reuse one stable message | PostgreSQL uniqueness, content-hash, and replay tests for all four logical keys | Messaging and producing-module suites | Partial — submission, Provider-result, and Payment-final identities pass; retry identity remains Slice 5 |
 | Changed content under one outbox identity fails | Typed consistency-error and unchanged-row assertions | Messaging integration suite | Passed — implemented identity |
-| Producer names and mappings are closed and exact | Typed API tests, four producer/key/type mappings, and shared Payment-final conflict test | Messaging contract and integration suites | Partial — producer names are closed; later message mappings remain scheduled |
+| Producer names and mappings are closed and exact | Typed API tests, four producer/key/type mappings, and shared Payment-final conflict test | Messaging contract and integration suites | Partial — producer names, submission, Provider-result, and shared Payment-final mappings pass; retry mapping remains Slice 5 |
 | Kafka outage preserves committed outbox work | Kafka/PostgreSQL Testcontainers outage/recovery test | `./gradlew test --tests '*ProviderCommandDeliveryIntegrationTests' --console=plain` | Passed — Slice 2 |
 | Publisher crash after Kafka acceptance duplicates safely | Failpoint test plus inbox/business final state | Same focused suite | Passed — Slice 2 |
 | Duplicate command creates one Provider work item | Kafka consumer concurrency test | `./gradlew test --tests '*ProviderCommandDeliveryIntegrationTests' --console=plain` | Passed — Slice 2 |
 | Provider call runs outside database transaction | Transaction-probe integration test | `./gradlew :test --tests '*ProviderHttpBoundaryTests' --console=plain` | Passed — Slice 3 rejects HTTP with an active transaction |
-| Duplicate Provider results create one Payment/Ledger effect | Kafka/PostgreSQL coordinated result tests | `./gradlew test --tests '*ProviderResultConsumer*' --console=plain` | Partial — Slice 3 keeps duplicate observations but one logical Provider result/outbox; Payment/Ledger application remains Slice 4 |
+| Duplicate Provider results create one Payment/Ledger effect | Kafka/PostgreSQL coordinated result tests | `./gradlew :test --tests '*ProviderResult*' --console=plain` | Passed at the Provider-result boundary — Slice 4; duplicate webhooks remain Slice 6 |
 | Duplicate webhooks create one Payment/Ledger effect | Signed HTTP plus Kafka/PostgreSQL end-to-end test | `./gradlew test --tests '*Webhook*' --console=plain` | Not run |
-| Out-of-order/conflicting finals do not regress state | Result-matrix and dead-letter tests | Result and webhook suites | Not run |
+| Out-of-order/conflicting finals do not regress state | Result-matrix and dead-letter tests | Result and webhook suites | Passed at the Provider-result boundary — Slice 4; webhook ordering remains Slice 6 |
 | Timeout produces UNKNOWN and status recovery | Bounded real-HTTP timeout and durable-work tests | Provider execution suite | Passed at Provider boundary — Slice 3 |
 | UNKNOWN is never blindly resubmitted | Work/attempt count and Provider-call assertions | Provider execution suite | Passed at Provider boundary — timed-out and crash-ambiguous submission work enters recovery; end-to-end scheduler remains Slice 5 |
 | Bounded safe retries create immutable attempts | Clock/scheduler plus Payment Attempt tests | Retry/recovery suite | Not run |
@@ -375,9 +386,9 @@ The exact file list is finalized at the start of each slice. The planned ownersh
 | Intentional retry never re-executes original submission work | `WAITING_RETRY_REQUEST`, work-type, Provider-call-count, fenced transaction, and next-attempt assertions | Provider retry/recovery suite | Not run |
 | Retry request identity survives scheduling and crashes | `(tenant_id, provider_evidence_id)` concurrency, stable `retryRequestId`, and stable outbox tests | Provider PostgreSQL and recovery suites | Not run |
 | Exhaustion remains durable without false final state | Work status, dead evidence, and Payment final-state assertion | Retry/recovery suite | Partial — Slice 3 fences the twelfth status-query boundary and marks Provider work `UNRESOLVED`; Payment/scheduler evidence remains Slice 5 |
-| SUCCESS uses exact ADR-020 posting | Existing plus outer-result transaction tests | Payment completion/result suites | Not run |
-| Ledger or Payment failure still rolls back completion | Existing ADR-020 failpoints with inbox/outbox assertions | Payment completion/result suites | Not run |
-| Inbox and business effect commit together | PostgreSQL/Kafka failure tests | Consumer suites | Passed for Provider command work — Slice 2; later consumers remain scheduled |
+| SUCCESS uses exact ADR-020 posting | Existing plus outer-result transaction tests | Payment completion/result suites | Passed — Slice 4 invokes the unchanged boundary and verifies the exact two-entry posting and replay |
+| Ledger or Payment failure still rolls back completion | Existing ADR-020 failpoints with inbox/outbox assertions | Payment completion/result suites | Passed — Slice 4 verifies missing-account, Ledger insertion, Payment update, accepted-evidence, and lifecycle-outbox rollback |
+| Inbox and business effect commit together | PostgreSQL/Kafka failure tests | Consumer suites | Passed for Provider command work — Slice 2 and Payment result application — Slice 4; later consumers remain scheduled |
 | Valid-envelope unsupported/poison events dead-letter safely | Rollback, separate failure-count transaction, failure-five terminal transaction, immediate unsupported-version, and malformed-payload tests | Messaging consumer suite | Passed — Slice 2 PostgreSQL/Kafka evidence |
 | Transport-invalid envelopes bypass inbox safely | No-messageId parsing cases, immediate transport dead letter, exact topic/partition/offset identity, bounded evidence, and post-commit acknowledgement | Messaging transport suite | Passed — Slice 2 PostgreSQL/Kafka evidence |
 | Claim leases recover crashed workers/publishers | Coordinated lease-expiry tests with injected Clock | Messaging and Provider suites | Passed for outbox publisher and Provider work through Slice 3 |
@@ -389,10 +400,10 @@ The exact file list is finalized at the start of each slice. The planned ownersh
 | Simulator cannot access Core database | Separate application build, datasource, migration tree, and PostgreSQL integration assertion | Simulator test task | Passed — Slice 3 separate subproject and PostgreSQL Testcontainer |
 | Correlation, causation, and trace context propagate | HTTP/Kafka/Provider/webhook span assertions | Observability end-to-end suite | Partial — envelope and Kafka correlation/causation headers pass; trace propagation remains Slice 7 |
 | Metrics and dashboards expose required signals | Meter-registry and dashboard-schema tests | Observability suite | Partial — Slices 2–3 add bounded messaging and Provider measures; exact lag, dashboards, and release evidence remain Slice 7 |
-| Modulith/ArchUnit prohibit forbidden access | Module verification and dependency rules | `./gradlew check --console=plain` | Passed through Slice 3 |
-| No Release 0.3+ capability is introduced | Dependency/source/scope searches and diff review | Repository audit commands | Passed through Slice 3 |
-| All existing and Release 0.2 tests pass | Full suite | `./gradlew test --console=plain` | Passed through Slice 3 |
-| All project checks pass | Full check | `./gradlew check --console=plain` | Passed through Slice 3 |
+| Modulith/ArchUnit prohibit forbidden access | Module verification and dependency rules | `./gradlew check --console=plain` | Passed through Slice 4 |
+| No Release 0.3+ capability is introduced | Dependency/source/scope searches and diff review | Repository audit commands | Passed through Slice 4 |
+| All existing and Release 0.2 tests pass | Full suite | `./gradlew test --console=plain` | Passed through Slice 4 |
+| All project checks pass | Full check | `./gradlew check --console=plain` | Passed through Slice 4 |
 
 ### Required release-gate commands
 

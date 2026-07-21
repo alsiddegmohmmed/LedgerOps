@@ -73,6 +73,18 @@ class ArchitectureRulesTests {
     }
 
     @Test
+    void providerPublishedApiDoesNotExposeProviderInternals() {
+        classes()
+                .that().resideInAPackage("com.ledgerops.provider.api..")
+                .should().onlyDependOnClassesThat().resideInAnyPackage(
+                        "com.ledgerops.provider.api..",
+                        "java..",
+                        "org.springframework.modulith.."
+                )
+                .check(productionClasses);
+    }
+
+    @Test
     void controllersRemainInApiPackages() {
         classes()
                 .that().areAnnotatedWith(RestController.class)

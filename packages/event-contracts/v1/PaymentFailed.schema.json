@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ledgerops.dev/contracts/v1/PaymentFailed.schema.json",
+  "title": "PaymentFailed v1",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "paymentId",
+    "attemptId",
+    "providerEvidenceId",
+    "finalCategory",
+    "failedAt"
+  ],
+  "properties": {
+    "paymentId": { "type": "string", "format": "uuid" },
+    "attemptId": { "type": "string", "format": "uuid" },
+    "providerEvidenceId": { "type": "string", "format": "uuid" },
+    "finalCategory": { "enum": ["DECLINED", "PERMANENT_FAILURE"] },
+    "providerReference": { "type": "string", "minLength": 1 },
+    "failedAt": { "type": "string", "format": "date-time" }
+  }
+}

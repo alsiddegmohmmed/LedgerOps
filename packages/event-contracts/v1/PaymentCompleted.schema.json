@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ledgerops.dev/contracts/v1/PaymentCompleted.schema.json",
+  "title": "PaymentCompleted v1",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "paymentId",
+    "attemptId",
+    "providerEvidenceId",
+    "ledgerTransactionId",
+    "completedAt"
+  ],
+  "properties": {
+    "paymentId": { "type": "string", "format": "uuid" },
+    "attemptId": { "type": "string", "format": "uuid" },
+    "providerEvidenceId": { "type": "string", "format": "uuid" },
+    "providerReference": { "type": "string", "minLength": 1 },
+    "ledgerTransactionId": { "type": "string", "format": "uuid" },
+    "completedAt": { "type": "string", "format": "date-time" }
+  }
+}

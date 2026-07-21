@@ -29,8 +29,47 @@ class KafkaTopicConfiguration {
     }
 
     @Bean
+    @ConditionalOnProperty(
+            name = "ledgerops.messaging.publisher.enabled",
+            havingValue = "true",
+            matchIfMissing = true
+    )
+    NewTopic providerResultsTopic() {
+        return TopicBuilder.name("ledgerops.provider.results.v1")
+                .partitions(6)
+                .replicas(1)
+                .build();
+    }
+
+    @Bean
+    @ConditionalOnProperty(
+            name = "ledgerops.messaging.publisher.enabled",
+            havingValue = "true",
+            matchIfMissing = true
+    )
+    NewTopic paymentLifecycleTopic() {
+        return TopicBuilder.name("ledgerops.payment.lifecycle.v1")
+                .partitions(6)
+                .replicas(1)
+                .build();
+    }
+
+    @Bean
     ConcurrentKafkaListenerContainerFactory<Object, Object>
             providerCommandKafkaListenerContainerFactory(
+                    ConcurrentKafkaListenerContainerFactoryConfigurer configurer,
+                    ConsumerFactory<Object, Object> consumerFactory
+            ) {
+        ConcurrentKafkaListenerContainerFactory<Object, Object> factory =
+                new ConcurrentKafkaListenerContainerFactory<>();
+        configurer.configure(factory, consumerFactory);
+        factory.getContainerProperties().setAckMode(ContainerProperties.AckMode.MANUAL_IMMEDIATE);
+        return factory;
+    }
+
+    @Bean
+    ConcurrentKafkaListenerContainerFactory<Object, Object>
+            paymentResultKafkaListenerContainerFactory(
                     ConcurrentKafkaListenerContainerFactoryConfigurer configurer,
                     ConsumerFactory<Object, Object> consumerFactory
             ) {

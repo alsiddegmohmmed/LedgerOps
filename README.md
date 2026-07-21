@@ -45,7 +45,7 @@ Selected verified foundations:
 
 ADR-016 reconciles the Payment lifecycle documentation. ADR-017 establishes the tenant-wide Payment API idempotency boundary. ADR-018 defines the minimal deterministic synchronous Risk model for Release 0.1. ADR-019 defines the Release 0.1 Ledger account model. Accepted ADR-020 defines the exact Payment-success posting and replay boundary. All nine Release 0.1 implementation slices are complete, including API and evidence hardening.
 
-Release 0.2 is active under [accepted ADR-021](docs/adr/ADR-021-define-release-0.2-provider-and-messaging-semantics.md) and the [Release 0.2 implementation plan](docs/plans/release-0.2-distributed-processing.md). Slices 0–3 are complete. The repository now has immutable Payment Attempts; atomic Payment submission; at-least-once Kafka command delivery; fenced outbox, inbox, and Provider work; a separate Provider Simulator and database; signed submission and status-query HTTP contracts; immutable Provider evidence; and duplicate-safe `ProviderResultObserved` outbox records. Payment result application, retry/recovery execution, webhooks, dashboards, and runbooks remain pending.
+Release 0.2 is active under [accepted ADR-021](docs/adr/ADR-021-define-release-0.2-provider-and-messaging-semantics.md) and the [Release 0.2 implementation plan](docs/plans/release-0.2-distributed-processing.md). Slices 0–4 are complete. The repository now has immutable Payment Attempts; atomic Payment submission; at-least-once Kafka command and result delivery; fenced outbox, inbox, and Provider work; a separate Provider Simulator and database; signed submission and status-query HTTP contracts; immutable Provider evidence; Payment-owned accepted-final evidence; exact Provider-result application; and duplicate-safe `PaymentCompleted` and `PaymentFailed` lifecycle outbox records. `SUCCESS` still uses the unchanged ADR-020 completion boundary. Retry/recovery execution, webhooks, dashboards, and runbooks remain pending.
 
 Slice 7 includes the immutable journal and account domains, V6/V7 persistence, atomic account validation, append-only postings, duplicate-source prevention, deferred database balance verification, and tenant-scoped balance and statement queries. Statements have explicit time boundaries, bounded stable pagination, separate debit/credit totals, and immutable source evidence. Slice 8 adds the internal, joined PostgreSQL transaction that posts exactly `DEBIT PROVIDER_CLEARING` and `CREDIT MERCHANT_PAYABLE` for the full Payment amount and currency, then completes the Payment. Exact replay validation, inconsistency detection, forced-failure rollback, concurrency, tenant isolation, and Modulith boundary tests pass.
 
@@ -101,7 +101,7 @@ The [requirement traceability matrix](docs/requirements/TRACEABILITY.md) records
 | Release | Outcome | Status |
 |---|---|---|
 | 0.1 | Transactional core: tenancy, payments, idempotency, synchronous risk, ledger, and atomic completion | Completed |
-| 0.2 | Distributed processing with Kafka, transactional outbox, and idempotent consumers | Active — Slices 0–3 complete |
+| 0.2 | Distributed processing with Kafka, transactional outbox, and idempotent consumers | Active — Slices 0–4 complete |
 | 0.3 | Keycloak, identity, tenant membership, permissions, merchant scope, authorization, tenant isolation, reconciliation, corrections, and financial operations | Planned |
 | 1.0 | Security hardening and release evidence: deployment controls, scanning, secrets, operational verification, documentation, observability, and portfolio release | Planned |
 | Post-1.0 | Advisory applied-AI capabilities outside critical financial decisions | Deferred |
@@ -110,7 +110,7 @@ Later-release technology remains excluded until the approved release sequence in
 
 ## Technology
 
-Current implemented stack through Release 0.2 Slice 3:
+Current implemented stack through Release 0.2 Slice 4:
 
 - Java 21
 - Spring Boot 4
@@ -124,7 +124,7 @@ Current implemented stack through Release 0.2 Slice 3:
 - JUnit 5
 - Testcontainers
 
-The approved technology baseline is documented in the [Technical Design and Architecture Specification](docs/architecture/LedgerOps_Technical_Design_and_Architecture_Specification_v1.6.docx). Technologies are introduced only by their implementation slice. Slice 3 adds the separate Provider Simulator, signed Provider HTTP, Resilience4j policies, and immutable Provider evidence. Payment result application and recovery orchestration begin in later slices.
+The approved technology baseline is documented in the [Technical Design and Architecture Specification](docs/architecture/LedgerOps_Technical_Design_and_Architecture_Specification_v1.6.docx). Technologies are introduced only by their implementation slice. Slice 4 adds no new platform technology; it completes the evidence-gated Provider-result path into the existing Payment and Ledger transaction. Retry and recovery orchestration begin in Slice 5.
 
 ## Key repository paths
 

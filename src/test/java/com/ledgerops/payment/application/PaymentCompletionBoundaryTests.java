@@ -39,6 +39,17 @@ class PaymentCompletionBoundaryTests {
     }
 
     @Test
+    void providerResultApplicationHasNoPublicHttpEndpoint() {
+        boolean publicResultEndpoint = handlerMapping.getHandlerMethods().keySet().stream()
+                .flatMap(mapping -> mapping.getPatternValues().stream())
+                .map(String::toLowerCase)
+                .anyMatch(pattern -> pattern.contains("provider-result")
+                        || pattern.contains("payment-result"));
+
+        assertFalse(publicResultEndpoint);
+    }
+
+    @Test
     void paymentOwnsTheTransactionAndLedgerMustJoinIt() throws Exception {
         Method paymentMethod = CompletePaymentAfterProviderSuccess.class.getMethod(
                 "complete",
@@ -65,6 +76,16 @@ class PaymentCompletionBoundaryTests {
         assertEquals(
                 Propagation.MANDATORY,
                 postMethod.getAnnotation(Transactional.class).propagation()
+        );
+
+        Method resultMethod = ApplyProviderResult.class.getMethod(
+                "apply",
+                com.ledgerops.messaging.api.IncomingMessage.class,
+                PaymentProviderResultCommand.class
+        );
+        assertEquals(
+                Propagation.REQUIRED,
+                resultMethod.getAnnotation(Transactional.class).propagation()
         );
     }
 }

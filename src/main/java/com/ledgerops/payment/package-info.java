@@ -5,6 +5,7 @@
             "ledger::api",
             "merchant::api",
             "messaging::api",
+            "provider::api",
             "risk::api",
             "tenancy::api"
         }
