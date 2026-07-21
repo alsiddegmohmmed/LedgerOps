@@ -45,6 +45,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @SpringBootTest(properties = {
         "ledgerops.messaging.publisher.enabled=true",
         "ledgerops.payment.result-consumer.enabled=true",
+        "ledgerops.payment.retry-consumer.enabled=true",
         "ledgerops.provider.command-consumer.enabled=false",
         "ledgerops.provider.execution.enabled=false",
         "ledgerops.messaging.publisher.delay-ms=50"

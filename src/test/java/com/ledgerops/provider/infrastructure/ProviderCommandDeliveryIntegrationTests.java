@@ -6,10 +6,17 @@ import com.ledgerops.messaging.api.ProducerName;
 import com.ledgerops.messaging.api.StoredOutboxMessage;
 import com.ledgerops.support.KafkaTestConfiguration;
 import com.ledgerops.support.PostgresTestConfiguration;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.opentelemetry.api.trace.SpanKind;
+import io.opentelemetry.sdk.testing.exporter.InMemorySpanExporter;
+import io.opentelemetry.sdk.trace.export.SimpleSpanProcessor;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Bean;
+import org.springframework.boot.micrometer.tracing.opentelemetry.autoconfigure.SdkTracerProviderBuilderCustomizer;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -28,8 +35,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
         "ledgerops.provider.command-consumer.enabled=true",
         "ledgerops.messaging.publisher.delay-ms=50"
 })
-@Import({PostgresTestConfiguration.class, KafkaTestConfiguration.class})
+@Import({PostgresTestConfiguration.class, KafkaTestConfiguration.class,
+        ProviderCommandDeliveryIntegrationTests.TraceExportConfiguration.class})
 class ProviderCommandDeliveryIntegrationTests {
+
+    private static final String TRACEPARENT =
+            "00-00000000000000000000000000000001-0000000000000002-01";
+    private static final String TRACESTATE = "ledgerops=release-0.2";
 
     @Autowired
     private MessageOutbox outbox;
@@ -45,6 +57,12 @@ class ProviderCommandDeliveryIntegrationTests {
 
     @Autowired
     private KafkaContainer kafkaContainer;
+
+    @Autowired
+    private InMemorySpanExporter spanExporter;
+
+    @Autowired
+    private MeterRegistry meters;
 
     @Test
     void committedCommandReachesOneInboxAndOneDurableProviderWorkAcrossRedelivery() {
@@ -86,6 +104,76 @@ class ProviderCommandDeliveryIntegrationTests {
         assertEquals("SIMULATOR", jdbc.queryForObject(
                 "SELECT provider_id FROM provider.work WHERE tenant_id = ?", String.class, tenantId
         ));
+        String deliveredTraceparent = jdbc.queryForObject(
+                "SELECT traceparent FROM provider.work WHERE tenant_id = ?",
+                String.class, tenantId);
+        assertTrue(deliveredTraceparent.startsWith(
+                "00-00000000000000000000000000000001-"));
+        assertEquals(TRACESTATE, jdbc.queryForObject(
+                "SELECT tracestate FROM provider.work WHERE tenant_id = ?",
+                String.class, tenantId));
+
+        await(() -> spanExporter.getFinishedSpanItems().stream().anyMatch(span ->
+                        span.getName().equals("messaging.outbox.publish")
+                                && span.getTraceId().equals(
+                                "00000000000000000000000000000001")),
+                Duration.ofSeconds(20));
+        var publishSpan = spanExporter.getFinishedSpanItems().stream()
+                .filter(span -> span.getName().equals("messaging.outbox.publish"))
+                .filter(span -> span.getTraceId().equals(
+                        "00000000000000000000000000000001"))
+                .findFirst().orElseThrow();
+        assertEquals("0000000000000002", publishSpan.getParentSpanId());
+        assertEquals(SpanKind.PRODUCER, publishSpan.getKind());
+        var consumerSpan = spanExporter.getFinishedSpanItems().stream()
+                .filter(span ->
+                span.getTraceId().equals(publishSpan.getTraceId())
+                        && span.getKind() == SpanKind.CONSUMER)
+                .findFirst().orElseThrow();
+        assertTrue(spanExporter.getFinishedSpanItems().stream()
+                .filter(span -> span.getName().equals("messaging.outbox.publish"))
+                .anyMatch(span -> span.getSpanId().equals(consumerSpan.getParentSpanId())));
+    }
+
+    @Test
+    void invalidOptionalTraceHeaderIsDroppedWithoutPoisoningBusinessWork() throws Exception {
+        UUID messageId = UUID.randomUUID();
+        UUID tenantId = UUID.randomUUID();
+        UUID paymentId = UUID.randomUUID();
+        UUID attemptId = UUID.randomUUID();
+        String raw = envelope(messageId, tenantId, paymentId, 1,
+                payload(paymentId, attemptId));
+        var properties = new java.util.Properties();
+        properties.put(org.apache.kafka.clients.producer.ProducerConfig.BOOTSTRAP_SERVERS_CONFIG,
+                kafkaContainer.getBootstrapServers());
+        properties.put(org.apache.kafka.clients.producer.ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG,
+                org.apache.kafka.common.serialization.StringSerializer.class);
+        properties.put(org.apache.kafka.clients.producer.ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG,
+                org.apache.kafka.common.serialization.StringSerializer.class);
+        try (var producer = new org.apache.kafka.clients.producer.KafkaProducer<String, String>(
+                properties)) {
+            var record = new org.apache.kafka.clients.producer.ProducerRecord<>(
+                    "ledgerops.provider.commands.v1", paymentId.toString(), raw
+            );
+            record.headers().add("traceparent", "invalid".getBytes(
+                    java.nio.charset.StandardCharsets.UTF_8));
+            producer.send(record).get(10, java.util.concurrent.TimeUnit.SECONDS);
+        }
+
+        await(() -> count("provider.work", "tenant_id", tenantId) == 1,
+                Duration.ofSeconds(20));
+
+        assertEquals("PROCESSED", jdbc.queryForObject("""
+                SELECT status FROM messaging.inbox
+                 WHERE consumer_name = 'provider-command-consumer-v1' AND message_id = ?
+                """, String.class, messageId));
+        String replacementTrace = jdbc.queryForObject(
+                "SELECT traceparent FROM provider.work WHERE tenant_id = ?",
+                String.class, tenantId);
+        assertTrue(replacementTrace.matches(
+                "00-[0-9a-f]{32}-[0-9a-f]{16}-[0-9a-f]{2}"));
+        assertTrue(meters.get("ledgerops.trace.context.invalid")
+                .tag("boundary", "provider_command_consumer").counter().count() >= 1);
     }
 
     @Test
@@ -178,16 +266,7 @@ class ProviderCommandDeliveryIntegrationTests {
     }
 
     private OutboxMessageDraft draft(UUID tenantId, UUID paymentId, UUID attemptId) {
-        String payload = "{" +
-                "\"attemptId\":\"" + attemptId + "\"," +
-                "\"paymentId\":\"" + paymentId + "\"," +
-                "\"attemptSequence\":1," +
-                "\"providerId\":\"SIMULATOR\"," +
-                "\"providerIdempotencyKey\":\"payment:" + paymentId + "\"," +
-                "\"amount\":\"12.30\"," +
-                "\"currency\":\"SAR\"," +
-                "\"paymentMethodCategory\":\"CARD\"," +
-                "\"requestIntentHash\":\"" + "a".repeat(64) + "\"}";
+        String payload = payload(paymentId, attemptId);
         return new OutboxMessageDraft(
                 ProducerName.PAYMENT,
                 "payment-submission:" + attemptId,
@@ -200,8 +279,37 @@ class ProviderCommandDeliveryIntegrationTests {
                 payload,
                 UUID.randomUUID(),
                 UUID.randomUUID(),
-                Instant.now()
+                Instant.now(),
+                TRACEPARENT,
+                TRACESTATE
         );
+    }
+
+    private String payload(UUID paymentId, UUID attemptId) {
+        return "{" +
+                "\"attemptId\":\"" + attemptId + "\"," +
+                "\"paymentId\":\"" + paymentId + "\"," +
+                "\"attemptSequence\":1," +
+                "\"providerId\":\"SIMULATOR\"," +
+                "\"providerIdempotencyKey\":\"payment:" + paymentId + "\"," +
+                "\"amount\":\"12.30\"," +
+                "\"currency\":\"SAR\"," +
+                "\"paymentMethodCategory\":\"CARD\"," +
+                "\"requestIntentHash\":\"" + "a".repeat(64) + "\"}";
+    }
+
+    @TestConfiguration(proxyBeanMethods = false)
+    static class TraceExportConfiguration {
+        @Bean
+        InMemorySpanExporter inMemorySpanExporter() {
+            return InMemorySpanExporter.create();
+        }
+
+        @Bean
+        SdkTracerProviderBuilderCustomizer traceExporterCustomizer(
+                InMemorySpanExporter exporter) {
+            return builder -> builder.addSpanProcessor(SimpleSpanProcessor.create(exporter));
+        }
     }
 
     private String envelope(

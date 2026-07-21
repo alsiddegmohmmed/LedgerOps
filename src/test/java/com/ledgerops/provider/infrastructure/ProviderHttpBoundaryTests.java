@@ -5,6 +5,13 @@ import com.ledgerops.provider.application.ProviderWorkType;
 import io.github.resilience4j.bulkhead.Bulkhead;
 import io.github.resilience4j.bulkhead.BulkheadConfig;
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
+import io.micrometer.tracing.otel.bridge.OtelCurrentTraceContext;
+import io.micrometer.tracing.otel.bridge.OtelTracer;
+import io.opentelemetry.api.trace.SpanKind;
+import io.opentelemetry.sdk.OpenTelemetrySdk;
+import io.opentelemetry.sdk.testing.exporter.InMemorySpanExporter;
+import io.opentelemetry.sdk.trace.SdkTracerProvider;
+import io.opentelemetry.sdk.trace.export.SimpleSpanProcessor;
 import org.junit.jupiter.api.Test;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
@@ -53,7 +60,9 @@ class ProviderHttpBoundaryTests {
         var server = com.sun.net.httpserver.HttpServer.create(new InetSocketAddress(0), 0);
         var response = new java.util.concurrent.atomic.AtomicReference<>(
                 "{\"category\":\"TEMPORARY_FAILURE\",\"accepted\":false}");
+        var propagatedTrace = new java.util.concurrent.atomic.AtomicReference<String>();
         server.createContext("/provider/v1/payments", exchange -> {
+            propagatedTrace.set(exchange.getRequestHeaders().getFirst("traceparent"));
             byte[] bytes = response.get().getBytes(java.nio.charset.StandardCharsets.UTF_8);
             exchange.sendResponseHeaders(503, bytes.length);
             exchange.getResponseBody().write(bytes);
@@ -65,6 +74,8 @@ class ProviderHttpBoundaryTests {
             assertEquals(com.ledgerops.provider.api.RetryDisposition.SAFE_TO_RESUBMIT,
                     safe.disposition());
             assertTrue(safe.noAcceptanceProven());
+            assertEquals("00-00000000000000000000000000000001-0000000000000002-01",
+                    propagatedTrace.get());
 
             response.set("{\"category\":\"TEMPORARY_FAILURE\"}");
             var ambiguous = gateway.execute(claim());
@@ -73,6 +84,51 @@ class ProviderHttpBoundaryTests {
             assertFalse(ambiguous.noAcceptanceProven());
         } finally {
             server.stop(0);
+        }
+    }
+
+    @Test
+    void providerHttpSpanContinuesPersistedTraceAndPropagatesItsChildContext() throws Exception {
+        var exporter = InMemorySpanExporter.create();
+        var provider = SdkTracerProvider.builder()
+                .addSpanProcessor(SimpleSpanProcessor.create(exporter)).build();
+        var telemetry = OpenTelemetrySdk.builder().setTracerProvider(provider).build();
+        var tracer = new OtelTracer(
+                telemetry.getTracer("ledgerops-test"), new OtelCurrentTraceContext(), ignored -> {
+                }
+        );
+        var propagatedTrace = new java.util.concurrent.atomic.AtomicReference<String>();
+        var server = com.sun.net.httpserver.HttpServer.create(new InetSocketAddress(0), 0);
+        server.createContext("/provider/v1/payments", exchange -> {
+            propagatedTrace.set(exchange.getRequestHeaders().getFirst("traceparent"));
+            String response = "{\"category\":\"SUCCESS\",\"providerResultId\":\""
+                    + UUID.randomUUID() + "\",\"providerReference\":\"sim-ref\"}";
+            byte[] bytes = response.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+            exchange.sendResponseHeaders(200, bytes.length);
+            exchange.getResponseBody().write(bytes);
+            exchange.close();
+        });
+        server.start();
+        try (SimulatorProviderGateway gateway = new SimulatorProviderGateway(
+                URI.create("http://127.0.0.1:" + server.getAddress().getPort()),
+                new ProviderHmacSigner("core-key", "test-only-shared-secret"),
+                CircuitBreaker.ofDefaults("trace-test"),
+                Bulkhead.of("trace-test",
+                        BulkheadConfig.custom().maxConcurrentCalls(10).build()),
+                Clock.systemUTC(), tracer)) {
+            gateway.execute(claim());
+
+            var span = exporter.getFinishedSpanItems().stream()
+                    .filter(item -> item.getName().equals("provider.simulator.http"))
+                    .findFirst().orElseThrow();
+            assertEquals("00000000000000000000000000000001", span.getTraceId());
+            assertEquals("0000000000000002", span.getParentSpanId());
+            assertEquals(SpanKind.CLIENT, span.getKind());
+            assertEquals("00-" + span.getTraceId() + "-" + span.getSpanId() + "-01",
+                    propagatedTrace.get());
+        } finally {
+            server.stop(0);
+            provider.close();
         }
     }
 
@@ -160,7 +216,9 @@ class ProviderHttpBoundaryTests {
         UUID paymentId = UUID.randomUUID();
         return new ProviderWorkClaim(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(),
                 paymentId, 1, ProviderWorkType.SUBMISSION, "SIMULATOR", "payment:" + paymentId,
-                "a".repeat(64), "{}", UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(),
+                "a".repeat(64), "{}", UUID.randomUUID(), UUID.randomUUID(),
+                "00-00000000000000000000000000000001-0000000000000002-01", null,
+                UUID.randomUUID(),
                 Instant.now().plusSeconds(30), preTransmissionRetryAvailable, false, false);
     }
 

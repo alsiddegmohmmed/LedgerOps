@@ -54,6 +54,7 @@ class SimulatorWebhookDeliveryStore {
                         rs.getObject("provider_event_id", UUID.class),
                         rs.getString("payload"), rs.getString("signature_mode"),
                         rs.getInt("repeat_remaining"), rs.getInt("attempt_count"),
+                        rs.getString("traceparent"), rs.getString("tracestate"),
                         rs.getObject("lease_token", UUID.class),
                         rs.getTimestamp("lease_expires_at").toInstant())) : Optional.empty(),
                 Timestamp.from(now), Timestamp.from(now), leaseOwner, token,

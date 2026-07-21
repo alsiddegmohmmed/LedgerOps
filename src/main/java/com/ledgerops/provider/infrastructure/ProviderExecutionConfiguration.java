@@ -5,6 +5,7 @@ import io.github.resilience4j.bulkhead.BulkheadConfig;
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerConfig;
 import org.springframework.beans.factory.annotation.Value;
+import io.micrometer.tracing.Tracer;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -45,7 +46,9 @@ class ProviderExecutionConfiguration {
     SimulatorProviderGateway simulatorProviderGateway(
             @Value("${ledgerops.provider.simulator.base-url}") URI baseUri,
             ProviderHmacSigner signer, CircuitBreaker circuitBreaker,
-            Bulkhead bulkhead, Clock clock) {
-        return new SimulatorProviderGateway(baseUri, signer, circuitBreaker, bulkhead, clock);
+            Bulkhead bulkhead, Clock clock, Tracer tracer) {
+        return new SimulatorProviderGateway(
+                baseUri, signer, circuitBreaker, bulkhead, clock, tracer
+        );
     }
 }

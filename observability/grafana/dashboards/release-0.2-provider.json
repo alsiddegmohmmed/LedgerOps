@@ -1,0 +1,20 @@
+{
+  "annotations": {"list": []},
+  "editable": false,
+  "panels": [
+    {"type":"timeseries","title":"Provider latency","targets":[{"expr":"rate(ledgerops_provider_http_duration_seconds_sum[5m]) / clamp_min(rate(ledgerops_provider_http_duration_seconds_count[5m]), 1)","legendFormat":"{{operation}} / {{outcome}}"}],"gridPos":{"h":8,"w":12,"x":0,"y":0}},
+    {"type":"timeseries","title":"Provider result categories","targets":[{"expr":"rate(ledgerops_provider_result_total[5m])","legendFormat":"{{category}}"}],"gridPos":{"h":8,"w":12,"x":12,"y":0}},
+    {"type":"stat","title":"Retry and recovery backlog","targets":[{"expr":"ledgerops_provider_retry_backlog","legendFormat":"retry"},{"expr":"ledgerops_provider_recovery_backlog","legendFormat":"recovery"}],"gridPos":{"h":6,"w":8,"x":0,"y":8}},
+    {"type":"timeseries","title":"Webhook reception","targets":[{"expr":"rate(ledgerops_webhook_receipt_total[5m])","legendFormat":"{{verification}}"},{"expr":"ledgerops_webhook_backlog","legendFormat":"backlog"}],"gridPos":{"h":6,"w":8,"x":8,"y":8}},
+    {"type":"timeseries","title":"Timeouts and ambiguity","targets":[{"expr":"rate(ledgerops_provider_timeout_total[5m])","legendFormat":"timeout / {{operation}}"},{"expr":"rate(ledgerops_provider_ambiguity_total[5m])","legendFormat":"ambiguity"}],"gridPos":{"h":6,"w":8,"x":16,"y":8}},
+    {"type":"stat","title":"Circuit and stuck Payments","targets":[{"expr":"ledgerops_provider_circuit_state","legendFormat":"{{circuit}} / {{state}}"},{"expr":"ledgerops_payment_processing_stuck","legendFormat":"stuck payments"}],"gridPos":{"h":6,"w":12,"x":0,"y":14}},
+    {"type":"stat","title":"Duplicate financial effects (target 0)","targets":[{"expr":"ledgerops_duplicate_financial_effect_total"}],"gridPos":{"h":6,"w":12,"x":12,"y":14}}
+  ],
+  "schemaVersion": 41,
+  "tags": ["ledgerops", "release-0.2", "provider"],
+  "templating": {"list": []},
+  "time": {"from":"now-1h","to":"now"},
+  "title": "LedgerOps Release 0.2 Provider Operations",
+  "uid": "ledgerops-release-02-provider",
+  "version": 1
+}

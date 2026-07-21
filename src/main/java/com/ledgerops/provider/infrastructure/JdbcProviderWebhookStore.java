@@ -118,15 +118,16 @@ class JdbcProviderWebhookStore implements ProviderWebhookStore, ProviderWebhookE
                      provider_event_id, payment_id, attempt_id, attempt_sequence,
                      provider_idempotency_key, provider_result_id, provider_reference,
                      result_category, provider_occurred_at, payload_hash, canonical_payload,
-                     status, correlation_id, received_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING', ?, ?, ?)
+                     status, correlation_id, traceparent, tracestate, received_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING', ?, ?, ?, ?, ?)
                 ON CONFLICT (tenant_id, provider_id, provider_event_id) DO NOTHING
                 """, eventId, mapping.tenantId(), authentication.providerId(),
                 authentication.providerClientId(), payload.providerEventId(), mapping.paymentId(),
                 mapping.attemptId(), mapping.attemptSequence(), mapping.providerKey(),
                 payload.providerResultId(), payload.providerReference(), payload.category().name(),
                 Timestamp.from(payload.providerOccurredAt()), bodyHash, payload.canonicalJson(),
-                request.correlationId(), Timestamp.from(request.receivedAt()),
+                request.correlationId(), request.traceparent(), request.tracestate(),
+                Timestamp.from(request.receivedAt()),
                 Timestamp.from(request.receivedAt()));
         if (inserted == 1) {
             insertReceipt(request, mapping.tenantId(), eventId, payload.providerEventId(),
@@ -201,6 +202,8 @@ class JdbcProviderWebhookStore implements ProviderWebhookStore, ProviderWebhookE
                         rs.getTimestamp("provider_occurred_at").toInstant(),
                         rs.getString("payload_hash"),
                         rs.getObject("correlation_id", UUID.class),
+                        rs.getString("traceparent"),
+                        rs.getString("tracestate"),
                         rs.getTimestamp("received_at").toInstant(),
                         rs.getObject("lease_token", UUID.class),
                         rs.getTimestamp("lease_expires_at").toInstant()
@@ -279,7 +282,7 @@ class JdbcProviderWebhookStore implements ProviderWebhookStore, ProviderWebhookE
                 claim.providerResultId(), claim.providerIdempotencyKey(),
                 durable.providerReference(), durable.category(), durable.disposition(),
                 durable.origin(), durable.observedAt(), claim.correlationId(),
-                claim.providerEventId(), now));
+                claim.providerEventId(), now, claim.traceparent(), claim.tracestate()));
         if (disposition == RetryDisposition.STATUS_RECOVERY_REQUIRED) {
             createStatusRecovery(claim, now);
         }
@@ -331,10 +334,11 @@ class JdbcProviderWebhookStore implements ProviderWebhookStore, ProviderWebhookE
                     (id, tenant_id, attempt_id, payment_id, attempt_sequence, work_type,
                      status, provider_id, provider_idempotency_key, request_intent_hash,
                      command_payload, due_at, correlation_id, causation_id,
-                     created_at, updated_at)
+                     traceparent, tracestate, created_at, updated_at)
                 SELECT ?, w.tenant_id, w.attempt_id, w.payment_id, w.attempt_sequence,
                        'STATUS_QUERY', 'PENDING', w.provider_id,
-                       w.provider_idempotency_key, w.request_intent_hash, '{}', ?, ?, ?, ?, ?
+                       w.provider_idempotency_key, w.request_intent_hash, '{}', ?, ?, ?,
+                       w.traceparent, w.tracestate, ?, ?
                   FROM provider.work w
                  WHERE w.tenant_id = ? AND w.attempt_id = ?
                    AND w.work_type = 'SUBMISSION'

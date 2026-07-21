@@ -33,14 +33,17 @@ class ProviderWebhookController {
             @RequestHeader(value = "X-LedgerOps-Key-Id", required = false) String keyId,
             @RequestHeader(value = "X-LedgerOps-Timestamp", required = false) String timestamp,
             @RequestHeader(value = "X-LedgerOps-Event-Id", required = false) String eventId,
-            @RequestHeader(value = "X-LedgerOps-Signature", required = false) String signature
+            @RequestHeader(value = "X-LedgerOps-Signature", required = false) String signature,
+            @RequestHeader(value = "traceparent", required = false) String traceparent,
+            @RequestHeader(value = "tracestate", required = false) String tracestate
     ) throws IOException {
         byte[] body = httpRequest.getInputStream()
                 .readNBytes(ReceiveProviderWebhook.MAXIMUM_BODY_BYTES + 1);
         UUID correlationId = UUID.fromString(MDC.get("correlationId"));
         var result = receiver.receive(new ProviderWebhookRequest(
                 body, keyId, timestamp, eventId, signature,
-                correlationId, clock.instant()));
+                correlationId, clock.instant(), validTraceparent(traceparent),
+                boundedTracestate(tracestate)));
         return switch (result.outcome()) {
             case UNAUTHORIZED -> ResponseEntity.status(401).build();
             case INVALID_PAYLOAD -> ResponseEntity.badRequest().build();
@@ -48,5 +51,14 @@ class ProviderWebhookController {
             case TOO_LARGE -> ResponseEntity.status(413).build();
             case UNMAPPED, ACCEPTED, DUPLICATE -> ResponseEntity.accepted().build();
         };
+    }
+
+    private String validTraceparent(String value) {
+        return value != null && value.matches(
+                "00-[0-9a-f]{32}-[0-9a-f]{16}-[0-9a-f]{2}") ? value : null;
+    }
+
+    private String boundedTracestate(String value) {
+        return value == null || value.length() <= 512 ? value : value.substring(0, 512);
     }
 }

@@ -10,6 +10,8 @@ record SimulatorWebhookClaim(
         String signatureMode,
         int repeatRemaining,
         int attemptCount,
+        String traceparent,
+        String tracestate,
         UUID leaseToken,
         Instant leaseExpiresAt
 ) {

@@ -20,6 +20,8 @@ public record ProviderWebhookClaim(
         Instant providerOccurredAt,
         String payloadHash,
         UUID correlationId,
+        String traceparent,
+        String tracestate,
         Instant receivedAt,
         UUID leaseToken,
         Instant leaseExpiresAt

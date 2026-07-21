@@ -1,0 +1,19 @@
+{
+  "annotations": {"list": []},
+  "editable": false,
+  "panels": [
+    {"type":"stat","title":"Outbox pending","targets":[{"expr":"ledgerops_outbox_pending"}],"gridPos":{"h":4,"w":6,"x":0,"y":0}},
+    {"type":"stat","title":"Oldest outbox age","targets":[{"expr":"ledgerops_outbox_oldest_age_seconds"}],"gridPos":{"h":4,"w":6,"x":6,"y":0}},
+    {"type":"timeseries","title":"Kafka consumer lag","targets":[{"expr":"ledgerops_kafka_consumer_lag","legendFormat":"{{consumer}} / {{topic}}"}],"gridPos":{"h":8,"w":12,"x":12,"y":0}},
+    {"type":"timeseries","title":"Outbox publication outcomes","targets":[{"expr":"rate(ledgerops_outbox_publish_total[5m])","legendFormat":"{{outcome}}"}],"gridPos":{"h":8,"w":12,"x":0,"y":4}},
+    {"type":"timeseries","title":"Inbox duplicates","targets":[{"expr":"rate(ledgerops_inbox_duplicate_total[5m])","legendFormat":"{{consumer}}"}],"gridPos":{"h":6,"w":12,"x":0,"y":12}},
+    {"type":"timeseries","title":"Dead messages","targets":[{"expr":"ledgerops_messaging_dead","legendFormat":"durable dead records"},{"expr":"rate(ledgerops_consumer_dead_total[5m])","legendFormat":"{{consumer}} / {{reason}}"}],"gridPos":{"h":6,"w":12,"x":12,"y":12}}
+  ],
+  "schemaVersion": 41,
+  "tags": ["ledgerops", "release-0.2", "messaging"],
+  "templating": {"list": []},
+  "time": {"from":"now-1h","to":"now"},
+  "title": "LedgerOps Release 0.2 Messaging",
+  "uid": "ledgerops-release-02-messaging",
+  "version": 1
+}

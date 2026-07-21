@@ -6,6 +6,7 @@ import com.ledgerops.messaging.api.OutboxMessageDraft;
 import com.ledgerops.messaging.api.ProducerName;
 import com.ledgerops.messaging.api.StoredOutboxMessage;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -22,6 +23,8 @@ import java.util.UUID;
 import java.util.LinkedHashMap;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
+import io.micrometer.tracing.Span;
+import io.micrometer.tracing.Tracer;
 
 @Component
 class JdbcMessageOutbox implements MessageOutbox {
@@ -40,8 +43,8 @@ class JdbcMessageOutbox implements MessageOutbox {
                 id, message_id, producer_name, deduplication_key, content_hash,
                 message_type, schema_version, aggregate_id, tenant_id, topic,
                 partition_key, payload, correlation_id, causation_id, occurred_at,
-                status, created_at, next_attempt_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING', ?, ?)
+                traceparent, tracestate, status, created_at, next_attempt_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING', ?, ?)
             ON CONFLICT (producer_name, deduplication_key) DO NOTHING
             """;
     private static final String FIND_BY_AGGREGATE_SQL = """
@@ -54,9 +57,11 @@ class JdbcMessageOutbox implements MessageOutbox {
             """;
 
     private final JdbcTemplate jdbcTemplate;
+    private final Tracer tracer;
 
-    JdbcMessageOutbox(JdbcTemplate jdbcTemplate) {
+    JdbcMessageOutbox(JdbcTemplate jdbcTemplate, ObjectProvider<Tracer> tracer) {
         this.jdbcTemplate = jdbcTemplate;
+        this.tracer = tracer.getIfAvailable();
     }
 
     @Override
@@ -71,6 +76,8 @@ class JdbcMessageOutbox implements MessageOutbox {
         UUID outboxId = UUID.randomUUID();
         UUID messageId = UUID.randomUUID();
         Timestamp occurredAt = Timestamp.from(draft.occurredAt());
+        TraceHeaders trace = draft.traceparent() == null
+                ? currentTrace() : new TraceHeaders(draft.traceparent(), draft.tracestate());
         jdbcTemplate.update(
                 INSERT_SQL,
                 outboxId,
@@ -88,6 +95,8 @@ class JdbcMessageOutbox implements MessageOutbox {
                 draft.correlationId(),
                 draft.causationId(),
                 occurredAt,
+                trace.traceparent(),
+                trace.tracestate(),
                 occurredAt,
                 occurredAt
         );
@@ -96,6 +105,21 @@ class JdbcMessageOutbox implements MessageOutbox {
                 draft.deduplicationKey()
         ).orElseThrow();
         return requireEquivalent(stored, draft, hash);
+    }
+
+    private TraceHeaders currentTrace() {
+        if (tracer == null) return new TraceHeaders(null, null);
+        Span span = tracer.currentSpan();
+        if (span == null) return new TraceHeaders(null, null);
+        var context = span.context();
+        String flags = context.sampled() ? "01" : "00";
+        return new TraceHeaders(
+                "00-" + context.traceId() + "-" + context.spanId() + "-" + flags,
+                null
+        );
+    }
+
+    private record TraceHeaders(String traceparent, String tracestate) {
     }
 
     @Override

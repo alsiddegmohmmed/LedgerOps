@@ -1,5 +1,6 @@
 package com.ledgerops.simulator;
 
+import io.micrometer.tracing.Tracer;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
@@ -23,9 +24,10 @@ class SimulatorConfiguration {
             @Value("${ledgerops.simulator.webhook.core-base-url}") URI coreBaseUrl,
             @Value("${ledgerops.simulator.webhook.key-id}") String keyId,
             @Value("${ledgerops.simulator.webhook.secret}") String secret,
-            Clock clock
+            Clock clock,
+            Tracer tracer
     ) {
         return new SimulatorWebhookSender(
-                coreBaseUrl, new SimulatorWebhookSigner(keyId, secret), clock);
+                coreBaseUrl, new SimulatorWebhookSigner(keyId, secret), clock, tracer);
     }
 }

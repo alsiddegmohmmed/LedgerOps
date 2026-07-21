@@ -4,9 +4,13 @@ import com.ledgerops.messaging.application.MessageEnvelopeCodec;
 import com.ledgerops.messaging.application.OutboxClaim;
 import com.ledgerops.messaging.application.OutboxDeliveryStore;
 import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.tracing.Span;
+import io.micrometer.tracing.Tracer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -39,7 +43,20 @@ class KafkaOutboxPublisher {
     private final KafkaTemplate<String, String> kafka;
     private final Clock clock;
     private final MeterRegistry meters;
+    private final Tracer tracer;
     private final String owner = "publisher-" + UUID.randomUUID();
+
+    @Autowired
+    KafkaOutboxPublisher(
+            OutboxDeliveryStore store,
+            MessageEnvelopeCodec codec,
+            KafkaTemplate<String, String> kafka,
+            Clock clock,
+            MeterRegistry meters,
+            ObjectProvider<Tracer> tracer
+    ) {
+        this(store, codec, kafka, clock, meters, tracer.getIfAvailable());
+    }
 
     KafkaOutboxPublisher(
             OutboxDeliveryStore store,
@@ -48,11 +65,23 @@ class KafkaOutboxPublisher {
             Clock clock,
             MeterRegistry meters
     ) {
+        this(store, codec, kafka, clock, meters, (Tracer) null);
+    }
+
+    private KafkaOutboxPublisher(
+            OutboxDeliveryStore store,
+            MessageEnvelopeCodec codec,
+            KafkaTemplate<String, String> kafka,
+            Clock clock,
+            MeterRegistry meters,
+            Tracer tracer
+    ) {
         this.store = store;
         this.codec = codec;
         this.kafka = kafka;
         this.clock = clock;
         this.meters = meters;
+        this.tracer = tracer;
     }
 
     @Scheduled(fixedDelayString = "${ledgerops.messaging.publisher.delay-ms:250}")
@@ -67,6 +96,16 @@ class KafkaOutboxPublisher {
         if (TransactionSynchronizationManager.isActualTransactionActive()) {
             throw new IllegalStateException("Kafka publication must occur outside a database transaction");
         }
+        Span publishSpan = startPublishSpan(claim);
+        try (Tracer.SpanInScope ignored = publishSpan == null
+                ? null : tracer.withSpan(publishSpan)) {
+            publishWithinTrace(claim);
+        } finally {
+            if (publishSpan != null) publishSpan.end();
+        }
+    }
+
+    private void publishWithinTrace(OutboxClaim claim) {
         try {
             var result = kafka.send(record(claim));
             try {
@@ -127,7 +166,59 @@ class KafkaOutboxPublisher {
         header(record, "tenantId", claim.tenantId().toString());
         header(record, "correlationId", claim.correlationId().toString());
         header(record, "causationId", claim.causationId().toString());
+        String traceparent = outboundTraceparent(claim.traceparent());
+        if (validTraceparent(traceparent)) {
+            header(record, "traceparent", traceparent);
+            if (claim.tracestate() != null && validTracestate(claim.tracestate())) {
+                header(record, "tracestate", claim.tracestate());
+            } else if (claim.tracestate() != null) {
+                recordInvalidTrace("kafka_publisher");
+            }
+        } else if (claim.traceparent() != null || claim.tracestate() != null) {
+            recordInvalidTrace("kafka_publisher");
+        }
         return record;
+    }
+
+    private Span startPublishSpan(OutboxClaim claim) {
+        if (tracer == null) return null;
+        Span.Builder builder = tracer.spanBuilder()
+                .name("messaging.outbox.publish")
+                .kind(Span.Kind.PRODUCER)
+                .tag("messaging.system", "kafka")
+                .tag("messaging.destination.name", claim.topic());
+        if (validTraceparent(claim.traceparent())) {
+            String[] parts = claim.traceparent().split("-");
+            var parent = tracer.traceContextBuilder()
+                    .traceId(parts[1])
+                    .spanId(parts[2])
+                    .sampled((Integer.parseInt(parts[3], 16) & 1) == 1)
+                    .build();
+            builder.setParent(parent);
+        } else {
+            builder.setNoParent();
+        }
+        return builder.start();
+    }
+
+    private boolean validTraceparent(String value) {
+        return value != null && value.matches(
+                "00-[0-9a-f]{32}-[0-9a-f]{16}-[0-9a-f]{2}");
+    }
+
+    private boolean validTracestate(String value) {
+        return value == null || value.length() <= 512;
+    }
+
+    private String outboundTraceparent(String fallback) {
+        if (tracer == null || tracer.currentSpan() == null) return fallback;
+        var context = tracer.currentSpan().context();
+        return "00-" + context.traceId() + "-" + context.spanId() + "-"
+                + (context.sampled() ? "01" : "00");
+    }
+
+    private void recordInvalidTrace(String boundary) {
+        meters.counter("ledgerops.trace.context.invalid", "boundary", boundary).increment();
     }
 
     private void header(ProducerRecord<String, String> record, String name, String value) {

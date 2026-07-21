@@ -400,7 +400,8 @@ class ProviderExecutionPersistenceIntegrationTests {
                                     UUID.randomUUID(), 1,
                                     com.ledgerops.provider.application.ProviderWorkType.SUBMISSION,
                                     "SIMULATOR", "payment:" + UUID.randomUUID(), "a".repeat(64),
-                                    "{}", UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(),
+                                    "{}", UUID.randomUUID(), UUID.randomUUID(), null, null,
+                                    UUID.randomUUID(),
                                     Instant.now().plusSeconds(30), true, false, false))));
         }
     }

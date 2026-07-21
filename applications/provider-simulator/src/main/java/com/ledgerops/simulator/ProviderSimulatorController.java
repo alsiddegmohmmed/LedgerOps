@@ -43,7 +43,9 @@ final class ProviderSimulatorController {
             @RequestHeader("X-LedgerOps-Key-Id") String keyId,
             @RequestHeader("X-LedgerOps-Timestamp") String timestamp,
             @RequestHeader("X-LedgerOps-Request-Id") String requestId,
-            @RequestHeader("X-LedgerOps-Signature") String signature) {
+            @RequestHeader("X-LedgerOps-Signature") String signature,
+            @RequestHeader(value = "traceparent", required = false) String traceparent,
+            @RequestHeader(value = "tracestate", required = false) String tracestate) {
         authenticate(SUBMIT_PATH, keyId, timestamp, requestId, body, signature);
         JsonNode request = parse(body);
         validateSubmission(request);
@@ -73,11 +75,12 @@ final class ProviderSimulatorController {
                     (transaction_id, provider_client_id, provider_idempotency_key,
                      request_intent_hash, request_content_hash, scenario,
                      result_category, provider_result_id, provider_reference,
-                     created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                     traceparent, tracestate, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT (provider_client_id, provider_idempotency_key) DO NOTHING
                 """, transactionId, providerClientId, providerKey, intentHash,
                 contentHash, scenario, category, resultId, providerReference,
+                validTraceparent(traceparent), boundedTracestate(tracestate),
                 Timestamp.from(clock.instant()), Timestamp.from(clock.instant()));
         if (inserted == 0) {
             Map<String, Object> raced = find(providerKey);
@@ -115,6 +118,15 @@ final class ProviderSimulatorController {
             throw new SimulatorProblemException(HttpStatus.UNAUTHORIZED,
                     "INVALID_PROVIDER_SIGNATURE", "Provider request authentication failed");
         }
+    }
+
+    private String validTraceparent(String value) {
+        return value != null && value.matches(
+                "00-[0-9a-f]{32}-[0-9a-f]{16}-[0-9a-f]{2}") ? value : null;
+    }
+
+    private String boundedTracestate(String value) {
+        return value == null || value.length() <= 512 ? value : value.substring(0, 512);
     }
 
     private JsonNode parse(byte[] body) {

@@ -38,7 +38,8 @@ class JdbcOutboxDeliveryStore implements OutboxDeliveryStore {
             RETURNING outbox.id, outbox.message_id, outbox.message_type,
                       outbox.schema_version, outbox.aggregate_id, outbox.tenant_id,
                       outbox.topic, outbox.partition_key, outbox.payload,
-                      outbox.correlation_id, outbox.causation_id, outbox.occurred_at,
+                      outbox.correlation_id, outbox.causation_id,
+                      outbox.traceparent, outbox.tracestate, outbox.occurred_at,
                       outbox.attempt_count, outbox.lease_token
             """;
 
@@ -170,6 +171,8 @@ class JdbcOutboxDeliveryStore implements OutboxDeliveryStore {
                 rs.getString("payload"),
                 rs.getObject("correlation_id", UUID.class),
                 rs.getObject("causation_id", UUID.class),
+                rs.getString("traceparent"),
+                rs.getString("tracestate"),
                 rs.getTimestamp("occurred_at").toInstant(),
                 rs.getInt("attempt_count"),
                 rs.getObject("lease_token", UUID.class)

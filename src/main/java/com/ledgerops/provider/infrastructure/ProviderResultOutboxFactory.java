@@ -28,7 +28,9 @@ final class ProviderResultOutboxFactory {
             Instant observedAt,
             UUID correlationId,
             UUID causationId,
-            Instant occurredAt
+            Instant occurredAt,
+            String traceparent,
+            String tracestate
     ) {
         LinkedHashMap<String, Object> fields = new LinkedHashMap<>();
         fields.put("attemptId", attemptId.toString());
@@ -53,6 +55,6 @@ final class ProviderResultOutboxFactory {
                 "provider-result:" + tenantId + ":SIMULATOR:" + providerResultId,
                 "ProviderResultObserved", 1, paymentId, tenantId,
                 "ledgerops.provider.results.v1", paymentId.toString(), payload,
-                correlationId, causationId, occurredAt);
+                correlationId, causationId, occurredAt, traceparent, tracestate);
     }
 }

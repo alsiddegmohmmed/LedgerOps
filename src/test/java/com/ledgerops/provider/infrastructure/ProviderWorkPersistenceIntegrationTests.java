@@ -37,7 +37,8 @@ class ProviderWorkPersistenceIntegrationTests {
         ProviderSubmissionCommand repeated = new ProviderSubmissionCommand(
                 first.tenantId(), repeatedMessageId, first.attemptId(), first.paymentId(),
                 first.attemptSequence(), first.providerId(), first.providerIdempotencyKey(), first.requestIntentHash(),
-                first.canonicalPayload(), first.correlationId(), first.causationId()
+                first.canonicalPayload(), first.correlationId(), first.causationId(),
+                first.traceparent(), first.tracestate()
         );
         IncomingMessage repeatedMessage = incoming(repeated, repeatedMessageId);
 
@@ -59,7 +60,8 @@ class ProviderWorkPersistenceIntegrationTests {
         ProviderSubmissionCommand changed = new ProviderSubmissionCommand(
                 first.tenantId(), UUID.randomUUID(), first.attemptId(), first.paymentId(),
                 first.attemptSequence(), first.providerId(), first.providerIdempotencyKey(), "b".repeat(64),
-                first.canonicalPayload(), first.correlationId(), first.causationId()
+                first.canonicalPayload(), first.correlationId(), first.causationId(),
+                first.traceparent(), first.tracestate()
         );
 
         assertThrows(ProviderWorkConsistencyException.class, () -> acceptance.accept(
@@ -84,7 +86,8 @@ class ProviderWorkPersistenceIntegrationTests {
                         command.tenantId(), command.messageId(), command.attemptId(),
                         command.paymentId(), command.attemptSequence(), command.providerId(),
                         command.providerIdempotencyKey(), command.requestIntentHash(),
-                        "not-json", command.correlationId(), command.causationId()
+                        "not-json", command.correlationId(), command.causationId(),
+                        command.traceparent(), command.tracestate()
                 )
         ));
 
@@ -102,7 +105,8 @@ class ProviderWorkPersistenceIntegrationTests {
                 UUID.randomUUID(), UUID.randomUUID(), attemptId, paymentId,
                 1, "SIMULATOR", "payment:" + paymentId, "a".repeat(64),
                 "{\"attemptId\":\"" + attemptId + "\"}",
-                UUID.randomUUID(), UUID.randomUUID()
+                UUID.randomUUID(), UUID.randomUUID(),
+                "00-00000000000000000000000000000001-0000000000000002-01", null
         );
     }
 

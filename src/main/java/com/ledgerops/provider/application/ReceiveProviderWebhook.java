@@ -61,7 +61,7 @@ public class ReceiveProviderWebhook {
     }
 
     private ProviderWebhookReceptionResult result(ProviderWebhookReceptionOutcome outcome) {
-        meters.counter("ledgerops.provider.webhook.receipt", "outcome",
+        meters.counter("ledgerops.webhook.receipt", "verification",
                 outcome.name().toLowerCase(java.util.Locale.ROOT)).increment();
         return new ProviderWebhookReceptionResult(outcome);
     }

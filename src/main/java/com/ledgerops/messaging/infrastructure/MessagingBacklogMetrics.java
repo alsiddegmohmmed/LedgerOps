@@ -23,12 +23,14 @@ class MessagingBacklogMetrics {
     private final Clock clock;
     private final AtomicLong pending = new AtomicLong();
     private final AtomicLong oldestAgeSeconds = new AtomicLong();
+    private final AtomicLong deadRecords = new AtomicLong();
 
     MessagingBacklogMetrics(JdbcTemplate jdbc, Clock clock, MeterRegistry meters) {
         this.jdbc = jdbc;
         this.clock = clock;
         meters.gauge("ledgerops.outbox.pending", pending);
         meters.gauge("ledgerops.outbox.oldest.age.seconds", oldestAgeSeconds);
+        meters.gauge("ledgerops.messaging.dead", deadRecords);
     }
 
     @Scheduled(fixedDelayString = "${ledgerops.messaging.metrics.delay-ms:5000}")
@@ -48,6 +50,11 @@ class MessagingBacklogMetrics {
         pending.set(backlog.count());
         oldestAgeSeconds.set(backlog.oldest() == null ? 0
                 : Math.max(0, Duration.between(backlog.oldest(), clock.instant()).toSeconds()));
+        deadRecords.set(jdbc.queryForObject("""
+                SELECT (SELECT count(*) FROM messaging.publication_dead_letters)
+                     + (SELECT count(*) FROM messaging.consumer_dead_letters)
+                     + (SELECT count(*) FROM messaging.transport_dead_letters)
+                """, Long.class));
     }
 
     private record Backlog(long count, Instant oldest) {

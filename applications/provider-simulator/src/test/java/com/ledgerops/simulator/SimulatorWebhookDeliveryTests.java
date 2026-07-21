@@ -1,7 +1,12 @@
 package com.ledgerops.simulator;
 
 import com.sun.net.httpserver.HttpServer;
+import io.micrometer.tracing.Tracer;
+import io.opentelemetry.api.trace.SpanKind;
+import io.opentelemetry.sdk.testing.exporter.InMemorySpanExporter;
+import io.opentelemetry.sdk.trace.export.SimpleSpanProcessor;
 import org.junit.jupiter.api.Test;
+import org.springframework.boot.micrometer.tracing.opentelemetry.autoconfigure.SdkTracerProviderBuilderCustomizer;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
@@ -34,6 +39,8 @@ class SimulatorWebhookDeliveryTests {
 
     @Autowired SimulatorWebhookDeliveryStore store;
     @Autowired JdbcTemplate jdbc;
+    @Autowired Tracer tracer;
+    @Autowired InMemorySpanExporter spanExporter;
 
     @Test
     void signedWebhookCallOccursOutsideTransactionAndFencedCompletionIsDurable()
@@ -41,6 +48,7 @@ class SimulatorWebhookDeliveryTests {
         insertProviderTransaction();
         SimulatorWebhookClaim claim = store.claimNext("simulator-worker").orElseThrow();
         AtomicBoolean verified = new AtomicBoolean();
+        var propagatedTrace = new java.util.concurrent.atomic.AtomicReference<String>();
         HttpServer server = HttpServer.create(new InetSocketAddress(0), 0);
         HmacVerifier verifier = new HmacVerifier(KEY_ID, SECRET, Clock.systemUTC());
         server.createContext("/internal/provider/v1/webhooks", exchange -> {
@@ -51,13 +59,14 @@ class SimulatorWebhookDeliveryTests {
                     exchange.getRequestHeaders().getFirst("X-LedgerOps-Timestamp"),
                     exchange.getRequestHeaders().getFirst("X-LedgerOps-Event-Id"), body,
                     exchange.getRequestHeaders().getFirst("X-LedgerOps-Signature")));
+            propagatedTrace.set(exchange.getRequestHeaders().getFirst("traceparent"));
             exchange.sendResponseHeaders(202, -1);
             exchange.close();
         });
         server.start();
         try (SimulatorWebhookSender sender = new SimulatorWebhookSender(
                 URI.create("http://localhost:" + server.getAddress().getPort()),
-                new SimulatorWebhookSigner(KEY_ID, SECRET), Clock.systemUTC())) {
+                new SimulatorWebhookSigner(KEY_ID, SECRET), Clock.systemUTC(), tracer)) {
             int status = sender.send(claim);
             store.record(claim, status, null);
         } finally {
@@ -65,6 +74,14 @@ class SimulatorWebhookDeliveryTests {
         }
 
         assertTrue(verified.get());
+        var span = spanExporter.getFinishedSpanItems().stream()
+                .filter(item -> item.getName().equals("simulator.webhook.http"))
+                .findFirst().orElseThrow();
+        assertEquals("00000000000000000000000000000001", span.getTraceId());
+        assertEquals("0000000000000002", span.getParentSpanId());
+        assertEquals(SpanKind.CLIENT, span.getKind());
+        assertEquals("00-" + span.getTraceId() + "-" + span.getSpanId() + "-01",
+                propagatedTrace.get());
         assertEquals("DELIVERED", jdbc.queryForObject("""
                 SELECT status FROM simulator.webhook_deliveries WHERE delivery_id = ?
                 """, String.class, claim.deliveryId()));
@@ -120,10 +137,12 @@ class SimulatorWebhookDeliveryTests {
                     (transaction_id, provider_client_id, provider_idempotency_key,
                      request_intent_hash, request_content_hash, scenario,
                      result_category, provider_result_id, provider_reference,
-                     created_at, updated_at)
-                VALUES (?, 'ledgerops-core-test', ?, ?, ?, 'SUCCESS', 'SUCCESS', ?, ?, ?, ?)
+                     traceparent, created_at, updated_at)
+                VALUES (?, 'ledgerops-core-test', ?, ?, ?, 'SUCCESS', 'SUCCESS', ?, ?, ?, ?, ?)
                 """, transactionId, "payment:" + paymentId, "a".repeat(64), "b".repeat(64),
-                resultId, "SIM-" + transactionId, Timestamp.from(now), Timestamp.from(now));
+                resultId, "SIM-" + transactionId,
+                "00-00000000000000000000000000000001-0000000000000002-01",
+                Timestamp.from(now), Timestamp.from(now));
     }
 
     @TestConfiguration(proxyBeanMethods = false)
@@ -132,6 +151,17 @@ class SimulatorWebhookDeliveryTests {
         @ServiceConnection
         PostgreSQLContainer postgres() {
             return new PostgreSQLContainer("postgres:17-alpine");
+        }
+
+        @Bean
+        InMemorySpanExporter inMemorySpanExporter() {
+            return InMemorySpanExporter.create();
+        }
+
+        @Bean
+        SdkTracerProviderBuilderCustomizer traceExporterCustomizer(
+                InMemorySpanExporter exporter) {
+            return builder -> builder.addSpanProcessor(SimpleSpanProcessor.create(exporter));
         }
     }
 }

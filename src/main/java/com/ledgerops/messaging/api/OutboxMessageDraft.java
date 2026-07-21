@@ -16,8 +16,21 @@ public record OutboxMessageDraft(
         String canonicalPayloadJson,
         UUID correlationId,
         UUID causationId,
-        Instant occurredAt
+        Instant occurredAt,
+        String traceparent,
+        String tracestate
 ) {
+    public OutboxMessageDraft(
+            ProducerName producerName, String deduplicationKey, String messageType,
+            int schemaVersion, UUID aggregateId, UUID tenantId, String topic,
+            String partitionKey, String canonicalPayloadJson, UUID correlationId,
+            UUID causationId, Instant occurredAt
+    ) {
+        this(producerName, deduplicationKey, messageType, schemaVersion, aggregateId,
+                tenantId, topic, partitionKey, canonicalPayloadJson, correlationId,
+                causationId, occurredAt, null, null);
+    }
+
     public OutboxMessageDraft {
         Objects.requireNonNull(producerName, "Producer name must not be null");
         deduplicationKey = requireText(deduplicationKey, "Deduplication key");
@@ -36,6 +49,13 @@ public record OutboxMessageDraft(
         Objects.requireNonNull(correlationId, "Correlation ID must not be null");
         Objects.requireNonNull(causationId, "Causation ID must not be null");
         Objects.requireNonNull(occurredAt, "Occurred-at time must not be null");
+        if (traceparent != null && !traceparent.matches(
+                "00-[0-9a-f]{32}-[0-9a-f]{16}-[0-9a-f]{2}")) {
+            throw new IllegalArgumentException("Traceparent must be canonical W3C version 00");
+        }
+        if (tracestate != null && tracestate.length() > 512) {
+            throw new IllegalArgumentException("Tracestate must not exceed 512 characters");
+        }
     }
 
     private static String requireText(String value, String label) {

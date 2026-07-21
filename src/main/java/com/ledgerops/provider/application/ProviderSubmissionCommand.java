@@ -13,6 +13,8 @@ public record ProviderSubmissionCommand(
         String requestIntentHash,
         String canonicalPayload,
         UUID correlationId,
-        UUID causationId
+        UUID causationId,
+        String traceparent,
+        String tracestate
 ) {
 }

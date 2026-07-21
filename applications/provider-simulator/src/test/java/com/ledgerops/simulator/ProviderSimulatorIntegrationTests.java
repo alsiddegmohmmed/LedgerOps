@@ -33,6 +33,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @Import(ProviderSimulatorIntegrationTests.PostgresConfiguration.class)
 class ProviderSimulatorIntegrationTests {
     private static final String SECRET = "test-only-core-to-simulator-secret";
+    private static final String TRACEPARENT =
+            "00-00000000000000000000000000000001-0000000000000002-01";
     @LocalServerPort int port;
     @Autowired JdbcTemplate jdbc;
 
@@ -53,6 +55,11 @@ class ProviderSimulatorIntegrationTests {
                  WHERE provider_client_id = 'ledgerops-core-test'
                    AND provider_idempotency_key = ?
                 """, Integer.class, key));
+        assertEquals(TRACEPARENT, jdbc.queryForObject("""
+                SELECT d.traceparent FROM simulator.webhook_deliveries d
+                  JOIN simulator.provider_transactions t USING (transaction_id)
+                 WHERE t.provider_idempotency_key = ?
+                """, String.class, key));
         assertEquals(1, jdbc.queryForObject("""
                 SELECT count(*) FROM simulator.webhook_deliveries d
                   JOIN simulator.provider_transactions t
@@ -192,6 +199,7 @@ class ProviderSimulatorIntegrationTests {
                 .header("X-LedgerOps-Timestamp", timestamp)
                 .header("X-LedgerOps-Request-Id", requestId)
                 .header("X-LedgerOps-Signature", signature)
+                .header("traceparent", TRACEPARENT)
                 .POST(HttpRequest.BodyPublishers.ofString(body)).build();
         return HttpClient.newHttpClient().send(request,
                 HttpResponse.BodyHandlers.ofString());
@@ -209,6 +217,7 @@ class ProviderSimulatorIntegrationTests {
                 .header("X-LedgerOps-Timestamp", timestamp)
                 .header("X-LedgerOps-Request-Id", requestId)
                 .header("X-LedgerOps-Signature", sign(path, timestamp, requestId, body))
+                .header("traceparent", TRACEPARENT)
                 .POST(HttpRequest.BodyPublishers.ofString(body)).build();
         return HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
     }

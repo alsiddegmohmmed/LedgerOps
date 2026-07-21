@@ -6,8 +6,12 @@ import com.ledgerops.messaging.api.IncomingMessage;
 import com.ledgerops.provider.application.ProviderSubmissionCommand;
 import com.ledgerops.provider.application.AcceptProviderSubmissionCommand;
 import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.tracing.Span;
+import io.micrometer.tracing.Tracer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.support.Acknowledgment;
 import org.springframework.stereotype.Component;
@@ -33,15 +37,36 @@ class ProviderCommandConsumer {
     private final ConsumerMessageStore messages;
     private final AcceptProviderSubmissionCommand acceptance;
     private final MeterRegistry meters;
+    private final Tracer tracer;
+
+    @Autowired
+    ProviderCommandConsumer(
+            ConsumerMessageStore messages,
+            AcceptProviderSubmissionCommand acceptance,
+            MeterRegistry meters,
+            ObjectProvider<Tracer> tracer
+    ) {
+        this(messages, acceptance, meters, tracer.getIfAvailable());
+    }
 
     ProviderCommandConsumer(
             ConsumerMessageStore messages,
             AcceptProviderSubmissionCommand acceptance,
             MeterRegistry meters
     ) {
+        this(messages, acceptance, meters, (Tracer) null);
+    }
+
+    private ProviderCommandConsumer(
+            ConsumerMessageStore messages,
+            AcceptProviderSubmissionCommand acceptance,
+            MeterRegistry meters,
+            Tracer tracer
+    ) {
         this.messages = messages;
         this.acceptance = acceptance;
         this.meters = meters;
+        this.tracer = tracer;
     }
 
     @KafkaListener(
@@ -51,6 +76,18 @@ class ProviderCommandConsumer {
             properties = "spring.json.value.default.type=java.lang.String"
     )
     void receive(ConsumerRecord<String, String> record, Acknowledgment acknowledgment) {
+        Span span = startConsumerSpan(record);
+        try (Tracer.SpanInScope ignored = span == null ? null : tracer.withSpan(span)) {
+            receiveWithinTrace(record, acknowledgment);
+        } finally {
+            if (span != null) span.end();
+        }
+    }
+
+    private void receiveWithinTrace(
+            ConsumerRecord<String, String> record,
+            Acknowledgment acknowledgment
+    ) {
         String raw = record.value() == null ? "" : record.value();
         UUID messageId = parser.trustworthyMessageId(raw);
         if (messageId == null) {
@@ -101,7 +138,7 @@ class ProviderCommandConsumer {
             return;
         }
         try {
-            ProviderSubmissionCommand command = command(envelope);
+            ProviderSubmissionCommand command = command(envelope, record);
             var result = acceptance.accept(incoming, command);
             if (result == com.ledgerops.messaging.api.InboxResult.DUPLICATE) {
                 meters.counter(
@@ -137,7 +174,10 @@ class ProviderCommandConsumer {
         }
     }
 
-    private ProviderSubmissionCommand command(ProviderCommandEnvelope envelope) {
+    private ProviderSubmissionCommand command(
+            ProviderCommandEnvelope envelope,
+            ConsumerRecord<String, String> record
+    ) {
         JsonNode payload = envelope.payload();
         UUID attemptId = uuid(payload, "attemptId");
         UUID paymentId = uuid(payload, "paymentId");
@@ -168,12 +208,30 @@ class ProviderCommandConsumer {
             throw new PermanentlyInvalidMessageException("Currency is invalid");
         }
         text(payload, "paymentMethodCategory");
+        String traceparent = header(record, "traceparent");
+        String tracestate = header(record, "tracestate");
+        if (traceparent != null && !traceparent.matches(
+                "00-[0-9a-f]{32}-[0-9a-f]{16}-[0-9a-f]{2}")) {
+            recordInvalidTrace();
+            traceparent = null;
+            tracestate = null;
+        }
+        if (tracestate != null && tracestate.length() > 512) {
+            recordInvalidTrace();
+            tracestate = null;
+        }
+        traceparent = currentTraceparent(traceparent);
         return new ProviderSubmissionCommand(
                 envelope.tenantId(), envelope.messageId(), attemptId, paymentId,
                 sequence.intValue(),
                 providerId, key, hash, envelope.canonicalPayload(),
-                envelope.correlationId(), envelope.causationId()
+                envelope.correlationId(), envelope.causationId(), traceparent, tracestate
         );
+    }
+
+    private String header(ConsumerRecord<String, String> record, String name) {
+        var header = record.headers().lastHeader(name);
+        return header == null ? null : new String(header.value(), StandardCharsets.UTF_8);
     }
 
     private UUID uuid(JsonNode payload, String field) {
@@ -205,5 +263,40 @@ class ProviderCommandConsumer {
                 "consumer", CONSUMER_NAME,
                 "reason", reason
         ).increment();
+    }
+
+    private void recordInvalidTrace() {
+        meters.counter(
+                "ledgerops.trace.context.invalid", "boundary", "provider_command_consumer"
+        ).increment();
+    }
+
+    private Span startConsumerSpan(ConsumerRecord<String, String> record) {
+        if (tracer == null) return null;
+        Span.Builder builder = tracer.spanBuilder()
+                .name("provider.command.consume")
+                .kind(Span.Kind.CONSUMER)
+                .tag("messaging.system", "kafka")
+                .tag("messaging.destination.name", "ledgerops.provider.commands.v1");
+        String value = header(record, "traceparent");
+        if (value != null && value.matches(
+                "00-[0-9a-f]{32}-[0-9a-f]{16}-[0-9a-f]{2}")) {
+            String[] parts = value.split("-");
+            builder.setParent(tracer.traceContextBuilder()
+                    .traceId(parts[1])
+                    .spanId(parts[2])
+                    .sampled((Integer.parseInt(parts[3], 16) & 1) == 1)
+                    .build());
+        } else {
+            builder.setNoParent();
+        }
+        return builder.start();
+    }
+
+    private String currentTraceparent(String fallback) {
+        if (tracer == null || tracer.currentSpan() == null) return fallback;
+        var context = tracer.currentSpan().context();
+        return "00-" + context.traceId() + "-" + context.spanId() + "-"
+                + (context.sampled() ? "01" : "00");
     }
 }

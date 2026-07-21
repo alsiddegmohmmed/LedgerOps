@@ -23,7 +23,8 @@ class MessageEnvelopeCodecTests {
                 UUID.randomUUID(), messageId, "SubmitPaymentToProvider", 1,
                 paymentId, tenantId, "ledgerops.provider.commands.v1",
                 paymentId.toString(), "{\"attemptId\":\"" + UUID.randomUUID() + "\"}",
-                correlationId, causationId, Instant.parse("2026-07-21T12:00:00Z"),
+                correlationId, causationId, null, null,
+                Instant.parse("2026-07-21T12:00:00Z"),
                 1, UUID.randomUUID()
         ));
 

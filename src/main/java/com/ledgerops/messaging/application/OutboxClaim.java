@@ -15,6 +15,8 @@ public record OutboxClaim(
         String canonicalPayloadJson,
         UUID correlationId,
         UUID causationId,
+        String traceparent,
+        String tracestate,
         Instant occurredAt,
         int attemptCount,
         UUID leaseToken

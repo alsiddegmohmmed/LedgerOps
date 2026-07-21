@@ -10,6 +10,8 @@ import com.ledgerops.provider.application.ProviderWorkType;
 import io.github.resilience4j.bulkhead.Bulkhead;
 import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
+import io.micrometer.tracing.Span;
+import io.micrometer.tracing.Tracer;
 import org.apache.hc.client5.http.classic.methods.HttpPost;
 import org.apache.hc.client5.http.config.RequestConfig;
 import org.apache.hc.client5.http.config.ConnectionConfig;
@@ -48,15 +50,22 @@ final class SimulatorProviderGateway implements ProviderGateway, AutoCloseable {
     private final CircuitBreaker circuitBreaker;
     private final Bulkhead bulkhead;
     private final Clock clock;
+    private final Tracer tracer;
     private final JsonMapper json = JsonMapper.builder().build();
 
     SimulatorProviderGateway(URI baseUri, ProviderHmacSigner signer,
             CircuitBreaker circuitBreaker, Bulkhead bulkhead, Clock clock) {
+        this(baseUri, signer, circuitBreaker, bulkhead, clock, null);
+    }
+
+    SimulatorProviderGateway(URI baseUri, ProviderHmacSigner signer,
+            CircuitBreaker circuitBreaker, Bulkhead bulkhead, Clock clock, Tracer tracer) {
         this.baseUri = baseUri;
         this.signer = signer;
         this.circuitBreaker = circuitBreaker;
         this.bulkhead = bulkhead;
         this.clock = clock;
+        this.tracer = tracer;
         RequestConfig timeouts = RequestConfig.custom()
                 .setResponseTimeout(Timeout.ofSeconds(3))
                 .build();
@@ -77,13 +86,31 @@ final class SimulatorProviderGateway implements ProviderGateway, AutoCloseable {
         if (TransactionSynchronizationManager.isActualTransactionActive()) {
             throw new IllegalStateException("Provider HTTP must execute outside a transaction");
         }
+        Span span = startHttpSpan(claim);
+        try (Tracer.SpanInScope ignored = span == null ? null : tracer.withSpan(span)) {
+            ProviderCallResult result = executeWithinTrace(claim, span);
+            if (span != null) {
+                span.tag("provider.result.category", result.category().name());
+                span.tag("provider.retry.disposition", result.disposition().name());
+            }
+            return result;
+        } catch (RuntimeException exception) {
+            if (span != null) span.error(exception);
+            throw exception;
+        } finally {
+            if (span != null) span.end();
+        }
+    }
+
+    private ProviderCallResult executeWithinTrace(ProviderWorkClaim claim, Span span) {
         UUID requestId = UUID.randomUUID();
         String path = claim.workType() == ProviderWorkType.SUBMISSION
                 ? SUBMISSION_PATH : STATUS_PATH;
         byte[] body = body(claim).getBytes(StandardCharsets.UTF_8);
         Instant started = clock.instant();
         Supplier<GatewayResponse> call = () -> {
-            GatewayResponse response = send(path, requestId, body);
+            GatewayResponse response = send(path, requestId, body,
+                    outboundTraceparent(span, claim.traceparent()), claim.tracestate());
             if (response.statusCode() >= 500) {
                 throw new ProviderHttpFailureException(response);
             }
@@ -114,13 +141,48 @@ final class SimulatorProviderGateway implements ProviderGateway, AutoCloseable {
         }
     }
 
+    private Span startHttpSpan(ProviderWorkClaim claim) {
+        if (tracer == null) return null;
+        Span.Builder builder = tracer.spanBuilder()
+                .name("provider.simulator.http")
+                .kind(Span.Kind.CLIENT)
+                .tag("provider.id", "SIMULATOR")
+                .tag("provider.work.type", claim.workType().name());
+        String traceparent = claim.traceparent();
+        if (traceparent != null && traceparent.matches(
+                "00-[0-9a-f]{32}-[0-9a-f]{16}-[0-9a-f]{2}")) {
+            String[] parts = traceparent.split("-");
+            builder.setParent(tracer.traceContextBuilder()
+                    .traceId(parts[1])
+                    .spanId(parts[2])
+                    .sampled((Integer.parseInt(parts[3], 16) & 1) == 1)
+                    .build());
+        } else {
+            builder.setNoParent();
+        }
+        return builder.start();
+    }
+
+    private String outboundTraceparent(Span span, String fallback) {
+        if (span == null) return fallback;
+        var context = span.context();
+        return "00-" + context.traceId() + "-" + context.spanId() + "-"
+                + (context.sampled() ? "01" : "00");
+    }
+
     private boolean isProvenPreTransmission(Throwable cause) {
         return cause instanceof java.net.ConnectException
                 || cause instanceof java.net.UnknownHostException
                 || cause instanceof javax.net.ssl.SSLHandshakeException;
     }
 
-    private GatewayResponse send(String path, UUID requestId, byte[] body) {
+    private GatewayResponse send(
+            String path,
+            UUID requestId,
+            byte[] body,
+            String traceparent,
+            String tracestate
+    ) {
         String timestamp = Long.toString(clock.instant().getEpochSecond());
         HttpPost request = new HttpPost(baseUri.resolve(path));
         request.setHeader("Content-Type", "application/json");
@@ -129,6 +191,8 @@ final class SimulatorProviderGateway implements ProviderGateway, AutoCloseable {
         request.setHeader("X-LedgerOps-Request-Id", requestId.toString());
         request.setHeader("X-LedgerOps-Signature",
                 signer.sign("POST", path, timestamp, requestId.toString(), body));
+        if (traceparent != null) request.setHeader("traceparent", traceparent);
+        if (tracestate != null) request.setHeader("tracestate", tracestate);
         request.setEntity(new ByteArrayEntity(body, ContentType.APPLICATION_JSON));
         try {
             return java.util.concurrent.CompletableFuture.supplyAsync(() -> {

@@ -1,13 +1,13 @@
 # Release 0.2 plan: Distributed Processing
 
-Status: Active
+Status: Completed
 Owner: One implementation owner per vertical slice
 Release: 0.2 — Distributed Processing
-Last updated: 2026-07-21
+Last updated: 2026-07-22
 
 ## Outcome
 
-Release 0.2 is complete when committed provider commands survive Kafka and process outages; duplicate commands, results, and webhooks produce one business and financial effect; Provider calls run outside database transactions; definitive `SUCCESS` reaches the existing ADR-020 atomic Payment-to-Ledger boundary; other Provider result categories follow their approved behavior; retry and status recovery stop at explicit limits; unresolved outcomes and dead messages remain durable and visible; and traces, metrics, contracts, and automated failure tests prove those guarantees.
+Release 0.2 is complete. Committed provider commands survive Kafka and process outages; duplicate commands, results, and webhooks produce one business and financial effect; Provider calls run outside database transactions; definitive `SUCCESS` reaches the existing ADR-020 atomic Payment-to-Ledger boundary; other Provider result categories follow their approved behavior; retry and status recovery stop at explicit limits; unresolved outcomes and dead messages remain durable and visible; and traces, metrics, contracts, and automated failure tests prove those guarantees.
 
 Release 0.2 extends the completed Release 0.1 Core Platform. It does not replace `CompletePaymentAfterProviderSuccess`, change `PaymentStatus`, move the existing Core source tree, or claim end-to-end exactly-once delivery.
 
@@ -15,7 +15,7 @@ Release 0.2 extends the completed Release 0.1 Core Platform. It does not replace
 
 This plan is for the engineer implementing and reviewing Release 0.2. It defines the approved-order work needed to add distributed Provider processing without weakening the transactional and financial evidence completed in Release 0.1.
 
-Slice 0 is complete: ADR-021 is accepted, its decisions are incorporated into Technical Specification v1.6, and this plan is active. Release 0.2 production implementation begins with Slice 1 only.
+Slices 0 through 7 are complete. ADR-021 is accepted, its decisions are incorporated into Technical Specification v1.6, and every Release 0.2 implementation slice has executable evidence. Release 0.3 has not started.
 
 ## Authority and requirement mapping
 
@@ -31,7 +31,7 @@ ADR-004, ADR-005, ADR-006, and ADR-009 are retrospective repository records of d
 
 ### Product requirement mapping
 
-| Product authority | Release 0.2 interpretation | Planned status at release exit |
+| Product authority | Release 0.2 interpretation | Approved status at release exit |
 |---|---|---|
 | PAY-03; §8.2 | Preserve the exact Payment lifecycle. Initial submission moves `APPROVED -> PROCESSING`; final `SUCCESS` uses ADR-020; definitive decline or permanent failure may move `PROCESSING -> FAILED`. | Partial; Release 0.2 implements the automated Provider path, not every Payment workflow. |
 | PAY-04 | Persist Payment Attempt and Provider evidence needed by a future composed Payment detail view. | Partial; no operations UI in Release 0.2. |
@@ -85,7 +85,7 @@ Repository inspection before implementation on 2026-07-21 established this histo
 - Flyway V1–V7 own the Tenancy, Merchant, Customer, Payment, Risk, and Ledger schemas. Released migrations are immutable.
 - Testcontainers starts PostgreSQL 17 only. Release 0.1 has 224 passing tests covering domain rules, migrations, concurrency, rollback, Modulith boundaries, HTTP/OpenAPI errors, logging, and demo seed behavior.
 - OpenAPI v0.1 documents tenant and Payment creation only. Logs use `X-Correlation-Id`/MDC correlation. The Release 0.1 demo starts one PostgreSQL container and contains no distributed infrastructure.
-- Release 0.1 is complete. Release 0.2 has no production implementation yet; Slice 0 changes documentation only.
+- At the Slice 0 baseline, Release 0.1 was complete and Release 0.2 had no production implementation. Slice 0 changed documentation only; Slices 1–7 subsequently delivered the executable evidence recorded below.
 
 ## Reconciliation and contradiction gate
 
@@ -349,7 +349,7 @@ Implementation evidence:
 
 ### Slice 7 — release hardening and gate
 
-Status: Pending
+Status: Completed — 22 July 2026
 
 Authority: Product PRV-05, DEV-01–DEV-04, §§10–12; Technical §§7.7, 11, 13, 14.2, 17, and Appendix C; accepted ADR-021.
 
@@ -361,6 +361,16 @@ Authority: Product PRV-05, DEV-01–DEV-04, §§10–12; Technical §§7.7, 11, 
 - Typed failures and observability: Demonstrate every outage, poison, dead, ambiguity, webhook conflict, rollback, bounded metric, dashboard, and alert-to-runbook path.
 - Verification: Run full Gradle checks, PostgreSQL/Kafka/Provider Testcontainers, contract compatibility, migration, architecture, end-to-end, terminology, and diff checks.
 - Completion: Every Release 0.2 criterion has executable evidence, requirement statuses are accurate, no blocker remains, and no later-release capability entered production.
+
+Implementation evidence:
+
+- OpenTelemetry trace context persists with outbox records, Kafka headers, Provider work, signed Provider HTTP requests, Simulator transactions, webhook deliveries, and mapped webhook work without entering HMAC input or metric labels. Executable span-tree tests prove that delayed outbox publication resumes the persisted parent, Provider command consumption and asynchronous webhook processing continue their published traces, and the Core Provider HTTP and Simulator webhook HTTP client spans propagate their child contexts. Invalid optional trace metadata is dropped and counted without poisoning business work.
+- Prometheus exposes every ADR-021 bounded measure. Kafka lag covers all partitions, including partitions without a committed consumer offset. Retry and recovery gauges include leased in-flight work, and the financial-effect detector queries duplicate tenant-scoped `PAYMENT` source identities instead of exposing an unwired constant.
+- Two provisioned Grafana dashboards cover messaging delivery and Provider operations. Eight validated Prometheus alerts link to the matching operations-runbook procedures.
+- V14 adds immutable Core trace context without changing V1–V13. Simulator V3 adds the corresponding separate-database trace evidence without changing Simulator V1–V2.
+- PostgreSQL Testcontainers proves a fresh V1–V14 installation and an in-place upgrade from the Release 0.1 V7 baseline while preserving existing tenant data.
+- The local Compose topology, Provider contract, Provider-flow diagram, operations runbook, Release 0.2 demo, and destructive reset warning match the implemented runtime.
+- The clean full test suite, full project checks, contract/schema checks, HMAC fixtures, OpenAPI parsing, dashboard JSON, Prometheus rules, links, migration audits, and scope searches pass at the release gate.
 
 ## Expected files
 
@@ -407,7 +417,7 @@ The exact file list is finalized at the start of each slice. The planned ownersh
 | Exhaustion remains durable without false final state | Work status, dead evidence, and Payment final-state assertion | Retry/recovery suite | Passed at the Slice 5 boundary — Provider work becomes `UNRESOLVED`; Payment remains `PROCESSING` |
 | SUCCESS uses exact ADR-020 posting | Existing plus outer-result transaction tests | Payment completion/result suites | Passed — Slice 4 invokes the unchanged boundary and verifies the exact two-entry posting and replay |
 | Ledger or Payment failure still rolls back completion | Existing ADR-020 failpoints with inbox/outbox assertions | Payment completion/result suites | Passed — Slice 4 verifies missing-account, Ledger insertion, Payment update, accepted-evidence, and lifecycle-outbox rollback |
-| Inbox and business effect commit together | PostgreSQL/Kafka failure tests | Consumer suites | Passed for Provider command work — Slice 2 and Payment result application — Slice 4; later consumers remain scheduled |
+| Inbox and business effect commit together | PostgreSQL/Kafka failure tests | Consumer suites | Passed for Provider command work, Payment result application, and Payment retry-command application |
 | Valid-envelope unsupported/poison events dead-letter safely | Rollback, separate failure-count transaction, failure-five terminal transaction, immediate unsupported-version, and malformed-payload tests | Messaging consumer suite | Passed — Slice 2 PostgreSQL/Kafka evidence |
 | Transport-invalid envelopes bypass inbox safely | No-messageId parsing cases, immediate transport dead letter, exact topic/partition/offset identity, bounded evidence, and post-commit acknowledgement | Messaging transport suite | Passed — Slice 2 PostgreSQL/Kafka evidence |
 | Claim leases recover crashed workers/publishers | Coordinated lease-expiry tests with injected Clock | Messaging and Provider suites | Passed for outbox publisher and Provider work through Slice 3 |
@@ -417,12 +427,12 @@ The exact file list is finalized at the start of each slice. The planned ownersh
 | Webhook attribution follows the exact authentication matrix | `401` platform-only, malformed `400`, unmapped `202`, and mapped duplicate/conflict tests | Webhook suite | Passed — Slice 6, including bounded `413` handling and direction/timestamp checks |
 | Every mapped Core business record is tenant-owned | Migration constraints, unattributed-evidence isolation, and repository tests | PostgreSQL integration suites | Passed through Slice 6 — mapped webhook records are tenant-owned; platform and unmapped evidence cannot create tenant work |
 | Simulator cannot access Core database | Separate application build, datasource, migration tree, and PostgreSQL integration assertion | Simulator test task | Passed — Slice 3 separate subproject and PostgreSQL Testcontainer |
-| Correlation, causation, and trace context propagate | HTTP/Kafka/Provider/webhook span assertions | Observability end-to-end suite | Partial — envelope and Kafka correlation/causation headers pass; trace propagation remains Slice 7 |
-| Metrics and dashboards expose required signals | Meter-registry and dashboard-schema tests | Observability suite | Partial — Slices 2–3 add bounded messaging and Provider measures; exact lag, dashboards, and release evidence remain Slice 7 |
-| Modulith/ArchUnit prohibit forbidden access | Module verification and dependency rules | `./gradlew check --console=plain` | Passed through Slice 6 |
-| No Release 0.3+ capability is introduced | Dependency/source/scope searches and diff review | Repository audit commands | Passed through Slice 6 |
-| All existing and Release 0.2 tests pass | Full suite | `./gradlew test --console=plain` | Passed through Slice 6 |
-| All project checks pass | Full check | `./gradlew check --console=plain` | Passed through Slice 6 |
+| Correlation, causation, and trace context propagate | HTTP/Kafka/Provider/webhook span assertions | Observability end-to-end suite | Passed — Slice 7 proves persisted-parent, Kafka producer/consumer, and Provider HTTP client span lineage; propagates W3C context across delayed boundaries; and keeps trace headers outside HMAC input |
+| Metrics and dashboards expose required signals | Meter-registry, detector, backlog-state, and dashboard-schema tests | Observability suite | Passed — Slice 7 provides executable duplicate-source detection, active retry/recovery backlog accounting, partition-complete Kafka lag, two Grafana dashboards, and eight runbook-linked alerts |
+| Modulith/ArchUnit prohibit forbidden access | Module verification and dependency rules | `./gradlew check --console=plain` | Passed — Release 0.2 gate |
+| No Release 0.3+ capability is introduced | Dependency/source/scope searches and diff review | Repository audit commands | Passed — Release 0.2 gate |
+| All existing and Release 0.2 tests pass | Full suite | `./gradlew clean test --console=plain` | Passed — Release 0.2 gate |
+| All project checks pass | Full check | `./gradlew check --console=plain` | Passed — Release 0.2 gate |
 
 ### Required release-gate commands
 
@@ -645,17 +655,17 @@ Slice 0 created these files:
 
 Each file must state: “This file is a retrospective record of a decision originally approved in LedgerOps Technical Specification v1.0 on 13 July 2026. It is not a recovered original and introduces no new decision.” Each record must reproduce only the corresponding decision already recorded by the Technical Specification: transactional outbox; at-least-once delivery with idempotent consumers; business-capability Kafka topics with aggregate partition keys; or a separate Provider Simulator application and database.
 
-### README synchronization
+### Slice 0 README synchronization record
 
-Slice 0 updates the repository status to:
+At Slice 0 completion, the repository status became:
 
 > Release 0.2 — Distributed Processing is active under accepted ADR-021 and the active Release 0.2 plan. It adds durable Provider delivery around the completed ADR-020 Payment-to-Ledger boundary. Release 0.2 does not add Keycloak, Reversal, reconciliation, public replay controls, Kubernetes, or cloud deployment.
 
 Update the repository tree only when `applications/provider-simulator`, event contracts, runbooks, and observability assets exist. Do not present a planned component as implemented.
 
-### AGENTS.md synchronization
+### Slice 0 AGENTS.md synchronization record
 
-Slice 0 replaces the current-scope opening with:
+At Slice 0 completion, the current-scope opening became:
 
 > The active milestone is **Release 0.2 — Distributed Processing**. Follow accepted ADR-021 and `docs/plans/release-0.2-distributed-processing.md`. Preserve the existing ADR-020 completion boundary. Release 0.2 permits Kafka, transactional outbox/inbox, Payment Attempts for Payments, Provider processing and recovery, the separate Provider Simulator, Resilience4j, OpenTelemetry, Prometheus, and initial Grafana dashboards. It still excludes Keycloak, authorization, Reversal, settlement/reconciliation, casework/corrections, public manual replay, Redis without an approved need, Kubernetes, Terraform, AWS deployment, and applied AI.
 
@@ -693,9 +703,9 @@ Use these exact initial rows after ADR-021 acceptance:
 | BR-13 | Release 0.2 keeps Provider progress separate from Payment, Reversal, and Reconciliation status. | Planned module, lifecycle, and persistence-boundary evidence. | Planned; Release exit Partial |
 ```
 
-### Proposed diagrams
+### Implemented diagrams
 
-Add, after ADR-021 acceptance:
+The [Release 0.2 Provider-flow diagrams](../architecture/diagrams/release-0.2-provider-flow.md) provide:
 
 - a module ownership diagram showing Payment, Messaging, Provider, and Ledger APIs and owned schemas;
 - a transaction/network sequence for initial submission, command consumption, Provider call, Stage A, and Stage B;
@@ -703,11 +713,11 @@ Add, after ADR-021 acceptance:
 - a webhook reception/processing sequence; and
 - a deployment diagram showing root Core, Kafka, Core PostgreSQL, Provider Simulator, and Simulator PostgreSQL with no shared database access.
 
-Every diagram must have equivalent explanatory text and use the same names as ADR-021.
+Each diagram includes equivalent explanatory text and uses the accepted ADR-021 names.
 
-### Proposed runbooks
+### Slice 0 proposed-runbook record
 
-Add read-only diagnosis and recovery guidance for:
+Slice 0 planned read-only diagnosis and recovery guidance for:
 
 - Kafka unavailable;
 - outbox backlog;
@@ -719,20 +729,15 @@ Add read-only diagnosis and recovery guidance for:
 - claim-lease recovery; and
 - stuck `PROCESSING` Payments.
 
-Release 0.2 runbooks must not provide an unauthenticated mutation or replay command. They may provide safe read-only queries and controlled local-demo reset steps.
+The implemented [Release 0.2 operations runbook](../runbooks/release-0.2-operations.md) provides this guidance without an unauthenticated mutation or replay command. It includes safe read-only diagnosis and the controlled local-demo reset path.
 
-### Proposed contracts and demo updates
+### Slice 0 proposed-contract and demo record
 
-- Add JSON Schemas and fixtures for the six ADR-021 contracts, including `PaymentSubmissionRetryRequested`.
-- Add Provider HTTP OpenAPI/JSON Schema and HMAC fixtures shared as immutable artifacts, not mutable domain classes.
-- Add Release 0.2 local topology instructions only after the commands are executable.
-- Extend synthetic seed data without real secrets or personal/financial data.
-- Demonstrate success, Kafka outage recovery, duplicate command/result/webhook, timeout-to-status-recovery, conflicting final evidence, dead-letter visibility, and zero duplicate financial effects.
-- Preserve the Release 0.1 demo as historical evidence; add a separate Release 0.2 demo and reset path.
+Slice 0 planned versioned JSON Schemas and fixtures for the six ADR-021 contracts, Provider HTTP schemas and HMAC fixtures, executable local-topology instructions, synthetic evidence, distributed failure stories, and a separate Release 0.2 demo. Slices 1–7 implemented those assets under `packages/event-contracts/v1`, `packages/provider-contracts/v1`, [Provider Simulator HTTP contract v1](../api/provider-simulator-v1.md), and the [Release 0.2 demo](../demo/release-0.2.md). The Release 0.1 demo remains historical evidence.
 
 ## Completion report
 
-- Changed: ADR-021 accepted; retrospective ADR records created; Technical Specification v1.6 approved; supporting documentation synchronized; this plan activated.
-- Verified: Slice 0 documentation, links, ADR numbering, DOCX integrity and rendering, repository tests, and scope audits. No Release 0.2 implementation evidence is claimed.
-- Incomplete: Slices 1 through 7 and every Release 0.2 executable evidence target.
+- Changed: Slices 0 through 7 are complete; ADR-021 remains accepted; the distributed Provider and messaging runtime, contracts, observability, operations evidence, and supporting documentation are implemented.
+- Verified: Atomic submission, at-least-once delivery, duplicate safety, Provider execution, evidence-gated final-result application, retry and ambiguity recovery, signed webhooks, dead-letter behavior, trace propagation, bounded metrics, dashboards, migrations, architecture boundaries, and the full Release 0.2 gate pass.
+- Incomplete: Product requirements intentionally marked `Partial` or `Deferred or Planned`; Release 0.3 identity, authorization, Reversal, reconciliation, corrections, and operational UI work have not started.
 - Deviations: None from Product Definition v1.6, Technical Specification v1.6, ADR-016, ADR-020, or ADR-021.

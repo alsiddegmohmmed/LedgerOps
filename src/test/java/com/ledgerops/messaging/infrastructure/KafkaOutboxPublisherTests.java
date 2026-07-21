@@ -85,6 +85,7 @@ class KafkaOutboxPublisherTests {
         assertEquals(claim.partitionKey(), record.key());
         assertEquals(claim.messageId().toString(), header(record, "messageId"));
         assertEquals(claim.correlationId().toString(), header(record, "correlationId"));
+        assertEquals(claim.traceparent(), header(record, "traceparent"));
         verify(store).markPublished(
                 eq(claim.outboxId()), eq(claim.leaseToken()), any(Instant.class)
         );
@@ -117,7 +118,9 @@ class KafkaOutboxPublisherTests {
         return new OutboxClaim(
                 UUID.randomUUID(), messageId, "SubmitPaymentToProvider", 1,
                 UUID.randomUUID(), UUID.randomUUID(), "topic", "key", "{}",
-                UUID.randomUUID(), UUID.randomUUID(), Instant.now(), attempt, UUID.randomUUID()
+                UUID.randomUUID(), UUID.randomUUID(),
+                "00-00000000000000000000000000000001-0000000000000002-01", null,
+                Instant.now(), attempt, UUID.randomUUID()
         );
     }
 }

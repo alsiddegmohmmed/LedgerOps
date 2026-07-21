@@ -1,0 +1,41 @@
+groups:
+  - name: ledgerops-release-0.2
+    rules:
+      - alert: LedgerOpsOutboxBacklog
+        expr: ledgerops_outbox_oldest_age_seconds > 60
+        for: 2m
+        annotations:
+          runbook: docs/runbooks/release-0.2-operations.md#kafka-outage-or-outbox-backlog
+      - alert: LedgerOpsConsumerLag
+        expr: ledgerops_kafka_consumer_lag > 0
+        for: 5m
+        annotations:
+          runbook: docs/runbooks/release-0.2-operations.md#consumer-lag-or-dead-message
+      - alert: LedgerOpsFinancialDeadLetter
+        expr: ledgerops_messaging_dead > 0
+        for: 1m
+        annotations:
+          runbook: docs/runbooks/release-0.2-operations.md#consumer-lag-or-dead-message
+      - alert: LedgerOpsProviderUnavailable
+        expr: ledgerops_provider_circuit_state{state="open"} == 1
+        for: 1m
+        annotations:
+          runbook: docs/runbooks/release-0.2-operations.md#provider-outage-or-ambiguous-outcome
+      - alert: LedgerOpsProviderAmbiguity
+        expr: increase(ledgerops_provider_ambiguity_total[5m]) > 0
+        annotations:
+          runbook: docs/runbooks/release-0.2-operations.md#provider-outage-or-ambiguous-outcome
+      - alert: LedgerOpsWebhookBacklog
+        expr: ledgerops_webhook_backlog > 0
+        for: 5m
+        annotations:
+          runbook: docs/runbooks/release-0.2-operations.md#webhook-backlog-or-signature-failures
+      - alert: LedgerOpsStuckPayment
+        expr: ledgerops_payment_processing_stuck > 0
+        for: 5m
+        annotations:
+          runbook: docs/runbooks/release-0.2-operations.md#stuck-payment-or-financial-consistency-failure
+      - alert: LedgerOpsDuplicateFinancialEffect
+        expr: ledgerops_duplicate_financial_effect_total > 0
+        annotations:
+          runbook: docs/runbooks/release-0.2-operations.md#stuck-payment-or-financial-consistency-failure

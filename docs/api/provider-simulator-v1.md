@@ -1,6 +1,6 @@
 # Provider Simulator HTTP contract v1
 
-Status: Implemented through Release 0.2 Slice 6
+Status: Implemented for Release 0.2
 
 The Provider Simulator is a separate Spring Boot application in `applications/provider-simulator`. It owns a separate PostgreSQL database and has no access to the LedgerOps Core database.
 
@@ -29,6 +29,11 @@ v1
 ```
 
 Use ASCII LF separators and no trailing LF. Trace headers propagate separately and are not signed. The Simulator accepts timestamps within 300 seconds of its injected clock. An unknown key, wrong-direction key, invalid timestamp, or invalid signature returns RFC 7807 `401 Unauthorized`.
+
+When present, `traceparent` must use canonical W3C version `00` form. `tracestate`
+is bounded to 512 characters. Core persists trace context with delayed Provider work,
+and the Simulator returns it with the corresponding webhook. Neither header is part
+of the HMAC canonical input.
 
 The cross-application golden fixture is `packages/provider-contracts/v1/fixtures/hmac-core-to-simulator.json`.
 
@@ -103,3 +108,8 @@ Run:
 ```
 
 Both suites use PostgreSQL Testcontainers. The Core tests also prove that Provider HTTP execution is rejected while a database transaction is active.
+
+Core and Provider Simulator expose bounded Prometheus metrics at
+`/actuator/prometheus`. The Release 0.2 dashboards and alerts are under
+`observability/`; record-level identifiers remain in traces and structured logs,
+not metric labels.

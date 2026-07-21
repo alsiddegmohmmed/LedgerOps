@@ -16,6 +16,8 @@ public record ProviderWorkClaim(
         String commandPayload,
         UUID correlationId,
         UUID causationId,
+        String traceparent,
+        String tracestate,
         UUID leaseToken,
         Instant leaseExpiresAt,
         boolean preTransmissionRetryAvailable,

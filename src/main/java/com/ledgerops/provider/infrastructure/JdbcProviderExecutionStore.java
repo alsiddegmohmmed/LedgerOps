@@ -95,6 +95,8 @@ class JdbcProviderExecutionStore implements ProviderExecutionStore, ProviderEvid
                         rs.getString("command_payload"),
                         rs.getObject("correlation_id", UUID.class),
                         rs.getObject("causation_id", UUID.class),
+                        rs.getString("traceparent"),
+                        rs.getString("tracestate"),
                         rs.getObject("lease_token", UUID.class),
                         rs.getTimestamp("lease_expires_at").toInstant(),
                         rs.getInt("transport_retry_count") < 1,
@@ -446,13 +448,15 @@ class JdbcProviderExecutionStore implements ProviderExecutionStore, ProviderEvid
                 INSERT INTO provider.work
                     (id, tenant_id, attempt_id, payment_id, attempt_sequence, work_type,
                      status, provider_id, provider_idempotency_key, request_intent_hash,
-                     command_payload, due_at, correlation_id, causation_id, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, 'STATUS_QUERY', 'PENDING', ?, ?, ?, '{}', ?, ?, ?, ?, ?)
+                     command_payload, due_at, correlation_id, causation_id,
+                     traceparent, tracestate, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, 'STATUS_QUERY', 'PENDING', ?, ?, ?, '{}', ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT (tenant_id, attempt_id, work_type) DO NOTHING
                 """, statusWorkId, submission.tenantId(), submission.attemptId(),
                 submission.paymentId(), submission.attemptSequence(), submission.providerId(),
                 submission.providerIdempotencyKey(), submission.requestIntentHash(),
                 Timestamp.from(dueAt), submission.correlationId(), submission.causationId(),
+                submission.traceparent(), submission.tracestate(),
                 Timestamp.from(now), Timestamp.from(now));
     }
 
@@ -492,7 +496,8 @@ class JdbcProviderExecutionStore implements ProviderExecutionStore, ProviderEvid
                 result.providerResultId(), message.providerIdempotencyKey(),
                 message.providerReference(), message.category(), message.disposition(),
                 message.origin(), message.observedAt(), claim.correlationId(),
-                claim.causationId(), result.completedAt());
+                claim.causationId(), result.completedAt(),
+                claim.traceparent(), claim.tracestate());
     }
 
     private void settleSubmissionRecoveryOwner(
