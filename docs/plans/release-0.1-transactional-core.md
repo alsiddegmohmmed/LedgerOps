@@ -130,7 +130,7 @@ Completed Money work:
 2. Enforced currency-defined decimal precision, prohibited negative values, and prohibited cross-currency arithmetic.
 3. Added invariant tests for SAR, JPY, and KWD precision, zero/positive semantics, arithmetic, currency mismatch, and negative-result rejection.
 
-Documentation reconciliation is complete through accepted ADR-016, ADR-017, ADR-018, ADR-019, and ADR-020. Product Definition v1.6 and Technical Specification v1.5 authorize the completed Slice 8 implementation.
+Documentation reconciliation is complete through accepted ADR-016, ADR-017, ADR-018, ADR-019, and ADR-020. Product Definition v1.6 and the current Technical Specification v1.6 authorize the completed Slice 8 implementation without changing the accepted Release 0.1 boundary.
 
 Completed Payment-domain work:
 
@@ -323,7 +323,7 @@ Completed work:
 3. Added correlation-aware operational log formatting and lifecycle logs that use stable identifiers without request payloads or secrets.
 4. Added executable OpenAPI/controller alignment, error-contract, health, logging-safety, domain-independence, published-API, controller-location, and constructor-injection architecture tests.
 5. Added an idempotent synthetic PostgreSQL seed and a local walkthrough for health, creation, equivalent replay, conflict, concurrency, and final-state verification.
-6. Audited this plan, the README, and requirement traceability against Product Definition v1.6, Technical Specification v1.5, and ADR-016 through ADR-020.
+6. Audited this plan, the README, and requirement traceability against Product Definition v1.6, the then-current v1.5 technical baseline, and ADR-016 through ADR-020. Technical Specification v1.6 now supersedes that baseline without changing Release 0.1 evidence.
 
 No public Payment-success endpoint or Release 0.2 infrastructure was introduced. Release 0.2 implementation remains pending its own approved plan.
 

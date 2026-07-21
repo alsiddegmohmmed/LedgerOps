@@ -1,10 +1,10 @@
-# Requirement traceability — Release 0.1
+# Requirement traceability — Releases 0.1 and 0.2
 
-Authority: approved LedgerOps Product Definition v1.6 and approved LedgerOps Technical Design and Architecture Specification v1.5. Accepted decisions include ADR-016 through ADR-020.
+Authority: approved LedgerOps Product Definition v1.6 and approved LedgerOps Technical Design and Architecture Specification v1.6. Accepted decisions include retrospective ADR-004, ADR-005, ADR-006, and ADR-009, plus ADR-016 through ADR-021.
 
 This matrix records derived implementation evidence. It does not modify either authoritative document.
 
-This matrix tracks only requirements touched by Release 0.1. Product requirements not listed here remain part of the authoritative Product Definition and are not silently removed.
+This matrix tracks requirements touched by Release 0.1 and planned for Release 0.2. Product requirements not listed here remain part of the authoritative Product Definition and are not silently removed.
 
 Status values: `Implemented`, `Partial`, `Planned`, `Deferred`, or `Blocked`.
 
@@ -14,8 +14,8 @@ Status values: `Implemented`, `Partial`, `Planned`, `Deferred`, or `Blocked`.
 | PAY-01 | create a stable tenant/merchant-owned payment with merchant reference, amount, currency, customer identifier, payment-method category, and idempotency key. Authorization is completed with the Release 0.3 identity boundary. | Current: domain aggregate, PostgreSQL schema/store, published ownership/activity checks, validated HTTP/OpenAPI creation contract, stable identifier and `CREATED` response, RFC 7807 failures, structured logs, and Testcontainers evidence cover every request field. Remaining: Release 0.3 authentication and authorization. | Partial |
 | PAY-02 | The Payment API idempotency namespace is tenant-wide. Equivalent requests under the same `tenantId + idempotencyKey` return the original logical result. Materially different content, including a different merchant, returns an explicit idempotency conflict. | Unique `(tenant_id, idempotency_key)` constraint, merchant-aware SHA-256 request fingerprint, atomic PostgreSQL insert-or-find, sequential replay, changed-content conflict, cross-merchant conflict, cross-tenant independence, coordinated eight-request concurrency, HTTP, and final-database-state tests pass. | Implemented |
 | PAY-03 | only the ADR-016 Payment transitions may occur; `REJECTED`, `FAILED`, and `REVERSED` are terminal, and provider, Reversal, and Reconciliation progress remain separate dimensions | Exact vocabulary and approved transitions have executable evidence. Slice 8 implements the accepted ADR-020 internal `PROCESSING -> COMPLETED` boundary, exact state/posting matrix, and typed inconsistency behavior. Provider-attempt and Reversal workflow enforcement remain later work. | Partial |
-| PAY-06 | one authorised full-payment Reversal workflow may be requested per `COMPLETED` Payment; failed retries remain in that workflow and add immutable provider attempts | Documentation remains aligned in Product v1.6 §6.6/PAY-06, Technical v1.5 §5.4, and ADR-016. Reversal implementation remains scheduled for Release 0.3. | Deferred |
-| PAY-08 | expose `REQUESTED`, `PROCESSING`, `FAILED`, and `COMPLETED` Reversal history; only completed reversal atomically compensates the ledger and changes Payment to `REVERSED` | Documentation remains aligned in Product v1.6 PAY-08/§8.4, Technical v1.5 §5.4, and ADR-016. Reversal implementation remains scheduled for Release 0.3. | Deferred |
+| PAY-06 | one authorised full-payment Reversal workflow may be requested per `COMPLETED` Payment; failed retries remain in that workflow and add immutable provider attempts | Documentation remains aligned in Product v1.6 §6.6/PAY-06, Technical v1.6 §5.4, and ADR-016. Reversal implementation remains scheduled for Release 0.3. | Deferred |
+| PAY-08 | expose `REQUESTED`, `PROCESSING`, `FAILED`, and `COMPLETED` Reversal history; only completed reversal atomically compensates the ledger and changes Payment to `REVERSED` | Documentation remains aligned in Product v1.6 PAY-08/§8.4, Technical v1.6 §5.4, and ADR-016. Reversal implementation remains scheduled for Release 0.3. | Deferred |
 | RSK-01 | Evaluate every eligible Payment synchronously against all enabled `PAYMENT_AMOUNT_THRESHOLD` rules for its currency. Record the exact profile version, every eligible rule result, uncapped and final scores, decision, and evaluation time. | Domain, application, migration, persistence, rollback, repeat, and coordinated-concurrency tests verify the exact rule model, versioned evidence, published boundary, one evaluation, and atomic Payment-owned orchestration. | Implemented |
 | RSK-02 | Produce `APPROVE`, `MANUAL_REVIEW`, or `REJECT` from an integer score capped at 100 and tenant thresholds satisfying `1 <= reviewThreshold < rejectThreshold <= 100`; map the result only to the approved Payment transitions from `VALIDATING`. | Domain, application, and PostgreSQL tests verify invalid threshold ordering, exact score boundaries, all three decisions, and exact Payment transition mapping. Manual-review queues and human decisions remain outside Release 0.1. | Implemented |
 | LED-01 | balanced journal transaction with at least one debit and credit; accepted ADR-020 defines the Payment-success template as exactly full-amount `DEBIT PROVIDER_CLEARING` and `CREDIT MERCHANT_PAYABLE` in the Payment currency | General Ledger invariants, V7 atomic persistence, and Slice 8 Payment-success template, rollback, consistency-matrix, replay, and concurrency evidence pass. Other later financial workflows remain. | Partial |
@@ -32,10 +32,39 @@ Status values: `Implemented`, `Partial`, `Planned`, `Deferred`, or `Blocked`.
 | BR-13 | Payment, Reversal, Reconciliation, and provider-attempt progress are separate dimensions | Authoritative documentation and ADR-016 are aligned. Executable Payment lifecycle, Risk, and atomic-completion evidence passes; provider-attempt, Reversal, and Reconciliation evidence remains deferred to its scheduled release. | Partial |
 | BR-14 | only a completed full Reversal changes Payment from `COMPLETED` to `REVERSED`; partial and cumulative reversals are prohibited | Authoritative documentation and ADR-016 are aligned; atomic reversal and prohibition tests remain scheduled for Release 0.3. | Deferred |
 
+## Release 0.2 planned evidence
+
+Slice 0 establishes authority and planned evidence only. No row below is implementation evidence. Change a status only after the corresponding executable verification passes.
+
+| Requirement | Release 0.2 interpretation | Planned evidence | Current and release-exit status |
+|---|---|---|---|
+| PAY-03 | Implement the automated Provider lifecycle path while preserving the approved Payment state machine and ADR-020 completion. | ADR-021 Slices 1, 4, and 5. | Planned; release exit `Partial` |
+| PAY-04 | Persist Payment Attempt and Provider evidence for future composed detail views without delivering the complete product-facing view. | ADR-021 Slices 1, 3, and 7. | Planned; release exit `Partial` |
+| PRV-01 | Provide deterministic Provider Simulator scenarios without the later authenticated administration workflow. | ADR-021 Slices 3 and 7. | Planned; release exit `Partial` |
+| PRV-02 | Implement immutable Payment-associated attempts and separate Provider-owned interaction/result evidence. Reversal attempts remain Release 0.3. | ADR-021 Slices 1, 3, and 5. | Planned; release exit `Partial` |
+| PRV-03 | Durably receive and asynchronously process signed Provider webhooks while preserving duplicate, invalid, out-of-order, and conflicting evidence without duplicate effects. | ADR-021 Slice 6; product timeline UI remains later. | Planned; release exit `Partial` |
+| PRV-04 | Implement bounded automatic safe retry and status recovery. Public manual retry remains deferred until Release 0.3 authorization and audit. | ADR-021 Slice 5. | Planned; release exit `Partial` |
+| PRV-05 | Expose Provider health through bounded Prometheus metrics and initial Grafana dashboards. These dashboards do not complete the product-facing operations experience. | ADR-021 Slice 7. | Planned; release exit `Partial` |
+| DEV-01 | Add signed Provider and event-contract developer reference material. | ADR-021 Slices 1–7. | Planned; release exit `Partial` |
+| DEV-02 | Merchant webhook testing is not implemented by Provider Simulator-to-Core webhooks. | Outside Release 0.2 implementation scope. | Deferred or Planned |
+| DEV-03 | Add deterministic distributed-processing failure stories without an authenticated scenario launcher. | ADR-021 Slices 3 and 7. | Planned; release exit `Partial` |
+| DEV-04 | Add synthetic Provider, attempt, messaging, and failure evidence to the demo. | ADR-021 Slice 7. | Planned; release exit `Partial` |
+| BR-01 | Enforce tenant ownership for mapped Core business records and isolate unattributed webhook-security evidence from business effects. | Migration, constraint, mapping, and tenant-isolation evidence. | Planned; release exit `Partial` |
+| BR-05 | Duplicate commands, Provider results, status observations, and webhooks produce one accepted business and financial effect. | Inbox, business-outbox hash, fenced lease, Provider-result identity, accepted-final-result, terminal-state, and ADR-020 replay evidence. | Implemented only after all required executable evidence passes |
+| BR-06 | Automatic submission retry and status recovery follow the exact ADR-021 dispositions and limits; ambiguity or exhaustion never invents a final failure. | Clock/scheduler, RetryDisposition, no-acceptance proof, attempt-count, UNKNOWN, recovery, and unresolved-evidence tests. | Implemented only after all required executable evidence passes |
+| BR-12 | Use injected time for leases, retries, signatures, evidence, and deterministic tests. | ADR-021 Slices 1–7. | Planned; release exit `Partial` |
+| BR-13 | Keep Provider progress separate from Payment, Reversal, and Reconciliation status. | Module, lifecycle, and persistence-boundary evidence. | Planned; release exit `Partial` |
+
 ## Technical decision evidence
 
 | Technical section | Decision | Evidence/status |
 |---|---|---|
+| ADR-004; Technical §§7.4–7.5 | Business state and outbound-message intent commit atomically through a transactional outbox. | Accepted retrospective decision; implementation planned in Slices 1–2. |
+| ADR-005; Technical §§7.4, 7.6–7.7 | At-least-once delivery uses idempotent consumers and makes no end-to-end exactly-once claim. | Accepted retrospective decision; implementation planned in Slices 2–7. |
+| ADR-006; Technical §§7.2–7.3 | Kafka topics follow business capabilities and use aggregate partition keys. | Accepted retrospective decision; contracts and delivery planned in Slice 2. |
+| ADR-009; Technical §§3, 9.1, 9.6, and 12.2 | Provider Simulator is a separate deployable application with its own database and no Core database access. | Accepted retrospective decision; executable evidence planned in Slice 3. |
+| ADR-020 and ADR-021; Technical §§5.6, 9.2–9.3, 13, 14.2, and 17 | Release 0.2 Stage B SUCCESS preserves the existing Payment-owned ADR-020 completion transaction and exact Ledger replay verification. | ADRs accepted; Release 0.1 boundary implemented; distributed Provider evidence and result application planned in Slice 4. |
+| ADR-021; Technical §§4–7, 9, 11, 13, 14.2, and 17 | Exact Release 0.2 module graph, identities, outbox/inbox, leases, Provider work, retry, HMAC, webhook, resilience, observability, scope, and verification semantics. | Accepted and documented in Technical v1.6; implementation remains planned in Slices 1–7. |
 | §4.1–4.4 | modular monolith, internal layering, owned schemas, no cross-table access | Tenancy and Merchant module declarations, published tenancy API, restricted Merchant dependency, separate schemas, and Modulith verification exist; expand with each module |
 | §4.3 and §5.1 | Merchant owns profiles/state/configuration/limits, belongs to exactly one tenant, and does not live inside the Tenant aggregate | merchant identity/state foundation, mandatory tenant reference, owned schema, scoped repository, and isolation tests implemented; configuration and limits remain planned |
 | §4.3, §5.1, and §8.6 | Customer owns simulated references, status, merchant relationship, risk attributes, and tokenized references while storing no real card credentials or unnecessary personal profiles | customer identity/reference/status foundation, mandatory tenant/merchant ownership, data-minimized owned schema, scoped repository, and isolation tests implemented; risk and tokenized attributes remain planned |

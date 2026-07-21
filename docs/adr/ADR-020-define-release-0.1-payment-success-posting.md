@@ -14,7 +14,7 @@ Superseded by: None
 
 This ADR defines the accounting template, replay contract, module boundary, and transaction boundary implemented in Release 0.1 Slice 8. After confirmed provider `SUCCESS`, Ledger debits `PROVIDER_CLEARING` and credits `MERCHANT_PAYABLE` for the full Payment amount. The financial source identity is exactly `tenantId + PAYMENT + paymentId`.
 
-The reconciled direction was reviewed and accepted on 21 July 2026. Slice 8 implementation is authorized against Product Definition v1.6 and Technical Specification v1.5.
+The reconciled direction was reviewed and accepted on 21 July 2026. Slice 8 implementation is authorized against Product Definition v1.6 and the current Technical Specification v1.6, which supersedes v1.5 without changing this boundary.
 
 ## Context
 

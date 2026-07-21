@@ -7,19 +7,19 @@ LedgerOps is a production-style portfolio project for learning and demonstrating
 Read these documents before making implementation decisions:
 
 1. `docs/product/LedgerOps_Product_Definition_Official_v1.6.docx` defines what the product must do.
-2. `docs/architecture/LedgerOps_Technical_Design_and_Architecture_Specification_v1.5.docx` defines the approved design.
-3. `docs/plans/release-0.1-transactional-core.md` defines the current sequence and status.
+2. `docs/architecture/LedgerOps_Technical_Design_and_Architecture_Specification_v1.6.docx` defines the approved design.
+3. `docs/plans/release-0.2-distributed-processing.md` defines the current sequence and status.
 4. `docs/requirements/TRACEABILITY.md` maps requirements to evidence.
 
 Precedence is product definition, technical specification, approved ADRs, then implementation plans. Code and plans must not silently contradict a higher-authority source.
 
-ADR-020 is accepted and authorizes Slice 8 Payment-success posting and completion orchestration.
+ADR-020 is accepted and remains the non-negotiable Payment-success posting and completion boundary. ADR-021 is accepted and authorizes Release 0.2 implementation after completion of Slice 0.
 
 If implementation evidence exposes a conflict or impractical decision, stop before changing the design. Describe the exact conflict, recommend one replacement with trade-offs, and wait for approval. Record an approved material change as an ADR.
 
 ## Current scope
 
-The latest completed milestone is **Release 0.1 — Transactional Core**. Release 0.2 implementation has not started; reconcile its first slice with the authoritative documents and record an approved implementation plan before adding distributed-processing infrastructure.
+The active milestone is **Release 0.2 — Distributed Processing**. Slice 0 is complete. Follow accepted ADR-021 and `docs/plans/release-0.2-distributed-processing.md`; begin production work only through the next pending slice.
 
 Allowed now:
 
@@ -31,8 +31,12 @@ Allowed now:
 - strict double-entry ledger and an internal atomic Payment-success completion using exactly full-amount `DEBIT PROVIDER_CLEARING` and `CREDIT MERCHANT_PAYABLE` in the Payment currency
 - HTTP APIs, OpenAPI, RFC 7807 problems, structured logs
 - JUnit, Testcontainers with PostgreSQL, ArchUnit, and Spring Modulith tests
+- Kafka with at-least-once delivery and transactional outbox/inbox
+- Payment Attempts for Payments and Provider processing/recovery
+- a separate Provider Simulator application and database
+- Resilience4j, OpenTelemetry, Prometheus, and initial Grafana dashboards
 
-Do not add Release 0.2 or later capabilities yet: Kafka, transactional outbox/inbox, Redis, Keycloak, Kubernetes, reconciliation, a polished frontend, or applied AI. Release 0.3 introduces Keycloak, identity, tenant membership, permissions, merchant scope, authorization, and tenant-isolation enforcement. Release 1.0 completes security hardening and release evidence. Do not add a technology because it appears in the eventual 1.0 baseline; the release plan controls when it is introduced.
+Release 0.2 still excludes Keycloak, identity and authorization, Reversal, settlement/reconciliation, casework/corrections, public manual replay, a polished frontend, Kubernetes, Terraform, AWS deployment, applied AI, and Redis without a separately approved need. Release 0.3 introduces Keycloak, identity, tenant membership, permissions, merchant scope, authorization, and tenant-isolation enforcement. Release 1.0 completes security hardening and release evidence. Do not add a technology before its active slice.
 
 ## Non-negotiable correctness rules
 
@@ -51,6 +55,13 @@ Do not add Release 0.2 or later capabilities yet: Kafka, transactional outbox/in
 - Risk configuration or processing failure leaves Payment `VALIDATING` and persists no partial Risk evidence or Payment decision.
 - Release 0.1 Ledger accounts use exactly `ACTIVE` and the ADR-019 account-code catalog. They have no lifecycle or deletion.
 - Ledger account uniqueness is exactly `tenantId + accountCode + currency`; every posting validates account existence, tenant, currency, and `ACTIVE` status atomically.
+- Preserve the exact ADR-020 completion transaction, Ledger posting identity, replay verification, and rollback behavior.
+- A Payment cannot complete from a Provider result without matching durable Provider evidence.
+- Provider HTTP calls occur outside database transactions. `UNKNOWN` enters status recovery and never triggers blind resubmission.
+- Release 0.2 supports exactly `providerId = SIMULATOR`; every attempt reuses the Payment-derived Provider idempotency identity.
+- Messaging producer names are the closed values `payment` and `provider`. Business outbox identity, inbox identity, canonical hashes, and stable message IDs follow ADR-021 exactly.
+- Outbox and Provider work use fenced leases. A stale lease holder cannot mutate reclaimed work.
+- The module direction is exactly `Provider -> messaging::api`, `Payment -> provider::api`, and `Payment -> messaging::api`; Provider never depends on Payment.
 
 ## Architecture and coding rules
 
