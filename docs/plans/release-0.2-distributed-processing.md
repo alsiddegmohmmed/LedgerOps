@@ -198,7 +198,7 @@ Authority: Product PRV-01–PRV-05 and BR-05–BR-06; Technical §§7, 9, 14.2, 
 
 ### Slice 1 — durable Payment submission
 
-Status: Pending
+Status: Completed
 
 Authority: Product PAY-03, PRV-02, BR-01, BR-05, BR-12, and BR-13; Technical §§4.3–4.4, 5.1, 5.3, 5.7, 6, 7.5, and 9.2; accepted ADR-021.
 
@@ -210,6 +210,16 @@ Authority: Product PAY-03, PRV-02, BR-01, BR-05, BR-12, and BR-13; Technical §�
 - Typed failures and observability: Cover missing/wrong-state Payment, version conflict, constraint failure, append conflict, rollback, and bounded submission logs/metrics.
 - Verification: PostgreSQL/Testcontainers migration, atomic rollback, replay, concurrent submission, outbox deduplication, immutable attempt, tenant isolation, and Modulith tests.
 - Completion: One operation yields one `PROCESSING` Payment, one attempt, and one durable command; a failure yields none.
+
+Completed evidence:
+
+- Added the immutable Payment-owned `PaymentAttempt` model with sequence 1, `providerId = SIMULATOR`, the Payment-derived Provider idempotency key, and the exact canonical request-intent hash.
+- Added forward migration V8 for Payment Attempts and the minimal Messaging-owned `PENDING` outbox. PostgreSQL enforces tenant/Payment ownership, attempt sequence uniqueness, the closed Provider catalog, typed producer names, business deduplication, JSON-object payload validation, and immutable attempt and outbox business content.
+- Added the internal Payment-owned submission transaction. It locks and validates the tenant before locking the Payment, persists the attempt, applies `Payment.startProcessing()`, performs the expected-version update, and appends `SubmitPaymentToProvider` atomically.
+- Equivalent replay returns the original attempt, outbox, and message identities. Partial or mismatched evidence raises a typed consistency failure and is never repaired or normalized.
+- Added canonical JSON Schema fixtures for SAR, JPY, an optional compatible payload extension, and invalid content. Canonical payload bytes survive PostgreSQL persistence unchanged.
+- PostgreSQL/Testcontainers tests cover successful submission, suspended-tenant serialization, tenant isolation, replay, concurrent submission, concurrent outbox deduplication, rollback at Payment/outbox failures, typed concurrency and persistence failures, immutable evidence, database constraints, canonical hashing, and Modulith boundaries.
+- Kafka, Provider work, external calls, inbox processing, result handling, retry, and webhooks remain unimplemented and belong to later slices.
 
 ### Slice 2 — Kafka command delivery
 

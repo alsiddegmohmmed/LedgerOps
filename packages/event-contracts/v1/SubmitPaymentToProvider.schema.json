@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ledgerops.dev/contracts/v1/SubmitPaymentToProvider.schema.json",
+  "title": "SubmitPaymentToProvider",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "attemptId",
+    "paymentId",
+    "attemptSequence",
+    "providerId",
+    "providerIdempotencyKey",
+    "amount",
+    "currency",
+    "paymentMethodCategory",
+    "requestIntentHash"
+  ],
+  "properties": {
+    "attemptId": { "type": "string", "format": "uuid" },
+    "paymentId": { "type": "string", "format": "uuid" },
+    "attemptSequence": { "type": "integer", "minimum": 1 },
+    "providerId": { "const": "SIMULATOR" },
+    "providerIdempotencyKey": {
+      "type": "string",
+      "pattern": "^payment:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+    },
+    "amount": { "type": "string", "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]+)?$" },
+    "currency": { "type": "string", "pattern": "^[A-Z]{3}$" },
+    "paymentMethodCategory": { "type": "string", "minLength": 1 },
+    "requestIntentHash": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+  }
+}

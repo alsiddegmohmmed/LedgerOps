@@ -114,6 +114,11 @@ class TenantManagementServiceTests {
         }
 
         @Override
+        public Optional<Tenant> findByIdForUpdate(TenantId tenantId) {
+            return findById(tenantId);
+        }
+
+        @Override
         public boolean existsByName(String name) {
             return tenants.values().stream()
                     .anyMatch(tenant -> tenant.name().equals(name));

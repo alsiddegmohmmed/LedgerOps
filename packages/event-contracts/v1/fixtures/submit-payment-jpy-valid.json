@@ -1,0 +1,11 @@
+{
+  "attemptId": "00000000-0000-0000-0000-000000000011",
+  "paymentId": "00000000-0000-0000-0000-000000000001",
+  "attemptSequence": 1,
+  "providerId": "SIMULATOR",
+  "providerIdempotencyKey": "payment:00000000-0000-0000-0000-000000000001",
+  "amount": "12",
+  "currency": "JPY",
+  "paymentMethodCategory": "CARD",
+  "requestIntentHash": "a759a31b7d2ca555352b5c6787514437e1e9c49cc538c8ed7c2872ac4ada8a5e"
+}

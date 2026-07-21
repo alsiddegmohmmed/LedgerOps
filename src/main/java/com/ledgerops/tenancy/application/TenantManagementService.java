@@ -76,7 +76,8 @@ public class TenantManagementService {
             TenantStatus targetStatus,
             UnaryOperator<Tenant> transition
     ) {
-        Tenant tenant = findTenant(tenantId);
+        Tenant tenant = tenantRepository.findByIdForUpdate(tenantId)
+                .orElseThrow(() -> new TenantNotFoundException(tenantId));
         Tenant transitionedTenant;
 
         try {

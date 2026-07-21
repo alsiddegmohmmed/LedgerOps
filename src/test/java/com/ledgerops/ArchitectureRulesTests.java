@@ -49,6 +49,18 @@ class ArchitectureRulesTests {
     }
 
     @Test
+    void messagingPublishedApiDoesNotExposeMessagingInternals() {
+        classes()
+                .that().resideInAPackage("com.ledgerops.messaging.api..")
+                .should().onlyDependOnClassesThat().resideInAnyPackage(
+                        "com.ledgerops.messaging.api..",
+                        "java..",
+                        "org.springframework.modulith.."
+                )
+                .check(productionClasses);
+    }
+
+    @Test
     void controllersRemainInApiPackages() {
         classes()
                 .that().areAnnotatedWith(RestController.class)

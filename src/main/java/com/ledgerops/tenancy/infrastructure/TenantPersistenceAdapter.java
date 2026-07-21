@@ -58,6 +58,13 @@ class TenantPersistenceAdapter implements TenantRepository {
     }
 
     @Override
+    @Transactional
+    public Optional<Tenant> findByIdForUpdate(TenantId tenantId) {
+        return repository.findByIdForUpdate(tenantId.value())
+                .map(this::toDomain);
+    }
+
+    @Override
     @Transactional(readOnly = true)
     public boolean existsByName(String name) {
         return repository.existsByName(name);

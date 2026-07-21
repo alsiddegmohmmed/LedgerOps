@@ -3,14 +3,18 @@ package com.ledgerops.payment.infrastructure;
 import com.ledgerops.merchant.api.MerchantReference;
 import com.ledgerops.payment.application.PaymentCompletionStore;
 import com.ledgerops.payment.application.PaymentLifecycleStore;
+import com.ledgerops.payment.application.PaymentSubmissionStore;
 import com.ledgerops.payment.application.VersionedPayment;
 import com.ledgerops.payment.domain.CustomerId;
 import com.ledgerops.payment.domain.IdempotencyKey;
 import com.ledgerops.payment.domain.Money;
 import com.ledgerops.payment.domain.Payment;
+import com.ledgerops.payment.domain.PaymentAttempt;
+import com.ledgerops.payment.domain.PaymentAttemptId;
 import com.ledgerops.payment.domain.PaymentId;
 import com.ledgerops.payment.domain.PaymentMethodCategory;
 import com.ledgerops.payment.domain.PaymentStatus;
+import com.ledgerops.payment.domain.ProviderId;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
@@ -24,7 +28,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 @Repository
-class PaymentJdbcLifecycleStore implements PaymentLifecycleStore, PaymentCompletionStore {
+class PaymentJdbcLifecycleStore implements PaymentLifecycleStore, PaymentCompletionStore, PaymentSubmissionStore {
 
     private static final String FIND_SQL = """
             SELECT id,
@@ -67,6 +71,22 @@ class PaymentJdbcLifecycleStore implements PaymentLifecycleStore, PaymentComplet
              WHERE tenant_id = ?
                AND id = ?
                FOR UPDATE
+            """;
+    private static final String FIND_ATTEMPT_SQL = """
+            SELECT id, tenant_id, payment_id, sequence, provider_id,
+                   provider_idempotency_key, initiated_at, merchant_id,
+                   customer_id, amount, currency, payment_method_category,
+                   request_intent_hash
+              FROM payment.payment_attempts
+             WHERE tenant_id = ? AND payment_id = ? AND sequence = ?
+            """;
+    private static final String INSERT_ATTEMPT_SQL = """
+            INSERT INTO payment.payment_attempts (
+                id, tenant_id, payment_id, sequence, provider_id,
+                provider_idempotency_key, initiated_at, merchant_id,
+                customer_id, amount, currency, payment_method_category,
+                request_intent_hash
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """;
 
     private final JdbcTemplate jdbcTemplate;
@@ -128,6 +148,61 @@ class PaymentJdbcLifecycleStore implements PaymentLifecycleStore, PaymentComplet
                 updatedPayment.id().value(),
                 expectedVersion
         ) == 1;
+    }
+
+    @Override
+    public Optional<PaymentAttempt> findAttempt(
+            UUID tenantId,
+            PaymentId paymentId,
+            int sequence
+    ) {
+        return jdbcTemplate.query(
+                FIND_ATTEMPT_SQL,
+                this::mapAttempt,
+                tenantId,
+                paymentId.value(),
+                sequence
+        ).stream().findFirst();
+    }
+
+    @Override
+    public void insertAttempt(PaymentAttempt attempt) {
+        jdbcTemplate.update(
+                INSERT_ATTEMPT_SQL,
+                attempt.attemptId().value(),
+                attempt.tenantId(),
+                attempt.paymentId().value(),
+                attempt.sequence(),
+                attempt.providerId().name(),
+                attempt.providerIdempotencyKey(),
+                Timestamp.from(attempt.initiatedAt()),
+                attempt.merchantId(),
+                attempt.customerId().value(),
+                attempt.amount().amount(),
+                attempt.amount().currency().getCurrencyCode(),
+                attempt.paymentMethodCategory().value(),
+                attempt.requestIntentHash()
+        );
+    }
+
+    private PaymentAttempt mapAttempt(ResultSet rs, int rowNumber) throws SQLException {
+        return new PaymentAttempt(
+                PaymentAttemptId.from(rs.getObject("id", UUID.class)),
+                rs.getObject("tenant_id", UUID.class),
+                PaymentId.from(rs.getObject("payment_id", UUID.class)),
+                rs.getInt("sequence"),
+                ProviderId.valueOf(rs.getString("provider_id")),
+                rs.getString("provider_idempotency_key"),
+                rs.getTimestamp("initiated_at").toInstant(),
+                rs.getObject("merchant_id", UUID.class),
+                CustomerId.from(rs.getObject("customer_id", UUID.class)),
+                Money.of(
+                        rs.getBigDecimal("amount"),
+                        Currency.getInstance(rs.getString("currency"))
+                ),
+                PaymentMethodCategory.from(rs.getString("payment_method_category")),
+                rs.getString("request_intent_hash")
+        );
     }
 
     private VersionedPayment mapVersionedPayment(

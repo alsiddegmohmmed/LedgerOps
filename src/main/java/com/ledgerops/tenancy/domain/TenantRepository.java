@@ -8,5 +8,7 @@ public interface TenantRepository {
 
     Optional<Tenant> findById(TenantId tenantId);
 
+    Optional<Tenant> findByIdForUpdate(TenantId tenantId);
+
     boolean existsByName(String name);
 }

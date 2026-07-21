@@ -113,7 +113,7 @@ public class PaymentCreationService {
     }
 
     private void validateReferences(Payment payment) {
-        TenantActivityStatus tenantStatus = tenantActivityQuery.evaluate(
+        TenantActivityStatus tenantStatus = tenantActivityQuery.evaluateForUpdate(
                 TenantReference.from(payment.tenantId())
         );
         if (tenantStatus != TenantActivityStatus.ALLOWED) {

@@ -1,0 +1,11 @@
+{
+  "attemptId": "not-a-uuid",
+  "paymentId": "00000000-0000-0000-0000-000000000001",
+  "attemptSequence": 0,
+  "providerId": "OTHER",
+  "providerIdempotencyKey": "wrong-key",
+  "amount": "12.3x",
+  "currency": "sar",
+  "paymentMethodCategory": "",
+  "requestIntentHash": "invalid"
+}
