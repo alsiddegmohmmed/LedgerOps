@@ -214,7 +214,10 @@ final class ProviderSimulatorController {
             case "PERMANENT_FAILURE" -> "PERMANENT_FAILURE";
             case "ACCEPTED" -> "ACCEPTED";
             case "PENDING" -> "PENDING";
-            case "TIMEOUT_THEN_SUCCESS", "SUCCESS", "SLOW_RESPONSE", "TIMEOUT" -> "SUCCESS";
+            case "TIMEOUT_THEN_SUCCESS", "SUCCESS", "SLOW_RESPONSE", "TIMEOUT",
+                 "DELAYED_WEBHOOK", "DUPLICATE_WEBHOOK", "MISSING_WEBHOOK",
+                 "OUT_OF_ORDER_WEBHOOK", "INVALID_SIGNATURE", "CONFLICTING_RESULT" ->
+                    "SUCCESS";
             default -> throw new IllegalStateException("Unsupported durable scenario " + scenario);
         };
     }

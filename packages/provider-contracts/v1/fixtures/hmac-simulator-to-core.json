@@ -1,0 +1,10 @@
+{
+  "method": "POST",
+  "rawPath": "/internal/provider/v1/webhooks",
+  "keyId": "simulator-to-core-v1",
+  "timestamp": "1784635200",
+  "eventId": "74d820be-c24f-4fa5-b884-7c74ad035cc4",
+  "rawBody": "{\"providerEventId\":\"74d820be-c24f-4fa5-b884-7c74ad035cc4\",\"providerResultId\":\"c1a2d7de-e5a5-43a3-95ca-18c3da7b0f25\",\"providerIdempotencyKey\":\"payment:be60ad81-77f2-478e-b67a-dfcc7a54564d\",\"providerReference\":\"simulator-transaction-1001\",\"providerResultCategory\":\"SUCCESS\",\"providerOccurredAt\":\"2026-07-21T12:00:00Z\"}",
+  "testSecret": "test-only-simulator-to-core-secret",
+  "signature": "v1=0WZxEcKrrGFNWofirODH8_vShsb2Ra8QngK_wvYscTw"
+}

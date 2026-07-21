@@ -19,7 +19,7 @@ If implementation evidence exposes a conflict or impractical decision, stop befo
 
 ## Current scope
 
-The active milestone is **Release 0.2 — Distributed Processing**. Slices 0–5 are complete; Slice 6 is the next pending slice. Follow accepted ADR-021 and `docs/plans/release-0.2-distributed-processing.md`; do not implement later-slice behavior early.
+The active milestone is **Release 0.2 — Distributed Processing**. Slices 0–6 are complete; Slice 7 is the next pending slice. Follow accepted ADR-021 and `docs/plans/release-0.2-distributed-processing.md`; do not implement later-slice behavior early.
 
 Allowed now:
 

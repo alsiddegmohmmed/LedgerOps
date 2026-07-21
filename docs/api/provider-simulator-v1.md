@@ -1,6 +1,6 @@
 # Provider Simulator HTTP contract v1
 
-Status: Implemented for Release 0.2 Slice 3
+Status: Implemented through Release 0.2 Slice 6
 
 The Provider Simulator is a separate Spring Boot application in `applications/provider-simulator`. It owns a separate PostgreSQL database and has no access to the LedgerOps Core database.
 
@@ -56,6 +56,42 @@ Core uses a 1-second connection timeout, 3-second read timeout, and 5-second tot
 
 The Simulator supports test-, seed-, or local-profile scenario overrides. It exposes no unauthenticated scenario-administration endpoint.
 
+## Deliver a Provider webhook
+
+`POST /internal/provider/v1/webhooks`
+
+The Simulator sends version-1 `ProviderWebhook` payloads to Core. The JSON Schema is `packages/provider-contracts/v1/ProviderWebhook.schema.json`.
+
+Simulator-to-Core webhooks use a separate secret set and `X-LedgerOps-Event-Id` in place of `X-LedgerOps-Request-Id`. The canonical UTF-8 input is:
+
+```text
+v1
+POST
+/internal/provider/v1/webhooks
+<KEY_ID>
+<TIMESTAMP_DECIMAL>
+<EVENT_ID>
+<LOWERCASE_SHA256_RAW_BODY>
+```
+
+Use ASCII LF separators and no trailing LF. Core reads at most 256 KiB plus one detection byte before authentication or JSON parsing. Core accepts timestamps whose absolute difference from its injected `Clock` is at most 300 seconds.
+
+Reception outcomes are:
+
+| Condition | Result | Durable evidence |
+|---|---|---|
+| Unknown key, wrong-direction key, invalid signature, or invalid timestamp | `401` | Bounded platform security rejection only; no Provider receipt or work |
+| Valid signature with malformed JSON | `400` | Provider-scoped unattributed invalid evidence; no tenant-owned receipt or work |
+| Valid payload without a Provider-owned mapping | `202` | Durable unattributed Provider receipt and operational signal; no tenant-owned work |
+| New mapped event | `202` | One tenant-owned canonical event, receipt, and asynchronous work item |
+| Repeated mapped event with the same identity and payload hash | `202` | Duplicate receipt evidence; no new work |
+| Repeated mapped event with changed content | `409` | Conflict receipt and operational evidence; no new work |
+| Body larger than 256 KiB | `413` | Bounded platform rejection metadata when available |
+
+Webhook body fields never establish tenant identity. Core resolves tenant, Payment, and Payment Attempt from the Provider-owned mapping created from `SubmitPaymentToProvider`.
+
+The Simulator persists outbound webhook delivery before sending it. Its deterministic test scenarios cover duplicate, delayed, missing, out-of-order, invalid-signature, and conflicting-result delivery. These Provider-to-Core webhooks do not implement DEV-02 merchant webhook testing.
+
 ## Verification
 
 Run:
@@ -63,6 +99,7 @@ Run:
 ```bash
 ./gradlew :applications:provider-simulator:test --console=plain
 ./gradlew :test --tests '*Provider*' --console=plain
+./gradlew :test --tests '*ProviderWebhook*' --console=plain
 ```
 
 Both suites use PostgreSQL Testcontainers. The Core tests also prove that Provider HTTP execution is rejected while a database transaction is active.

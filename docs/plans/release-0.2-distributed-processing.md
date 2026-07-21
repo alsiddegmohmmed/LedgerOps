@@ -324,7 +324,7 @@ Implementation evidence:
 
 ### Slice 6 — signed webhook reception and asynchronous processing
 
-Status: Pending
+Status: Completed — 21 July 2026
 
 Authority: Product PRV-01–PRV-04, BR-01, BR-05, and §11; Technical §§8.6, 9.5–9.6, 11, and 13; accepted ADR-021.
 
@@ -336,6 +336,16 @@ Authority: Product PRV-01–PRV-04, BR-01, BR-05, and §11; Technical §§8.6, 9
 - Typed failures and observability: Cover the exact `401`, `400`, `202`, `409`, and `413` attribution matrix, key direction, timestamp, missing mapping, backlog, duplicates, conflicts, and trace propagation.
 - Verification: HMAC canonical bytes, separate keys, unauthenticated no-receipt behavior, malformed unattributed evidence, unmapped `202`, identity mapping, replay-window boundaries, duplicate/conflicting/out-of-order delivery, fenced async recovery, tenant isolation, and one Payment/Ledger effect.
 - Completion: Signed Provider webhooks are durable and duplicate-safe without implementing merchant webhook testing or introducing a module cycle.
+
+Implementation evidence:
+
+- Core accepts only bounded signed webhook bodies at `POST /internal/provider/v1/webhooks`. The controller reads at most 256 KiB plus one detection byte before authentication or JSON parsing.
+- Reception persists the exact platform rejection, authenticated-invalid, unmapped, mapped, duplicate, or conflict evidence before returning `401`, `400`, `202`, `409`, or `413`. Webhook payload fields never establish tenant identity.
+- Provider-owned mappings resolve tenant, Payment, and Payment Attempt identity. Mapped canonical events and receipts are tenant-owned and unique by `(tenant_id, provider_id, provider_event_id)`; duplicate content creates evidence without new work, and changed content creates durable conflict evidence.
+- Asynchronous webhook processing uses recoverable fenced leases. Only the current lease token can commit immutable interaction/result evidence, schedule status recovery, append `ProviderResultObserved`, or complete the work.
+- The separate Provider Simulator durably creates signed webhook deliveries in its own database and supports duplicate, delayed, missing, out-of-order, invalid-signature, and conflicting-result test scenarios without accessing the Core database.
+- Contract, PostgreSQL, HTTP, Kafka, concurrency, crash-recovery, and end-to-end tests prove exact HMAC bytes, key direction, timestamp boundaries, tenant isolation, duplicate/conflicting evidence, Stage A atomicity, terminal-state no-regression, and one ADR-020 Payment/Ledger effect.
+- DEV-02 merchant webhook testing, public replay, settlement webhooks, dashboards, and runbooks remain excluded or scheduled for Slice 7 as specified.
 
 ### Slice 7 — release hardening and gate
 
@@ -385,9 +395,9 @@ The exact file list is finalized at the start of each slice. The planned ownersh
 | Publisher crash after Kafka acceptance duplicates safely | Failpoint test plus inbox/business final state | Same focused suite | Passed — Slice 2 |
 | Duplicate command creates one Provider work item | Kafka consumer concurrency test | `./gradlew test --tests '*ProviderCommandDeliveryIntegrationTests' --console=plain` | Passed — Slice 2 |
 | Provider call runs outside database transaction | Transaction-probe integration test | `./gradlew :test --tests '*ProviderHttpBoundaryTests' --console=plain` | Passed — Slice 3 rejects HTTP with an active transaction |
-| Duplicate Provider results create one Payment/Ledger effect | Kafka/PostgreSQL coordinated result tests | `./gradlew :test --tests '*ProviderResult*' --console=plain` | Passed at the Provider-result boundary — Slice 4; duplicate webhooks remain Slice 6 |
-| Duplicate webhooks create one Payment/Ledger effect | Signed HTTP plus Kafka/PostgreSQL end-to-end test | `./gradlew test --tests '*Webhook*' --console=plain` | Not run |
-| Out-of-order/conflicting finals do not regress state | Result-matrix and dead-letter tests | Result and webhook suites | Passed at the Provider-result boundary — Slice 4; webhook ordering remains Slice 6 |
+| Duplicate Provider results create one Payment/Ledger effect | Kafka/PostgreSQL coordinated result tests | `./gradlew :test --tests '*ProviderResult*' --console=plain` | Passed — Slice 4 result delivery and Slice 6 webhook-origin results converge on one accepted effect |
+| Duplicate webhooks create one Payment/Ledger effect | Signed HTTP plus Kafka/PostgreSQL end-to-end test | `./gradlew :test --tests '*ProviderWebhook*' --console=plain` | Passed — Slice 6 |
+| Out-of-order/conflicting finals do not regress state | Result-matrix and dead-letter tests | Result and webhook suites | Passed — Slices 4 and 6 preserve the accepted final effect and retain conflicting evidence |
 | Timeout produces UNKNOWN and status recovery | Bounded real-HTTP timeout and durable-work tests | Provider execution suite | Passed at Provider boundary — Slice 3 |
 | UNKNOWN is never blindly resubmitted | Work/attempt count and Provider-call assertions | Provider execution suite | Passed — UNKNOWN creates bounded status-query work only |
 | Bounded safe retries create immutable attempts | Clock/scheduler plus Payment Attempt tests | Retry/recovery suite | Passed — maximum three attempts, exact delay bounds, immutable attempt evidence |
@@ -404,15 +414,15 @@ The exact file list is finalized at the start of each slice. The planned ownersh
 | Stale lease holders cannot mutate reclaimed records | New-token claim, renewal, and every terminal/wait-state CAS test | Messaging and Provider concurrency suites | Passed for outbox and Provider evidence/state mutations through Slice 3 |
 | Inbox and dead-letter identities are exact | `PROCESSED`/`DEAD`, outboxId, consumerName/messageId, and consumerName/topic/partition/offset constraint tests | Messaging PostgreSQL suite | Passed — Slice 2 |
 | RetryDisposition enforces exact retry safety | Category matrix, database constraint, durable no-acceptance proof, authoritative API verification, and status-query prohibition | Provider and retry/recovery suites | Passed — Provider constraints plus Payment-side authoritative evidence verification |
-| Webhook attribution follows the exact authentication matrix | `401` platform-only, malformed `400`, unmapped `202`, and mapped duplicate/conflict tests | Webhook suite | Not run |
-| Every mapped Core business record is tenant-owned | Migration constraints, unattributed-evidence isolation, and repository tests | PostgreSQL integration suites | Partial — Slice 3 adds composite tenant/work/evidence constraints; webhook records remain scheduled |
+| Webhook attribution follows the exact authentication matrix | `401` platform-only, malformed `400`, unmapped `202`, and mapped duplicate/conflict tests | Webhook suite | Passed — Slice 6, including bounded `413` handling and direction/timestamp checks |
+| Every mapped Core business record is tenant-owned | Migration constraints, unattributed-evidence isolation, and repository tests | PostgreSQL integration suites | Passed through Slice 6 — mapped webhook records are tenant-owned; platform and unmapped evidence cannot create tenant work |
 | Simulator cannot access Core database | Separate application build, datasource, migration tree, and PostgreSQL integration assertion | Simulator test task | Passed — Slice 3 separate subproject and PostgreSQL Testcontainer |
 | Correlation, causation, and trace context propagate | HTTP/Kafka/Provider/webhook span assertions | Observability end-to-end suite | Partial — envelope and Kafka correlation/causation headers pass; trace propagation remains Slice 7 |
 | Metrics and dashboards expose required signals | Meter-registry and dashboard-schema tests | Observability suite | Partial — Slices 2–3 add bounded messaging and Provider measures; exact lag, dashboards, and release evidence remain Slice 7 |
-| Modulith/ArchUnit prohibit forbidden access | Module verification and dependency rules | `./gradlew check --console=plain` | Passed through Slice 5 |
-| No Release 0.3+ capability is introduced | Dependency/source/scope searches and diff review | Repository audit commands | Passed through Slice 5 |
-| All existing and Release 0.2 tests pass | Full suite | `./gradlew test --console=plain` | Passed through Slice 5 |
-| All project checks pass | Full check | `./gradlew check --console=plain` | Passed through Slice 4 |
+| Modulith/ArchUnit prohibit forbidden access | Module verification and dependency rules | `./gradlew check --console=plain` | Passed through Slice 6 |
+| No Release 0.3+ capability is introduced | Dependency/source/scope searches and diff review | Repository audit commands | Passed through Slice 6 |
+| All existing and Release 0.2 tests pass | Full suite | `./gradlew test --console=plain` | Passed through Slice 6 |
+| All project checks pass | Full check | `./gradlew check --console=plain` | Passed through Slice 6 |
 
 ### Required release-gate commands
 

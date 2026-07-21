@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ledgerops.local/contracts/provider/v1/ProviderWebhook.schema.json",
+  "title": "ProviderWebhook",
+  "type": "object",
+  "required": [
+    "providerEventId",
+    "providerResultId",
+    "providerIdempotencyKey",
+    "providerResultCategory",
+    "providerOccurredAt"
+  ],
+  "properties": {
+    "providerEventId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "providerResultId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "providerIdempotencyKey": {
+      "type": "string",
+      "pattern": "^payment:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+    },
+    "providerReference": {
+      "type": "string",
+      "minLength": 1
+    },
+    "providerResultCategory": {
+      "type": "string",
+      "enum": [
+        "SUCCESS",
+        "ACCEPTED",
+        "DECLINED",
+        "PENDING",
+        "TEMPORARY_FAILURE",
+        "PERMANENT_FAILURE",
+        "UNKNOWN"
+      ]
+    },
+    "providerOccurredAt": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "additionalProperties": true
+}

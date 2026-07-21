@@ -53,6 +53,14 @@ class ProviderSimulatorIntegrationTests {
                  WHERE provider_client_id = 'ledgerops-core-test'
                    AND provider_idempotency_key = ?
                 """, Integer.class, key));
+        assertEquals(1, jdbc.queryForObject("""
+                SELECT count(*) FROM simulator.webhook_deliveries d
+                  JOIN simulator.provider_transactions t
+                    ON t.transaction_id = d.transaction_id
+                 WHERE t.provider_client_id = 'ledgerops-core-test'
+                   AND t.provider_idempotency_key = ?
+                   AND d.status = 'PENDING'
+                """, Integer.class, key));
         assertTrue(replay.body().contains("\"category\":\"SUCCESS\""));
     }
 
@@ -137,6 +145,42 @@ class ProviderSimulatorIntegrationTests {
                 """, Integer.class, temporaryKey));
     }
 
+    @Test
+    void webhookScenariosCreateDeterministicDurableDeliveryInstructions() throws Exception {
+        String delayed = createScenario("DELAYED_WEBHOOK");
+        assertTrue(jdbc.queryForObject("""
+                SELECT d.next_attempt_at > d.created_at
+                  FROM simulator.webhook_deliveries d
+                  JOIN simulator.provider_transactions t USING (transaction_id)
+                 WHERE t.provider_idempotency_key = ?
+                """, Boolean.class, delayed));
+
+        String duplicate = createScenario("DUPLICATE_WEBHOOK");
+        assertEquals(1, jdbc.queryForObject("""
+                SELECT repeat_remaining
+                  FROM simulator.webhook_deliveries d
+                  JOIN simulator.provider_transactions t USING (transaction_id)
+                 WHERE t.provider_idempotency_key = ?
+                """, Integer.class, duplicate));
+
+        String missing = createScenario("MISSING_WEBHOOK");
+        assertEquals("SUPPRESSED", deliveryStatus(missing));
+
+        String invalid = createScenario("INVALID_SIGNATURE");
+        assertEquals("INVALID", jdbc.queryForObject("""
+                SELECT signature_mode
+                  FROM simulator.webhook_deliveries d
+                  JOIN simulator.provider_transactions t USING (transaction_id)
+                 WHERE t.provider_idempotency_key = ?
+                """, String.class, invalid));
+
+        String outOfOrder = createScenario("OUT_OF_ORDER_WEBHOOK");
+        assertEquals("SUCCESS,PENDING", deliveryCategories(outOfOrder));
+
+        String conflicting = createScenario("CONFLICTING_RESULT");
+        assertEquals("SUCCESS,DECLINED", deliveryCategories(conflicting));
+    }
+
     private HttpResponse<String> send(String path, String body, boolean valid) throws Exception {
         String timestamp = Long.toString(Instant.now().getEpochSecond());
         String requestId = UUID.randomUUID().toString();
@@ -200,6 +244,34 @@ class ProviderSimulatorIntegrationTests {
                     (provider_client_id, provider_idempotency_key, scenario)
                 VALUES ('ledgerops-core-test', ?, ?)
                 """, key, scenario);
+    }
+
+    private String createScenario(String scenario) throws Exception {
+        UUID paymentId = UUID.randomUUID();
+        String key = "payment:" + paymentId;
+        configure(key, scenario);
+        assertEquals(200, send("/provider/v1/payments",
+                submission(paymentId, key, "9".repeat(64)), true).statusCode());
+        return key;
+    }
+
+    private String deliveryStatus(String providerKey) {
+        return jdbc.queryForObject("""
+                SELECT d.status
+                  FROM simulator.webhook_deliveries d
+                  JOIN simulator.provider_transactions t USING (transaction_id)
+                 WHERE t.provider_idempotency_key = ?
+                """, String.class, providerKey);
+    }
+
+    private String deliveryCategories(String providerKey) {
+        return jdbc.queryForObject("""
+                SELECT string_agg(d.payload::jsonb ->> 'providerResultCategory', ','
+                                  ORDER BY d.delivery_sequence)
+                  FROM simulator.webhook_deliveries d
+                  JOIN simulator.provider_transactions t USING (transaction_id)
+                 WHERE t.provider_idempotency_key = ?
+                """, String.class, providerKey);
     }
 
     @TestConfiguration(proxyBeanMethods = false)

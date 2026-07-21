@@ -487,25 +487,12 @@ class JdbcProviderExecutionStore implements ProviderExecutionStore, ProviderEvid
 
     private OutboxMessageDraft resultDraft(
             ProviderWorkClaim claim, ProviderCallResult result, ResultMessage message) {
-        String payload = "{" +
-                "\"attemptId\":\"" + claim.attemptId() + "\"," +
-                "\"evidenceOrigin\":\"" + message.origin() + "\"," +
-                "\"observedAt\":\"" + message.observedAt() + "\"," +
-                "\"paymentId\":\"" + claim.paymentId() + "\"," +
-                "\"providerEvidenceId\":\"" + message.evidenceId() + "\"," +
-                "\"providerId\":\"SIMULATOR\"," +
-                "\"providerIdempotencyKey\":\"" + message.providerIdempotencyKey() + "\"," +
-                (message.providerReference() == null ? "" :
-                        "\"providerReference\":\"" + message.providerReference() + "\",") +
-                "\"providerResultId\":\"" + result.providerResultId() + "\"," +
-                "\"providerResultCategory\":\"" + message.category() + "\"," +
-                "\"retryDisposition\":\"" + message.disposition() + "\"}";
-        return new OutboxMessageDraft(
-                ProducerName.PROVIDER,
-                "provider-result:" + claim.tenantId() + ":SIMULATOR:" + result.providerResultId(),
-                "ProviderResultObserved", 1, claim.paymentId(), claim.tenantId(),
-                "ledgerops.provider.results.v1", claim.paymentId().toString(), payload,
-                claim.correlationId(), claim.causationId(), result.completedAt());
+        return ProviderResultOutboxFactory.draft(
+                claim.tenantId(), claim.paymentId(), claim.attemptId(), message.evidenceId(),
+                result.providerResultId(), message.providerIdempotencyKey(),
+                message.providerReference(), message.category(), message.disposition(),
+                message.origin(), message.observedAt(), claim.correlationId(),
+                claim.causationId(), result.completedAt());
     }
 
     private void settleSubmissionRecoveryOwner(
