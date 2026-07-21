@@ -473,10 +473,10 @@ class PaymentSubmissionIntegrationTests {
                     id, message_id, producer_name, deduplication_key, content_hash,
                     message_type, schema_version, aggregate_id, tenant_id, topic,
                     partition_key, payload, correlation_id, causation_id, occurred_at,
-                    status, created_at
+                    status, created_at, next_attempt_at
                 ) VALUES (?, ?, ?, ?, ?, 'SubmitPaymentToProvider', 1, ?, ?,
                           'ledgerops.provider.commands.v1', ?, '{}', ?, ?, now(),
-                          'PENDING', now())
+                          'PENDING', now(), now())
                 """,
                 UUID.randomUUID(), UUID.randomUUID(), producerName, deduplicationKey,
                 "a".repeat(64), payment.id().value(), payment.tenantId(),

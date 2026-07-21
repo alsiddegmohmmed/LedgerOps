@@ -61,6 +61,18 @@ class ArchitectureRulesTests {
     }
 
     @Test
+    void providerDoesNotDependOnPaymentOrQueryItsPersistence() {
+        noClasses()
+                .that().resideInAPackage("com.ledgerops.provider..")
+                .should().dependOnClassesThat().resideInAnyPackage(
+                        "com.ledgerops.payment..",
+                        "org.springframework.web.client..",
+                        "org.springframework.web.reactive.function.client.."
+                )
+                .check(productionClasses);
+    }
+
+    @Test
     void controllersRemainInApiPackages() {
         classes()
                 .that().areAnnotatedWith(RestController.class)

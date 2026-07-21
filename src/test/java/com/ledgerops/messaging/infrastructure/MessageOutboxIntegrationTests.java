@@ -116,6 +116,20 @@ class MessageOutboxIntegrationTests {
     }
 
     @Test
+    void firstPublicationDueTimeUsesTheInjectedOutboxEvidenceTime() {
+        Instant occurredAt = Instant.parse("2026-07-21T12:00:00Z");
+        OutboxMessageDraft message = draft(
+                UUID.randomUUID(), UUID.randomUUID(), "{\"value\":\"one\"}"
+        );
+
+        StoredOutboxMessage stored = outbox.appendOrGet(message);
+
+        assertEquals(occurredAt, jdbcTemplate.queryForObject("""
+                SELECT next_attempt_at FROM messaging.outbox WHERE id = ?
+                """, java.sql.Timestamp.class, stored.outboxId()).toInstant());
+    }
+
+    @Test
     void malformedPayloadIsRejectedByJsonParsing() {
         OutboxMessageDraft malformed = draft(
                 UUID.randomUUID(),

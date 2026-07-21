@@ -45,7 +45,7 @@ Selected verified foundations:
 
 ADR-016 reconciles the Payment lifecycle documentation. ADR-017 establishes the tenant-wide Payment API idempotency boundary. ADR-018 defines the minimal deterministic synchronous Risk model for Release 0.1. ADR-019 defines the Release 0.1 Ledger account model. Accepted ADR-020 defines the exact Payment-success posting and replay boundary. All nine Release 0.1 implementation slices are complete, including API and evidence hardening.
 
-Release 0.2 is active under [accepted ADR-021](docs/adr/ADR-021-define-release-0.2-provider-and-messaging-semantics.md) and the [Release 0.2 implementation plan](docs/plans/release-0.2-distributed-processing.md). Slices 0 and 1 are complete. The repository now has immutable Payment Attempts, the minimal Messaging outbox, and the atomic internal `APPROVED -> PROCESSING` submission transaction. Slice 2 is next; Kafka delivery, Provider execution, the Provider Simulator, dashboards, and runbooks are not implemented yet.
+Release 0.2 is active under [accepted ADR-021](docs/adr/ADR-021-define-release-0.2-provider-and-messaging-semantics.md) and the [Release 0.2 implementation plan](docs/plans/release-0.2-distributed-processing.md). Slices 0–2 are complete. The repository now has immutable Payment Attempts, the atomic internal `APPROVED -> PROCESSING` submission transaction, at-least-once Kafka command delivery, fenced transactional-outbox publication, inbox/dead-letter persistence, and duplicate-safe durable Provider `SUBMISSION` work. Provider HTTP execution and the separate Provider Simulator begin in Slice 3; result application, retry/recovery, webhooks, dashboards, and runbooks remain pending.
 
 Slice 7 includes the immutable journal and account domains, V6/V7 persistence, atomic account validation, append-only postings, duplicate-source prevention, deferred database balance verification, and tenant-scoped balance and statement queries. Statements have explicit time boundaries, bounded stable pagination, separate debit/credit totals, and immutable source evidence. Slice 8 adds the internal, joined PostgreSQL transaction that posts exactly `DEBIT PROVIDER_CLEARING` and `CREDIT MERCHANT_PAYABLE` for the full Payment amount and currency, then completes the Payment. Exact replay validation, inconsistency detection, forced-failure rollback, concurrency, tenant isolation, and Modulith boundary tests pass.
 
@@ -100,7 +100,7 @@ The [requirement traceability matrix](docs/requirements/TRACEABILITY.md) records
 | Release | Outcome | Status |
 |---|---|---|
 | 0.1 | Transactional core: tenancy, payments, idempotency, synchronous risk, ledger, and atomic completion | Completed |
-| 0.2 | Distributed processing with Kafka, transactional outbox, and idempotent consumers | Active — Slices 0–1 complete |
+| 0.2 | Distributed processing with Kafka, transactional outbox, and idempotent consumers | Active — Slices 0–2 complete |
 | 0.3 | Keycloak, identity, tenant membership, permissions, merchant scope, authorization, tenant isolation, reconciliation, corrections, and financial operations | Planned |
 | 1.0 | Security hardening and release evidence: deployment controls, scanning, secrets, operational verification, documentation, observability, and portfolio release | Planned |
 | Post-1.0 | Advisory applied-AI capabilities outside critical financial decisions | Deferred |
@@ -109,7 +109,7 @@ Later-release technology remains excluded until the approved release sequence in
 
 ## Technology
 
-Current implemented stack through Release 0.2 Slice 1:
+Current implemented stack through Release 0.2 Slice 2:
 
 - Java 21
 - Spring Boot 4
@@ -117,11 +117,12 @@ Current implemented stack through Release 0.2 Slice 1:
 - Spring Data JPA
 - PostgreSQL
 - Flyway
+- Apache Kafka
 - Gradle Kotlin DSL
 - JUnit 5
 - Testcontainers
 
-The approved technology baseline is documented in the [Technical Design and Architecture Specification](docs/architecture/LedgerOps_Technical_Design_and_Architecture_Specification_v1.6.docx). Technologies are introduced only by their implementation slice. Slice 1 introduces PostgreSQL-backed Payment Attempts and the minimal outbox; Kafka and Provider infrastructure begin in later slices.
+The approved technology baseline is documented in the [Technical Design and Architecture Specification](docs/architecture/LedgerOps_Technical_Design_and_Architecture_Specification_v1.6.docx). Technologies are introduced only by their implementation slice. Slice 2 introduces Kafka command delivery and the minimal Provider-owned durable-work boundary; it does not make Provider HTTP calls or implement the Provider Simulator.
 
 ## Key repository paths
 

@@ -40,8 +40,8 @@ class JdbcMessageOutbox implements MessageOutbox {
                 id, message_id, producer_name, deduplication_key, content_hash,
                 message_type, schema_version, aggregate_id, tenant_id, topic,
                 partition_key, payload, correlation_id, causation_id, occurred_at,
-                status, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING', ?)
+                status, created_at, next_attempt_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING', ?, ?)
             ON CONFLICT (producer_name, deduplication_key) DO NOTHING
             """;
     private static final String FIND_BY_AGGREGATE_SQL = """
@@ -87,6 +87,7 @@ class JdbcMessageOutbox implements MessageOutbox {
                 draft.canonicalPayloadJson(),
                 draft.correlationId(),
                 draft.causationId(),
+                occurredAt,
                 occurredAt,
                 occurredAt
         );
