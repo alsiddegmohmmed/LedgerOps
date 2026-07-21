@@ -6,6 +6,7 @@ import com.ledgerops.provider.application.ProviderCallResult;
 import com.ledgerops.provider.application.ProviderExecutionStore;
 import com.ledgerops.provider.application.ProviderWorkClaim;
 import com.ledgerops.provider.application.ProviderWorkConsistencyException;
+import com.ledgerops.provider.application.ProviderWorkType;
 import com.ledgerops.support.PostgresTestConfiguration;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -29,6 +30,121 @@ class ProviderExecutionPersistenceIntegrationTests {
     @Autowired ProviderExecutionStore store;
     @Autowired JdbcTemplate jdbc;
     @Autowired PlatformTransactionManager transactionManager;
+
+    @Test
+    void dueSafeRetryCreatesOneStableRetryRequestAndCommandWithoutAnotherProviderCall() {
+        UUID tenantId = UUID.randomUUID();
+        UUID paymentId = UUID.randomUUID();
+        UUID attemptId = UUID.randomUUID();
+        insertWork(tenantId, paymentId, attemptId);
+        ProviderWorkClaim submission = store.claimNext("safe-retry-worker").orElseThrow();
+        store.record(submission, result(submission, UUID.randomUUID(),
+                ProviderResultCategory.TEMPORARY_FAILURE,
+                RetryDisposition.SAFE_TO_RESUBMIT, false, true));
+
+        assertEquals("WAITING_RETRY_REQUEST", workStatus(tenantId, attemptId, "SUBMISSION"));
+        assertEquals(1, jdbc.queryForObject("""
+                SELECT execution_count FROM provider.work
+                 WHERE tenant_id = ? AND attempt_id = ? AND work_type = 'SUBMISSION'
+                """, Integer.class, tenantId, attemptId));
+        jdbc.update("""
+                UPDATE provider.work SET due_at = now()
+                 WHERE tenant_id = ? AND attempt_id = ? AND work_type = 'SUBMISSION'
+                """, tenantId, attemptId);
+
+        var retryClaim = store.claimRetryRequest("retry-request-worker").orElseThrow();
+        store.issueRetryRequest(retryClaim);
+
+        UUID retryRequestId = jdbc.queryForObject("""
+                SELECT retry_request_id FROM provider.retry_requests
+                 WHERE tenant_id = ? AND previous_attempt_id = ?
+                """, UUID.class, tenantId, attemptId);
+        assertEquals("COMPLETED", workStatus(tenantId, attemptId, "SUBMISSION"));
+        assertEquals(1, jdbc.queryForObject("""
+                SELECT count(*) FROM messaging.outbox
+                 WHERE producer_name = 'provider' AND deduplication_key = ?
+                   AND message_type = 'PaymentSubmissionRetryRequested'
+                """, Integer.class, "payment-retry:" + retryRequestId));
+        assertTrue(store.claimRetryRequest("second-worker").isEmpty());
+        assertEquals(1, jdbc.queryForObject("""
+                SELECT execution_count FROM provider.work
+                 WHERE tenant_id = ? AND attempt_id = ? AND work_type = 'SUBMISSION'
+                """, Integer.class, tenantId, attemptId));
+        assertThrows(Exception.class, () -> jdbc.update("""
+                DELETE FROM provider.retry_requests
+                 WHERE tenant_id = ? AND retry_request_id = ?
+                """, tenantId, retryRequestId));
+        assertThrows(Exception.class, () -> jdbc.update("""
+                INSERT INTO provider.retry_requests
+                    (retry_request_id, tenant_id, payment_id, previous_attempt_id,
+                     provider_evidence_id, provider_id, requested_at)
+                VALUES (?, ?, ?, ?, ?, 'SIMULATOR', now())
+                """, UUID.randomUUID(), tenantId, paymentId, attemptId,
+                retryClaim.providerEvidenceId()));
+    }
+
+    @Test
+    void preTransmissionRetryIsFencedBoundedAndDoesNotConsumeAProviderAttempt() {
+        UUID tenantId = UUID.randomUUID();
+        UUID paymentId = UUID.randomUUID();
+        UUID attemptId = UUID.randomUUID();
+        insertWork(tenantId, paymentId, attemptId);
+        ProviderWorkClaim first = store.claimNext("transport-worker").orElseThrow();
+        assertTrue(first.preTransmissionRetryAvailable());
+
+        store.defer(first, "PRETRANSMISSION_FAILURE");
+        assertEquals(1, jdbc.queryForObject("""
+                SELECT transport_retry_count FROM provider.work
+                 WHERE tenant_id = ? AND attempt_id = ? AND work_type = 'SUBMISSION'
+                """, Integer.class, tenantId, attemptId));
+        assertEquals(0, jdbc.queryForObject("""
+                SELECT execution_count FROM provider.work
+                 WHERE tenant_id = ? AND attempt_id = ? AND work_type = 'SUBMISSION'
+                """, Integer.class, tenantId, attemptId));
+        jdbc.update("""
+                UPDATE provider.work SET due_at = now()
+                 WHERE tenant_id = ? AND attempt_id = ? AND work_type = 'SUBMISSION'
+                """, tenantId, attemptId);
+        ProviderWorkClaim second = store.claimNext("transport-worker").orElseThrow();
+        org.junit.jupiter.api.Assertions.assertFalse(second.preTransmissionRetryAvailable());
+        assertThrows(ProviderWorkConsistencyException.class,
+                () -> store.defer(second, "PRETRANSMISSION_FAILURE"));
+        store.markUnresolved(second, "PRETRANSMISSION_RETRY_EXHAUSTED");
+    }
+
+    @Test
+    void statusRecoveryCreatesOnlyStatusQueryWorkAndRetriesOnlyThatWorkType() {
+        UUID tenantId = UUID.randomUUID();
+        UUID paymentId = UUID.randomUUID();
+        UUID attemptId = UUID.randomUUID();
+        insertWork(tenantId, paymentId, attemptId);
+        ProviderWorkClaim submission = store.claimNext("submission-worker").orElseThrow();
+        store.record(submission, result(submission, UUID.randomUUID(),
+                ProviderResultCategory.UNKNOWN,
+                RetryDisposition.STATUS_RECOVERY_REQUIRED, false, false));
+
+        assertEquals("WAITING_STATUS", workStatus(tenantId, attemptId, "SUBMISSION"));
+        assertEquals(1, jdbc.queryForObject("""
+                SELECT count(*) FROM provider.work
+                 WHERE tenant_id = ? AND attempt_id = ? AND work_type = 'STATUS_QUERY'
+                """, Integer.class, tenantId, attemptId));
+        jdbc.update("""
+                UPDATE provider.work SET due_at = now()
+                 WHERE tenant_id = ? AND attempt_id = ? AND work_type = 'STATUS_QUERY'
+                """, tenantId, attemptId);
+        ProviderWorkClaim status = store.claimNext("status-worker").orElseThrow();
+        assertEquals(ProviderWorkType.STATUS_QUERY, status.workType());
+        store.record(status, result(status, UUID.randomUUID(),
+                ProviderResultCategory.PENDING,
+                RetryDisposition.STATUS_RECOVERY_REQUIRED, true, false));
+
+        assertEquals("WAITING_STATUS", workStatus(tenantId, attemptId, "SUBMISSION"));
+        assertEquals("WAITING_STATUS", workStatus(tenantId, attemptId, "STATUS_QUERY"));
+        assertEquals(1, jdbc.queryForObject("""
+                SELECT execution_count FROM provider.work
+                 WHERE tenant_id = ? AND attempt_id = ? AND work_type = 'SUBMISSION'
+                """, Integer.class, tenantId, attemptId));
+    }
 
     @Test
     void fencedResultTransactionPersistsImmutableEvidenceOutboxAndCompletionTogether() {
@@ -178,6 +294,10 @@ class ProviderExecutionPersistenceIntegrationTests {
         UUID attemptId = UUID.randomUUID();
         insertStatusWork(tenantId, paymentId, attemptId);
         jdbc.update("""
+                UPDATE provider.work SET due_at = now()
+                 WHERE tenant_id = ? AND attempt_id = ? AND work_type = 'STATUS_QUERY'
+                """, tenantId, attemptId);
+        jdbc.update("""
                 UPDATE provider.work SET execution_count = 12
                  WHERE tenant_id = ? AND attempt_id = ? AND work_type = 'STATUS_QUERY'
                 """, tenantId, attemptId);
@@ -203,7 +323,10 @@ class ProviderExecutionPersistenceIntegrationTests {
         store.record(submission, result(submission, UUID.randomUUID(),
                 ProviderResultCategory.ACCEPTED,
                 RetryDisposition.STATUS_RECOVERY_REQUIRED, true, false));
-        insertStatusWork(tenantId, paymentId, attemptId);
+        jdbc.update("""
+                UPDATE provider.work SET due_at = now()
+                 WHERE tenant_id = ? AND attempt_id = ? AND work_type = 'STATUS_QUERY'
+                """, tenantId, attemptId);
         ProviderWorkClaim status = store.claimNext("status-worker").orElseThrow();
         store.record(status, result(status, UUID.randomUUID(),
                 ProviderResultCategory.SUCCESS, RetryDisposition.NOT_RETRYABLE, true, false));
@@ -274,11 +397,11 @@ class ProviderExecutionPersistenceIntegrationTests {
                     assertThrows(IllegalStateException.class,
                             () -> gateway.execute(new ProviderWorkClaim(
                                     UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(),
-                                    UUID.randomUUID(),
+                                    UUID.randomUUID(), 1,
                                     com.ledgerops.provider.application.ProviderWorkType.SUBMISSION,
                                     "SIMULATOR", "payment:" + UUID.randomUUID(), "a".repeat(64),
                                     "{}", UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(),
-                                    Instant.now().plusSeconds(30), false, false))));
+                                    Instant.now().plusSeconds(30), true, false, false))));
         }
     }
 
@@ -331,11 +454,11 @@ class ProviderExecutionPersistenceIntegrationTests {
         Instant now = Instant.now();
         jdbc.update("""
                 INSERT INTO provider.work
-                    (id, tenant_id, attempt_id, payment_id, work_type, status,
+                    (id, tenant_id, attempt_id, payment_id, attempt_sequence, work_type, status,
                      provider_id, provider_idempotency_key, request_intent_hash,
                      command_payload, due_at, correlation_id, causation_id,
                      created_at, updated_at)
-                VALUES (?, ?, ?, ?, 'SUBMISSION', 'PENDING', 'SIMULATOR', ?, ?, ?,
+                VALUES (?, ?, ?, ?, 1, 'SUBMISSION', 'PENDING', 'SIMULATOR', ?, ?, ?,
                         ?, ?, ?, ?, ?)
                 """, UUID.randomUUID(), tenantId, attemptId, paymentId,
                 "payment:" + paymentId, "c".repeat(64), payload(attemptId, paymentId),
@@ -347,11 +470,11 @@ class ProviderExecutionPersistenceIntegrationTests {
         Instant now = Instant.now();
         jdbc.update("""
                 INSERT INTO provider.work
-                    (id, tenant_id, attempt_id, payment_id, work_type, status,
+                    (id, tenant_id, attempt_id, payment_id, attempt_sequence, work_type, status,
                      provider_id, provider_idempotency_key, request_intent_hash,
                      command_payload, due_at, correlation_id, causation_id,
                      created_at, updated_at)
-                VALUES (?, ?, ?, ?, 'STATUS_QUERY', 'PENDING', 'SIMULATOR', ?, ?, ?,
+                VALUES (?, ?, ?, ?, 1, 'STATUS_QUERY', 'PENDING', 'SIMULATOR', ?, ?, ?,
                         ?, ?, ?, ?, ?)
                 """, UUID.randomUUID(), tenantId, attemptId, paymentId,
                 "payment:" + paymentId, "c".repeat(64), payload(attemptId, paymentId),
@@ -363,6 +486,13 @@ class ProviderExecutionPersistenceIntegrationTests {
         return "{\"attemptId\":\"" + attemptId + "\",\"paymentId\":\"" + paymentId
                 + "\",\"providerIdempotencyKey\":\"payment:" + paymentId
                 + "\",\"requestIntentHash\":\"" + "c".repeat(64) + "\"}";
+    }
+
+    private String workStatus(UUID tenantId, UUID attemptId, String workType) {
+        return jdbc.queryForObject("""
+                SELECT status FROM provider.work
+                 WHERE tenant_id = ? AND attempt_id = ? AND work_type = ?
+                """, String.class, tenantId, attemptId, workType);
     }
 
     private int count(String table, String column, UUID id) {

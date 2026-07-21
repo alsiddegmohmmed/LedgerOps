@@ -31,19 +31,21 @@ class JdbcProviderWorkStore implements ProviderWorkStore {
         jdbc.update("""
                 INSERT INTO provider.work
                     (id, tenant_id, attempt_id, payment_id, work_type, status,
-                     provider_id, provider_idempotency_key, request_intent_hash,
+                     attempt_sequence, provider_id, provider_idempotency_key, request_intent_hash,
                      command_payload, due_at, correlation_id, causation_id,
                      created_at, updated_at)
-                VALUES (?, ?, ?, ?, 'SUBMISSION', 'PENDING', ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, 'SUBMISSION', 'PENDING', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT (tenant_id, attempt_id, work_type) DO NOTHING
                 """, UUID.randomUUID(), command.tenantId(), command.attemptId(),
-                command.paymentId(), command.providerId(), command.providerIdempotencyKey(),
+                command.paymentId(), command.attemptSequence(), command.providerId(),
+                command.providerIdempotencyKey(),
                 command.requestIntentHash(), command.canonicalPayload(), Timestamp.from(now),
                 command.correlationId(), command.messageId(), Timestamp.from(now),
                 Timestamp.from(now));
 
         Boolean matches = jdbc.query("""
                 SELECT payment_id = ?
+                   AND attempt_sequence = ?
                    AND provider_id = ?
                    AND provider_idempotency_key = ?
                    AND request_intent_hash = ?
@@ -51,7 +53,8 @@ class JdbcProviderWorkStore implements ProviderWorkStore {
                   FROM provider.work
                  WHERE tenant_id = ? AND attempt_id = ? AND work_type = 'SUBMISSION'
                 """, rs -> rs.next() && rs.getBoolean(1),
-                command.paymentId(), command.providerId(), command.providerIdempotencyKey(),
+                command.paymentId(), command.attemptSequence(), command.providerId(),
+                command.providerIdempotencyKey(),
                 command.requestIntentHash(), command.canonicalPayload(), command.tenantId(),
                 command.attemptId());
         if (!Boolean.TRUE.equals(matches)) {

@@ -524,11 +524,11 @@ class ApplyProviderResultIntegrationTests {
             workId = UUID.randomUUID();
             jdbc.update("""
                 INSERT INTO provider.work (
-                    id, tenant_id, attempt_id, payment_id, work_type, status,
+                    id, tenant_id, attempt_id, payment_id, attempt_sequence, work_type, status,
                     provider_id, provider_idempotency_key, request_intent_hash,
                     command_payload, due_at, correlation_id, causation_id,
                     created_at, updated_at
-                ) VALUES (?, ?, ?, ?, 'SUBMISSION', 'COMPLETED', 'SIMULATOR', ?, ?,
+                ) VALUES (?, ?, ?, ?, 1, 'SUBMISSION', 'COMPLETED', 'SIMULATOR', ?, ?,
                           '{}', ?, ?, ?, ?, ?)
                 """, workId, fixture.payment().tenantId(),
                 fixture.attempt().attemptId().value(), fixture.payment().id().value(),

@@ -170,6 +170,7 @@ class ProviderCommandConsumer {
         text(payload, "paymentMethodCategory");
         return new ProviderSubmissionCommand(
                 envelope.tenantId(), envelope.messageId(), attemptId, paymentId,
+                sequence.intValue(),
                 providerId, key, hash, envelope.canonicalPayload(),
                 envelope.correlationId(), envelope.causationId()
         );

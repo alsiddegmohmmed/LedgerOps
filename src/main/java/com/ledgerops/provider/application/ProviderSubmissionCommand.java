@@ -7,6 +7,7 @@ public record ProviderSubmissionCommand(
         UUID messageId,
         UUID attemptId,
         UUID paymentId,
+        int attemptSequence,
         String providerId,
         String providerIdempotencyKey,
         String requestIntentHash,

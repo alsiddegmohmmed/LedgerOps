@@ -124,6 +124,45 @@ class ProviderResultKafkaIntegrationTests {
                 fixture.payment().tenantId(), fixture.payment().id().value()));
     }
 
+    @Test
+    void kafkaRetryCommandCreatesOneNextAttemptAndOneSubmissionCommand() {
+        Fixture fixture = fixture();
+        Evidence evidence = safeRetryEvidence(fixture);
+        UUID retryRequestId = UUID.randomUUID();
+        TransactionTemplate transaction = new TransactionTemplate(transactionManager);
+        StoredOutboxMessage requested = transaction.execute(status -> outbox.appendOrGet(
+                retryDraft(fixture, evidence, retryRequestId)));
+
+        await(() -> attemptCount(fixture.payment()) == 2, Duration.ofSeconds(20));
+        await(() -> "PUBLISHED".equals(outboxStatus(requested.outboxId())),
+                Duration.ofSeconds(10));
+        jdbc.update("""
+                UPDATE messaging.outbox
+                   SET status = 'PENDING', next_attempt_at = CURRENT_TIMESTAMP,
+                       published_at = NULL
+                 WHERE id = ?
+                """, requested.outboxId());
+        await(() -> "PUBLISHED".equals(outboxStatus(requested.outboxId())),
+                Duration.ofSeconds(20));
+
+        assertEquals(2, attemptCount(fixture.payment()));
+        assertEquals(PaymentStatus.PROCESSING, loadStatus(fixture.payment()));
+        assertEquals(1, jdbc.queryForObject("""
+                SELECT count(*) FROM payment.retry_applications
+                 WHERE tenant_id = ? AND retry_request_id = ?
+                """, Integer.class, fixture.payment().tenantId(), retryRequestId));
+        assertEquals(1, jdbc.queryForObject("""
+                SELECT count(*) FROM messaging.inbox
+                 WHERE consumer_name = 'payment-retry-command-consumer-v1'
+                   AND message_id = ? AND status = 'PROCESSED'
+                """, Integer.class, requested.messageId()));
+        assertEquals(1, jdbc.queryForObject("""
+                SELECT count(*) FROM messaging.outbox
+                 WHERE producer_name = 'payment' AND message_type = 'SubmitPaymentToProvider'
+                   AND aggregate_id = ? AND payload::jsonb ->> 'attemptSequence' = '2'
+                """, Integer.class, fixture.payment().id().value()));
+    }
+
     private Fixture fixture() {
         UUID tenantId = UUID.randomUUID();
         Payment payment = Payment.create(
@@ -175,11 +214,11 @@ class ProviderResultKafkaIntegrationTests {
         Instant observedAt = Instant.now().truncatedTo(ChronoUnit.MICROS);
         jdbc.update("""
                 INSERT INTO provider.work (
-                    id, tenant_id, attempt_id, payment_id, work_type, status,
+                    id, tenant_id, attempt_id, payment_id, attempt_sequence, work_type, status,
                     provider_id, provider_idempotency_key, request_intent_hash,
                     command_payload, due_at, correlation_id, causation_id,
                     created_at, updated_at
-                ) VALUES (?, ?, ?, ?, 'SUBMISSION', 'COMPLETED', 'SIMULATOR', ?, ?,
+                ) VALUES (?, ?, ?, ?, 1, 'SUBMISSION', 'COMPLETED', 'SIMULATOR', ?, ?,
                           '{}', ?, ?, ?, ?, ?)
                 """, workId, fixture.payment().tenantId(),
                 fixture.attempt().attemptId().value(), fixture.payment().id().value(),
@@ -213,6 +252,70 @@ class ProviderResultKafkaIntegrationTests {
                 fixture.attempt().providerIdempotencyKey(), resultId,
                 "simulator-success", Timestamp.from(observedAt));
         return new Evidence(evidenceId, resultId, observedAt);
+    }
+
+    private Evidence safeRetryEvidence(Fixture fixture) {
+        UUID workId = UUID.randomUUID();
+        UUID interactionId = UUID.randomUUID();
+        UUID evidenceId = UUID.randomUUID();
+        UUID resultId = UUID.randomUUID();
+        Instant observedAt = Instant.now().truncatedTo(ChronoUnit.MICROS);
+        jdbc.update("""
+                INSERT INTO provider.work (
+                    id, tenant_id, attempt_id, payment_id, attempt_sequence, work_type, status,
+                    provider_id, provider_idempotency_key, request_intent_hash,
+                    command_payload, due_at, correlation_id, causation_id,
+                    created_at, updated_at, execution_count
+                ) VALUES (?, ?, ?, ?, 1, 'SUBMISSION', 'COMPLETED', 'SIMULATOR', ?, ?,
+                          '{}', ?, ?, ?, ?, ?, 1)
+                """, workId, fixture.payment().tenantId(),
+                fixture.attempt().attemptId().value(), fixture.payment().id().value(),
+                fixture.attempt().providerIdempotencyKey(), fixture.attempt().requestIntentHash(),
+                Timestamp.from(observedAt), UUID.randomUUID(), UUID.randomUUID(),
+                Timestamp.from(observedAt), Timestamp.from(observedAt));
+        jdbc.update("""
+                INSERT INTO provider.interactions (
+                    interaction_id, tenant_id, work_id, attempt_id, payment_id,
+                    provider_id, work_type, request_id, request_body_hash,
+                    response_body_hash, http_status, communication_outcome,
+                    latency_millis, safe_error_code, started_at, completed_at
+                ) VALUES (?, ?, ?, ?, ?, 'SIMULATOR', 'SUBMISSION', ?, ?, ?, 503,
+                          'RESPONSE', 1, 'PROVIDER_TEMPORARY_FAILURE', ?, ?)
+                """, interactionId, fixture.payment().tenantId(), workId,
+                fixture.attempt().attemptId().value(), fixture.payment().id().value(),
+                UUID.randomUUID(), "e".repeat(64), "f".repeat(64),
+                Timestamp.from(observedAt.minusMillis(1)), Timestamp.from(observedAt));
+        jdbc.update("""
+                INSERT INTO provider.results (
+                    evidence_id, tenant_id, interaction_id, work_id, attempt_id,
+                    payment_id, provider_id, provider_idempotency_key,
+                    provider_result_id, result_category, retry_disposition,
+                    provider_transaction_found, no_acceptance_proven,
+                    evidence_origin, observed_at
+                ) VALUES (?, ?, ?, ?, ?, ?, 'SIMULATOR', ?, ?, 'TEMPORARY_FAILURE',
+                          'SAFE_TO_RESUBMIT', false, true, 'SUBMISSION_RESPONSE', ?)
+                """, evidenceId, fixture.payment().tenantId(), interactionId, workId,
+                fixture.attempt().attemptId().value(), fixture.payment().id().value(),
+                fixture.attempt().providerIdempotencyKey(), resultId,
+                Timestamp.from(observedAt));
+        return new Evidence(evidenceId, resultId, observedAt);
+    }
+
+    private OutboxMessageDraft retryDraft(
+            Fixture fixture, Evidence evidence, UUID retryRequestId) {
+        LinkedHashMap<String, Object> fields = new LinkedHashMap<>();
+        fields.put("paymentId", fixture.payment().id().value().toString());
+        fields.put("previousAttemptId", fixture.attempt().attemptId().value().toString());
+        fields.put("providerEvidenceId", evidence.evidenceId().toString());
+        fields.put("providerId", "SIMULATOR");
+        fields.put("requestedAt", evidence.observedAt().toString());
+        fields.put("retryRequestId", retryRequestId.toString());
+        return new OutboxMessageDraft(
+                ProducerName.PROVIDER, "payment-retry:" + retryRequestId,
+                "PaymentSubmissionRetryRequested", 1, fixture.payment().id().value(),
+                fixture.payment().tenantId(), "ledgerops.payment.commands.v1",
+                fixture.payment().id().value().toString(), CanonicalJson.object(fields),
+                UUID.randomUUID(), UUID.randomUUID(), evidence.observedAt());
     }
 
     private OutboxMessageDraft resultDraft(Fixture fixture, Evidence evidence) {
@@ -259,6 +362,13 @@ class ProviderResultKafkaIntegrationTests {
                 String.class,
                 outboxId
         );
+    }
+
+    private int attemptCount(Payment payment) {
+        return jdbc.queryForObject("""
+                SELECT count(*) FROM payment.payment_attempts
+                 WHERE tenant_id = ? AND payment_id = ?
+                """, Integer.class, payment.tenantId(), payment.id().value());
     }
 
     private int count(String table, Payment payment) {

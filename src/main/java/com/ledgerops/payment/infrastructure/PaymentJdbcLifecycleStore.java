@@ -6,6 +6,8 @@ import com.ledgerops.payment.application.AcceptedFinalProviderResult;
 import com.ledgerops.payment.application.PaymentLifecycleStore;
 import com.ledgerops.payment.application.PaymentProviderResultStore;
 import com.ledgerops.payment.application.PaymentSubmissionStore;
+import com.ledgerops.payment.application.PaymentRetryApplication;
+import com.ledgerops.payment.application.PaymentRetryStore;
 import com.ledgerops.payment.application.VersionedPayment;
 import com.ledgerops.payment.domain.CustomerId;
 import com.ledgerops.payment.domain.IdempotencyKey;
@@ -32,7 +34,7 @@ import java.util.UUID;
 
 @Repository
 class PaymentJdbcLifecycleStore implements PaymentLifecycleStore, PaymentCompletionStore,
-        PaymentSubmissionStore, PaymentProviderResultStore {
+        PaymentSubmissionStore, PaymentProviderResultStore, PaymentRetryStore {
 
     private static final String FIND_SQL = """
             SELECT id,
@@ -111,6 +113,22 @@ class PaymentJdbcLifecycleStore implements PaymentLifecycleStore, PaymentComplet
                 customer_id, amount, currency, payment_method_category,
                 request_intent_hash
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """;
+    private static final String FIND_LATEST_ATTEMPT_SQL = """
+            SELECT id, tenant_id, payment_id, sequence, provider_id,
+                   provider_idempotency_key, initiated_at, merchant_id,
+                   customer_id, amount, currency, payment_method_category,
+                   request_intent_hash
+              FROM payment.payment_attempts
+             WHERE tenant_id = ? AND payment_id = ?
+             ORDER BY sequence DESC
+             LIMIT 1
+            """;
+    private static final String FIND_RETRY_APPLICATION_SQL = """
+            SELECT tenant_id, retry_request_id, payment_id, previous_attempt_id,
+                   new_attempt_id, provider_evidence_id, provider_id, requested_at, applied_at
+              FROM payment.retry_applications
+             WHERE tenant_id = ? AND retry_request_id = ?
             """;
 
     private final JdbcTemplate jdbcTemplate;
@@ -207,6 +225,46 @@ class PaymentJdbcLifecycleStore implements PaymentLifecycleStore, PaymentComplet
                 attempt.paymentMethodCategory().value(),
                 attempt.requestIntentHash()
         );
+    }
+
+    @Override
+    public Optional<PaymentAttempt> findLatestAttempt(UUID tenantId, PaymentId paymentId) {
+        return jdbcTemplate.query(
+                FIND_LATEST_ATTEMPT_SQL, this::mapAttempt, tenantId, paymentId.value()
+        ).stream().findFirst();
+    }
+
+    @Override
+    public Optional<PaymentRetryApplication> findRetryApplication(
+            UUID tenantId, UUID retryRequestId) {
+        return jdbcTemplate.query(
+                FIND_RETRY_APPLICATION_SQL,
+                (rs, rowNumber) -> new PaymentRetryApplication(
+                        rs.getObject("tenant_id", UUID.class),
+                        rs.getObject("retry_request_id", UUID.class),
+                        rs.getObject("payment_id", UUID.class),
+                        rs.getObject("previous_attempt_id", UUID.class),
+                        rs.getObject("new_attempt_id", UUID.class),
+                        rs.getObject("provider_evidence_id", UUID.class),
+                        rs.getString("provider_id"),
+                        rs.getTimestamp("requested_at").toInstant(),
+                        rs.getTimestamp("applied_at").toInstant()),
+                tenantId, retryRequestId
+        ).stream().findFirst();
+    }
+
+    @Override
+    public void insertRetryApplication(PaymentRetryApplication application) {
+        jdbcTemplate.update("""
+                INSERT INTO payment.retry_applications
+                    (tenant_id, retry_request_id, payment_id, previous_attempt_id,
+                     new_attempt_id, provider_evidence_id, provider_id, requested_at, applied_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, application.tenantId(), application.retryRequestId(),
+                application.paymentId(), application.previousAttemptId(),
+                application.newAttemptId(), application.providerEvidenceId(),
+                application.providerId(), Timestamp.from(application.requestedAt()),
+                Timestamp.from(application.appliedAt()));
     }
 
     @Override

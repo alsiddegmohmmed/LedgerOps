@@ -34,6 +34,12 @@ class ProviderExecutionWorker {
 
     @Scheduled(fixedDelayString = "${ledgerops.provider.execution.delay-ms:250}")
     void executeOne() {
+        if (store.claimRetryRequest(owner).map(claim -> {
+            store.issueRetryRequest(claim);
+            return true;
+        }).orElse(false)) {
+            return;
+        }
         store.claimNext(owner).ifPresent(this::execute);
     }
 

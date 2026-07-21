@@ -110,6 +110,22 @@ class ProviderHttpBoundaryTests {
     }
 
     @Test
+    void provenConnectionRefusalAllowsOneLowLevelRetryThenEntersRecovery() throws Exception {
+        try (SimulatorProviderGateway gateway = gateway(1)) {
+            var deferred = assertThrows(
+                    com.ledgerops.provider.application.ProviderCallDeferredException.class,
+                    () -> gateway.execute(claim(true)));
+            assertEquals("PRETRANSMISSION_FAILURE", deferred.reasonCode());
+
+            var exhausted = gateway.execute(claim(false));
+            assertEquals(com.ledgerops.provider.api.ProviderResultCategory.UNKNOWN,
+                    exhausted.category());
+            assertEquals(com.ledgerops.provider.api.RetryDisposition.STATUS_RECOVERY_REQUIRED,
+                    exhausted.disposition());
+        }
+    }
+
+    @Test
     void resilienceConfigurationUsesEveryApprovedReleaseValue() {
         ProviderExecutionConfiguration configuration = new ProviderExecutionConfiguration();
         var circuit = configuration.providerCircuitBreaker().getCircuitBreakerConfig();
@@ -137,11 +153,15 @@ class ProviderHttpBoundaryTests {
     }
 
     private ProviderWorkClaim claim() {
+        return claim(true);
+    }
+
+    private ProviderWorkClaim claim(boolean preTransmissionRetryAvailable) {
         UUID paymentId = UUID.randomUUID();
         return new ProviderWorkClaim(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(),
-                paymentId, ProviderWorkType.SUBMISSION, "SIMULATOR", "payment:" + paymentId,
+                paymentId, 1, ProviderWorkType.SUBMISSION, "SIMULATOR", "payment:" + paymentId,
                 "a".repeat(64), "{}", UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(),
-                Instant.now().plusSeconds(30), false, false);
+                Instant.now().plusSeconds(30), preTransmissionRetryAvailable, false, false);
     }
 
     private HmacFixture readFixture() {

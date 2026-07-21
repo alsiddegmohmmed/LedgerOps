@@ -8,6 +8,7 @@ public record ProviderWorkClaim(
         UUID tenantId,
         UUID attemptId,
         UUID paymentId,
+        int attemptSequence,
         ProviderWorkType workType,
         String providerId,
         String providerIdempotencyKey,
@@ -17,6 +18,7 @@ public record ProviderWorkClaim(
         UUID causationId,
         UUID leaseToken,
         Instant leaseExpiresAt,
+        boolean preTransmissionRetryAvailable,
         boolean recoveryOnly,
         boolean exhausted
 ) {

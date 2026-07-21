@@ -25,15 +25,13 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 import java.time.Clock;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
-import java.util.LinkedHashMap;
 import java.util.Optional;
 import java.util.UUID;
 
 @Service
 public class SubmitApprovedPayment {
 
-    static final String MESSAGE_TYPE = "SubmitPaymentToProvider";
-    static final String TOPIC = "ledgerops.provider.commands.v1";
+    static final String MESSAGE_TYPE = PaymentSubmissionMessageFactory.MESSAGE_TYPE;
     private static final Logger LOGGER = LoggerFactory.getLogger(SubmitApprovedPayment.class);
 
     private final PaymentSubmissionStore paymentStore;
@@ -267,31 +265,8 @@ public class SubmitApprovedPayment {
             SubmitApprovedPaymentCommand command,
             PaymentAttempt attempt
     ) {
-        LinkedHashMap<String, Object> fields = new LinkedHashMap<>();
-        fields.put("attemptId", attempt.attemptId().value().toString());
-        fields.put("paymentId", attempt.paymentId().value().toString());
-        fields.put("attemptSequence", attempt.sequence());
-        fields.put("providerId", attempt.providerId().name());
-        fields.put("providerIdempotencyKey", attempt.providerIdempotencyKey());
-        fields.put("amount", attempt.amount().amount().toPlainString());
-        fields.put("currency", attempt.amount().currency().getCurrencyCode());
-        fields.put("paymentMethodCategory", attempt.paymentMethodCategory().value());
-        fields.put("requestIntentHash", attempt.requestIntentHash());
-        String payload = CanonicalJson.object(fields);
-        return new OutboxMessageDraft(
-                ProducerName.PAYMENT,
-                submissionKeyFor(attempt.attemptId().value()),
-                MESSAGE_TYPE,
-                1,
-                attempt.paymentId().value(),
-                attempt.tenantId(),
-                TOPIC,
-                attempt.paymentId().value().toString(),
-                payload,
-                command.correlationId(),
-                command.causationId(),
-                attempt.initiatedAt()
-        );
+        return PaymentSubmissionMessageFactory.draft(
+                attempt, command.correlationId(), command.causationId(), attempt.initiatedAt());
     }
 
     private String providerIdempotencyKey(Payment payment) {

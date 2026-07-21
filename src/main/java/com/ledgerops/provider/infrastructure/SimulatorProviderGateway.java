@@ -102,6 +102,9 @@ final class SimulatorProviderGateway implements ProviderGateway, AutoCloseable {
                     started, clock.instant());
         } catch (RuntimeException exception) {
             Throwable cause = rootCause(exception);
+            if (claim.preTransmissionRetryAvailable() && isProvenPreTransmission(cause)) {
+                throw new ProviderCallDeferredException("PRETRANSMISSION_FAILURE");
+            }
             String code = cause instanceof java.util.concurrent.TimeoutException
                     || cause instanceof java.net.SocketTimeoutException
                     ? "PROVIDER_TIMEOUT" : "PROVIDER_CONNECTION_FAILURE";
@@ -109,6 +112,12 @@ final class SimulatorProviderGateway implements ProviderGateway, AutoCloseable {
                     "PROVIDER_TIMEOUT".equals(code) ? "TIMEOUT" : "CONNECTION_FAILURE",
                     code, false);
         }
+    }
+
+    private boolean isProvenPreTransmission(Throwable cause) {
+        return cause instanceof java.net.ConnectException
+                || cause instanceof java.net.UnknownHostException
+                || cause instanceof javax.net.ssl.SSLHandshakeException;
     }
 
     private GatewayResponse send(String path, UUID requestId, byte[] body) {

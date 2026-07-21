@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ledgerops.dev/contracts/v1/PaymentSubmissionRetryRequested.schema.json",
+  "title": "PaymentSubmissionRetryRequested v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "retryRequestId",
+    "paymentId",
+    "previousAttemptId",
+    "providerEvidenceId",
+    "providerId",
+    "requestedAt"
+  ],
+  "properties": {
+    "retryRequestId": { "type": "string", "format": "uuid" },
+    "paymentId": { "type": "string", "format": "uuid" },
+    "previousAttemptId": { "type": "string", "format": "uuid" },
+    "providerEvidenceId": { "type": "string", "format": "uuid" },
+    "providerId": { "const": "SIMULATOR" },
+    "requestedAt": { "type": "string", "format": "date-time" }
+  }
+}

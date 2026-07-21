@@ -9,6 +9,7 @@ import com.ledgerops.provider.api.ProviderResultCategory;
 import com.ledgerops.provider.api.RetryDisposition;
 import com.ledgerops.provider.application.ProviderCallResult;
 import com.ledgerops.provider.application.ProviderExecutionStore;
+import com.ledgerops.provider.application.ProviderRetryRequestClaim;
 import com.ledgerops.provider.application.ProviderWorkClaim;
 import com.ledgerops.provider.application.ProviderWorkConsistencyException;
 import com.ledgerops.provider.application.ProviderWorkType;
@@ -47,7 +48,13 @@ class JdbcProviderExecutionStore implements ProviderExecutionStore, ProviderEvid
         Instant expires = now.plus(LEASE);
         UUID token = UUID.randomUUID();
         return jdbc.query("""
-                WITH candidate AS (
+                WITH activated AS (
+                    UPDATE provider.work
+                       SET status = 'RETRYABLE', updated_at = ?
+                     WHERE work_type = 'STATUS_QUERY' AND status = 'WAITING_STATUS'
+                       AND due_at <= ?
+                    RETURNING id
+                ), candidate AS (
                     SELECT id, status AS prior_status, execution_count AS prior_count
                       FROM provider.work
                      WHERE ((status IN ('PENDING', 'RETRYABLE') AND due_at <= ?)
@@ -80,6 +87,7 @@ class JdbcProviderExecutionStore implements ProviderExecutionStore, ProviderEvid
                         rs.getObject("tenant_id", UUID.class),
                         rs.getObject("attempt_id", UUID.class),
                         rs.getObject("payment_id", UUID.class),
+                        rs.getInt("attempt_sequence"),
                         ProviderWorkType.valueOf(rs.getString("work_type")),
                         rs.getString("provider_id"),
                         rs.getString("provider_idempotency_key"),
@@ -89,10 +97,119 @@ class JdbcProviderExecutionStore implements ProviderExecutionStore, ProviderEvid
                         rs.getObject("causation_id", UUID.class),
                         rs.getObject("lease_token", UUID.class),
                         rs.getTimestamp("lease_expires_at").toInstant(),
+                        rs.getInt("transport_retry_count") < 1,
                         rs.getBoolean("recovery_only"),
                         rs.getBoolean("exhausted")
+                )) : Optional.empty(), Timestamp.from(now), Timestamp.from(now),
+                Timestamp.from(now), Timestamp.from(now), leaseOwner,
+                token, Timestamp.from(expires), Timestamp.from(now));
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public Optional<ProviderRetryRequestClaim> claimRetryRequest(String leaseOwner) {
+        Instant now = clock.instant();
+        UUID token = UUID.randomUUID();
+        Instant expires = now.plus(LEASE);
+        return jdbc.query("""
+                WITH candidate AS (
+                    SELECT w.id
+                      FROM provider.work w
+                     WHERE w.work_type = 'SUBMISSION'
+                       AND ((w.status = 'WAITING_RETRY_REQUEST' AND w.due_at <= ?)
+                            OR (w.status = 'CLAIMED' AND w.lease_expires_at <= ?
+                                AND EXISTS (
+                                    SELECT 1 FROM provider.results r
+                                     WHERE r.tenant_id = w.tenant_id
+                                       AND r.attempt_id = w.attempt_id
+                                       AND r.retry_disposition = 'SAFE_TO_RESUBMIT'
+                                )))
+                     ORDER BY w.due_at, w.created_at
+                     FOR UPDATE SKIP LOCKED
+                     LIMIT 1
+                ), claimed AS (
+                    UPDATE provider.work w
+                       SET status = 'CLAIMED', lease_owner = ?, lease_token = ?,
+                           lease_expires_at = ?, updated_at = ?
+                      FROM candidate
+                     WHERE w.id = candidate.id
+                    RETURNING w.*
+                )
+                SELECT c.*, r.evidence_id, r.provider_result_id
+                  FROM claimed c
+                  JOIN LATERAL (
+                      SELECT evidence_id, provider_result_id
+                        FROM provider.results
+                       WHERE tenant_id = c.tenant_id AND attempt_id = c.attempt_id
+                         AND retry_disposition = 'SAFE_TO_RESUBMIT'
+                       ORDER BY observed_at DESC, evidence_id
+                       LIMIT 1
+                  ) r ON TRUE
+                """, rs -> rs.next() ? Optional.of(new ProviderRetryRequestClaim(
+                        rs.getObject("id", UUID.class), rs.getObject("tenant_id", UUID.class),
+                        rs.getObject("payment_id", UUID.class),
+                        rs.getObject("attempt_id", UUID.class), rs.getInt("attempt_sequence"),
+                        rs.getObject("evidence_id", UUID.class),
+                        rs.getObject("provider_result_id", UUID.class), rs.getString("provider_id"),
+                        rs.getObject("correlation_id", UUID.class),
+                        rs.getObject("lease_token", UUID.class),
+                        rs.getTimestamp("lease_expires_at").toInstant()
                 )) : Optional.empty(), Timestamp.from(now), Timestamp.from(now), leaseOwner,
                 token, Timestamp.from(expires), Timestamp.from(now));
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void issueRetryRequest(ProviderRetryRequestClaim claim) {
+        Instant now = clock.instant().truncatedTo(java.time.temporal.ChronoUnit.MICROS);
+        requireCurrentLease(claim.workId(), claim.leaseToken(), now);
+        RetryRequest existing = jdbc.query("""
+                SELECT retry_request_id, requested_at
+                  FROM provider.retry_requests
+                 WHERE tenant_id = ? AND provider_evidence_id = ?
+                """, rs -> rs.next() ? new RetryRequest(
+                        rs.getObject(1, UUID.class), rs.getTimestamp(2).toInstant()) : null,
+                claim.tenantId(), claim.providerEvidenceId());
+        RetryRequest retry = existing;
+        if (retry == null) {
+            retry = new RetryRequest(UUID.randomUUID(), now);
+            jdbc.update("""
+                    INSERT INTO provider.retry_requests
+                        (retry_request_id, tenant_id, payment_id, previous_attempt_id,
+                         provider_evidence_id, provider_id, requested_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    """, retry.retryRequestId(), claim.tenantId(), claim.paymentId(),
+                    claim.previousAttemptId(), claim.providerEvidenceId(), claim.providerId(),
+                    Timestamp.from(retry.requestedAt()));
+        }
+        String payload = "{" +
+                "\"paymentId\":\"" + claim.paymentId() + "\"," +
+                "\"previousAttemptId\":\"" + claim.previousAttemptId() + "\"," +
+                "\"providerEvidenceId\":\"" + claim.providerEvidenceId() + "\"," +
+                "\"providerId\":\"SIMULATOR\"," +
+                "\"requestedAt\":\"" + retry.requestedAt() + "\"," +
+                "\"retryRequestId\":\"" + retry.retryRequestId() + "\"}";
+        var resultMessage = outbox.find(
+                ProducerName.PROVIDER,
+                "provider-result:" + claim.tenantId() + ":SIMULATOR:" + claim.providerResultId()
+        ).orElseThrow(() -> new ProviderWorkConsistencyException(
+                "Safe retry evidence has no durable Provider-result outbox record"));
+        outbox.appendOrGet(new OutboxMessageDraft(
+                ProducerName.PROVIDER, "payment-retry:" + retry.retryRequestId(),
+                "PaymentSubmissionRetryRequested", 1, claim.paymentId(), claim.tenantId(),
+                "ledgerops.payment.commands.v1", claim.paymentId().toString(), payload,
+                claim.correlationId(), resultMessage.messageId(), retry.requestedAt()));
+        int updated = jdbc.update("""
+                UPDATE provider.work
+                   SET status = 'COMPLETED', lease_owner = NULL, lease_token = NULL,
+                       lease_expires_at = NULL, updated_at = ?
+                 WHERE id = ? AND status = 'CLAIMED' AND lease_token = ?
+                   AND lease_expires_at > ?
+                """, Timestamp.from(now), claim.workId(), claim.leaseToken(), Timestamp.from(now));
+        if (updated != 1) {
+            throw new ProviderWorkConsistencyException(
+                    "Provider retry-request lease was lost before completion");
+        }
     }
 
     @Override
@@ -112,16 +229,23 @@ class JdbcProviderExecutionStore implements ProviderExecutionStore, ProviderEvid
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void defer(ProviderWorkClaim claim, String reasonCode) {
         Instant now = clock.instant();
+        boolean preTransmission = "PRETRANSMISSION_FAILURE".equals(reasonCode);
+        Instant dueAt = preTransmission
+                ? now.plus(ProviderSchedule.preTransmissionDelay(claim.workId()))
+                : now.plusSeconds(1);
         int updated = jdbc.update("""
                 UPDATE provider.work
                    SET status = 'RETRYABLE', due_at = ?, lease_owner = NULL,
                        lease_token = NULL, lease_expires_at = NULL,
                        execution_count = execution_count - 1,
+                       transport_retry_count = transport_retry_count + ?,
                        last_error_code = ?, updated_at = ?
                  WHERE id = ? AND status = 'CLAIMED' AND lease_token = ?
                    AND lease_expires_at > ?
-                """, Timestamp.from(now.plusSeconds(1)), reasonCode, Timestamp.from(now),
-                claim.workId(), claim.leaseToken(), Timestamp.from(now));
+                   AND (? = false OR transport_retry_count < 1)
+                """, Timestamp.from(dueAt), preTransmission ? 1 : 0, reasonCode,
+                Timestamp.from(now), claim.workId(), claim.leaseToken(), Timestamp.from(now),
+                preTransmission);
         if (updated != 1) {
             throw new ProviderWorkConsistencyException("Provider work lease was lost while deferring");
         }
@@ -131,6 +255,16 @@ class JdbcProviderExecutionStore implements ProviderExecutionStore, ProviderEvid
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void markUnresolved(ProviderWorkClaim claim, String reasonCode) {
         Instant now = clock.instant();
+        if (claim.workType() == ProviderWorkType.STATUS_QUERY) {
+            recordOperationalEvent(claim, "STATUS_RECOVERY_EXHAUSTED", reasonCode);
+            jdbc.update("""
+                    UPDATE provider.work
+                       SET status = 'UNRESOLVED', lease_owner = NULL, lease_token = NULL,
+                           lease_expires_at = NULL, last_error_code = ?, updated_at = ?
+                     WHERE tenant_id = ? AND attempt_id = ? AND work_type = 'SUBMISSION'
+                       AND status = 'WAITING_STATUS'
+                    """, reasonCode, Timestamp.from(now), claim.tenantId(), claim.attemptId());
+        }
         int updated = jdbc.update("""
                 UPDATE provider.work
                    SET status = 'UNRESOLVED', lease_owner = NULL, lease_token = NULL,
@@ -157,16 +291,18 @@ class JdbcProviderExecutionStore implements ProviderExecutionStore, ProviderEvid
                 Timestamp.from(now));
         int updated = jdbc.update("""
                 UPDATE provider.work
-                   SET status = 'WAITING_STATUS', lease_owner = NULL, lease_token = NULL,
+                   SET status = 'WAITING_STATUS', due_at = ?, lease_owner = NULL, lease_token = NULL,
                        lease_expires_at = NULL, last_error_code = ?, updated_at = ?
                  WHERE id = ? AND status = 'CLAIMED' AND lease_token = ?
                    AND lease_expires_at > ?
-                """, reasonCode, Timestamp.from(now), claim.workId(), claim.leaseToken(),
+                """, Timestamp.from(now.plus(ProviderSchedule.statusDelay(claim.workId(), 1))),
+                reasonCode, Timestamp.from(now), claim.workId(), claim.leaseToken(),
                 Timestamp.from(now));
         if (updated != 1) {
             throw new ProviderWorkConsistencyException(
                     "Provider work lease was lost while recording ambiguity");
         }
+        createStatusQueryWork(claim, now);
     }
 
     @Override
@@ -241,13 +377,15 @@ class JdbcProviderExecutionStore implements ProviderExecutionStore, ProviderEvid
                         "Provider result evidence was not durable before outbox append"));
         ResultMessage message = durable.message();
         outbox.appendOrGet(resultDraft(claim, result, message));
-        String status = switch (result.disposition()) {
-            case NOT_RETRYABLE -> "COMPLETED";
-            case SAFE_TO_RESUBMIT -> "WAITING_RETRY_REQUEST";
-            case STATUS_RECOVERY_REQUIRED -> "WAITING_STATUS";
-        };
-        if (claim.workType() == ProviderWorkType.STATUS_QUERY) {
-            settleSubmissionRecoveryOwner(claim, now);
+        String status = nextStatus(claim, result);
+        Instant dueAt = nextDueAt(claim, result, now);
+        if (claim.workType() == ProviderWorkType.SUBMISSION
+                && result.disposition() == RetryDisposition.STATUS_RECOVERY_REQUIRED) {
+            createStatusQueryWork(claim, now);
+        }
+        if (claim.workType() == ProviderWorkType.STATUS_QUERY
+                && result.disposition() != RetryDisposition.STATUS_RECOVERY_REQUIRED) {
+            settleSubmissionRecoveryOwner(claim, result, now);
         }
         int updated = jdbc.update("""
                 UPDATE provider.work
@@ -256,11 +394,76 @@ class JdbcProviderExecutionStore implements ProviderExecutionStore, ProviderEvid
                        updated_at = ?
                  WHERE id = ? AND status = 'CLAIMED' AND lease_token = ?
                    AND lease_expires_at > ?
-                """, status, Timestamp.from(now), result.requestId(), result.safeErrorCode(),
+                """, status, Timestamp.from(dueAt), result.requestId(), result.safeErrorCode(),
                 Timestamp.from(now), claim.workId(), claim.leaseToken(), Timestamp.from(now));
         if (updated != 1) {
             throw new ProviderWorkConsistencyException("Provider work lease was lost while recording");
         }
+    }
+
+    private String nextStatus(ProviderWorkClaim claim, ProviderCallResult result) {
+        if (claim.workType() == ProviderWorkType.STATUS_QUERY) {
+            return result.disposition() == RetryDisposition.STATUS_RECOVERY_REQUIRED
+                    ? "WAITING_STATUS" : "COMPLETED";
+        }
+        if (result.disposition() == RetryDisposition.SAFE_TO_RESUBMIT
+                && claim.attemptSequence() >= 3) {
+            recordOperationalEvent(claim, "SAFE_RETRY_EXHAUSTED", "MAXIMUM_ATTEMPTS_REACHED");
+            return "UNRESOLVED";
+        }
+        return switch (result.disposition()) {
+            case NOT_RETRYABLE -> "COMPLETED";
+            case SAFE_TO_RESUBMIT -> "WAITING_RETRY_REQUEST";
+            case STATUS_RECOVERY_REQUIRED -> "WAITING_STATUS";
+        };
+    }
+
+    private Instant nextDueAt(ProviderWorkClaim claim, ProviderCallResult result, Instant now) {
+        if (claim.workType() == ProviderWorkType.STATUS_QUERY
+                && result.disposition() == RetryDisposition.STATUS_RECOVERY_REQUIRED) {
+            return now.plus(ProviderSchedule.statusDelay(claim.workId(),
+                    Math.min(12, claim.exhausted() ? 12 : statusExecutionCount(claim.workId()) + 1)));
+        }
+        if (claim.workType() == ProviderWorkType.SUBMISSION
+                && result.disposition() == RetryDisposition.SAFE_TO_RESUBMIT
+                && claim.attemptSequence() < 3) {
+            return now.plus(ProviderSchedule.retryDelay(claim.workId(), claim.attemptSequence() + 1));
+        }
+        return now;
+    }
+
+    private int statusExecutionCount(UUID workId) {
+        Integer count = jdbc.queryForObject(
+                "SELECT execution_count FROM provider.work WHERE id = ?",
+                Integer.class, workId);
+        return count == null ? 1 : count;
+    }
+
+    private void createStatusQueryWork(ProviderWorkClaim submission, Instant now) {
+        UUID statusWorkId = UUID.randomUUID();
+        Instant dueAt = now.plus(ProviderSchedule.statusDelay(statusWorkId, 1));
+        jdbc.update("""
+                INSERT INTO provider.work
+                    (id, tenant_id, attempt_id, payment_id, attempt_sequence, work_type,
+                     status, provider_id, provider_idempotency_key, request_intent_hash,
+                     command_payload, due_at, correlation_id, causation_id, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, 'STATUS_QUERY', 'PENDING', ?, ?, ?, '{}', ?, ?, ?, ?, ?)
+                ON CONFLICT (tenant_id, attempt_id, work_type) DO NOTHING
+                """, statusWorkId, submission.tenantId(), submission.attemptId(),
+                submission.paymentId(), submission.attemptSequence(), submission.providerId(),
+                submission.providerIdempotencyKey(), submission.requestIntentHash(),
+                Timestamp.from(dueAt), submission.correlationId(), submission.causationId(),
+                Timestamp.from(now), Timestamp.from(now));
+    }
+
+    private void recordOperationalEvent(
+            ProviderWorkClaim claim, String eventType, String reasonCode) {
+        jdbc.update("""
+                INSERT INTO provider.operational_events
+                    (event_id, tenant_id, work_id, event_type, safe_reason_code, occurred_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """, UUID.randomUUID(), claim.tenantId(), claim.workId(), eventType,
+                reasonCode, Timestamp.from(clock.instant()));
     }
 
     @Override
@@ -305,7 +508,8 @@ class JdbcProviderExecutionStore implements ProviderExecutionStore, ProviderEvid
                 claim.correlationId(), claim.causationId(), result.completedAt());
     }
 
-    private void settleSubmissionRecoveryOwner(ProviderWorkClaim statusClaim, Instant now) {
+    private void settleSubmissionRecoveryOwner(
+            ProviderWorkClaim statusClaim, ProviderCallResult result, Instant now) {
         UUID settlementToken = UUID.randomUUID();
         UUID submissionId = jdbc.query("""
                 UPDATE provider.work
@@ -320,15 +524,37 @@ class JdbcProviderExecutionStore implements ProviderExecutionStore, ProviderEvid
         if (submissionId == null) {
             return;
         }
+        String status = result.disposition() == RetryDisposition.SAFE_TO_RESUBMIT
+                && statusClaim.attemptSequence() < 3 ? "WAITING_RETRY_REQUEST" : "COMPLETED";
+        if (result.disposition() == RetryDisposition.SAFE_TO_RESUBMIT
+                && statusClaim.attemptSequence() >= 3) {
+            status = "UNRESOLVED";
+            recordOperationalEvent(statusClaim, "SAFE_RETRY_EXHAUSTED", "MAXIMUM_ATTEMPTS_REACHED");
+        }
+        Instant dueAt = "WAITING_RETRY_REQUEST".equals(status)
+                ? now.plus(ProviderSchedule.retryDelay(submissionId, statusClaim.attemptSequence() + 1))
+                : now;
         int settled = jdbc.update("""
                 UPDATE provider.work
-                   SET status = 'COMPLETED', lease_owner = NULL, lease_token = NULL,
+                   SET status = ?, due_at = ?, lease_owner = NULL, lease_token = NULL,
                        lease_expires_at = NULL, updated_at = ?
                  WHERE id = ? AND status = 'CLAIMED' AND lease_token = ?
-                """, Timestamp.from(now), submissionId, settlementToken);
+                """, status, Timestamp.from(dueAt), Timestamp.from(now), submissionId,
+                settlementToken);
         if (settled != 1) {
             throw new ProviderWorkConsistencyException(
                     "Originating submission recovery ownership could not be settled");
+        }
+    }
+
+    private void requireCurrentLease(UUID workId, UUID leaseToken, Instant now) {
+        Integer current = jdbc.queryForObject("""
+                SELECT count(*) FROM provider.work
+                 WHERE id = ? AND status = 'CLAIMED' AND lease_token = ?
+                   AND lease_expires_at > ?
+                """, Integer.class, workId, leaseToken, Timestamp.from(now));
+        if (current == null || current != 1) {
+            throw new ProviderWorkConsistencyException("Provider work lease is stale");
         }
     }
 
@@ -392,5 +618,8 @@ class JdbcProviderExecutionStore implements ProviderExecutionStore, ProviderEvid
             String origin,
             Instant observedAt
     ) {
+    }
+
+    private record RetryRequest(UUID retryRequestId, Instant requestedAt) {
     }
 }
