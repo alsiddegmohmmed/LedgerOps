@@ -1,0 +1,12 @@
+{
+  "method": "POST",
+  "rawPath": "/provider/v1/payments",
+  "keyId": "core-key",
+  "timestamp": "1784600000",
+  "requestId": "018f47f2-bd77-7d62-a90e-8e276d5608e8",
+  "rawBody": "{}",
+  "rawBodySha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+  "canonical": "v1\nPOST\n/provider/v1/payments\ncore-key\n1784600000\n018f47f2-bd77-7d62-a90e-8e276d5608e8\n44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+  "testSecret": "test-only-shared-secret",
+  "signature": "v1=Wo1JG4baFIY9nRvU_4-nenYqfayYUdHSpTWDNPanyTc"
+}

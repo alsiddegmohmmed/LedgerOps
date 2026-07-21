@@ -45,11 +45,12 @@ Selected verified foundations:
 
 ADR-016 reconciles the Payment lifecycle documentation. ADR-017 establishes the tenant-wide Payment API idempotency boundary. ADR-018 defines the minimal deterministic synchronous Risk model for Release 0.1. ADR-019 defines the Release 0.1 Ledger account model. Accepted ADR-020 defines the exact Payment-success posting and replay boundary. All nine Release 0.1 implementation slices are complete, including API and evidence hardening.
 
-Release 0.2 is active under [accepted ADR-021](docs/adr/ADR-021-define-release-0.2-provider-and-messaging-semantics.md) and the [Release 0.2 implementation plan](docs/plans/release-0.2-distributed-processing.md). Slices 0–2 are complete. The repository now has immutable Payment Attempts, the atomic internal `APPROVED -> PROCESSING` submission transaction, at-least-once Kafka command delivery, fenced transactional-outbox publication, inbox/dead-letter persistence, and duplicate-safe durable Provider `SUBMISSION` work. Provider HTTP execution and the separate Provider Simulator begin in Slice 3; result application, retry/recovery, webhooks, dashboards, and runbooks remain pending.
+Release 0.2 is active under [accepted ADR-021](docs/adr/ADR-021-define-release-0.2-provider-and-messaging-semantics.md) and the [Release 0.2 implementation plan](docs/plans/release-0.2-distributed-processing.md). Slices 0–3 are complete. The repository now has immutable Payment Attempts; atomic Payment submission; at-least-once Kafka command delivery; fenced outbox, inbox, and Provider work; a separate Provider Simulator and database; signed submission and status-query HTTP contracts; immutable Provider evidence; and duplicate-safe `ProviderResultObserved` outbox records. Payment result application, retry/recovery execution, webhooks, dashboards, and runbooks remain pending.
 
 Slice 7 includes the immutable journal and account domains, V6/V7 persistence, atomic account validation, append-only postings, duplicate-source prevention, deferred database balance verification, and tenant-scoped balance and statement queries. Statements have explicit time boundaries, bounded stable pagination, separate debit/credit totals, and immutable source evidence. Slice 8 adds the internal, joined PostgreSQL transaction that posts exactly `DEBIT PROVIDER_CLEARING` and `CREDIT MERCHANT_PAYABLE` for the full Payment amount and currency, then completes the Payment. Exact replay validation, inconsistency detection, forced-failure rollback, concurrency, tenant isolation, and Modulith boundary tests pass.
 
 See the [Release 0.1 implementation plan](docs/plans/release-0.1-transactional-core.md) for completed evidence and the [active Release 0.2 plan](docs/plans/release-0.2-distributed-processing.md) for the current sequence.
+The signed Simulator endpoints and HMAC bytes are documented in the [Provider Simulator HTTP contract v1](docs/api/provider-simulator-v1.md).
 
 ## Architecture
 
@@ -100,7 +101,7 @@ The [requirement traceability matrix](docs/requirements/TRACEABILITY.md) records
 | Release | Outcome | Status |
 |---|---|---|
 | 0.1 | Transactional core: tenancy, payments, idempotency, synchronous risk, ledger, and atomic completion | Completed |
-| 0.2 | Distributed processing with Kafka, transactional outbox, and idempotent consumers | Active — Slices 0–2 complete |
+| 0.2 | Distributed processing with Kafka, transactional outbox, and idempotent consumers | Active — Slices 0–3 complete |
 | 0.3 | Keycloak, identity, tenant membership, permissions, merchant scope, authorization, tenant isolation, reconciliation, corrections, and financial operations | Planned |
 | 1.0 | Security hardening and release evidence: deployment controls, scanning, secrets, operational verification, documentation, observability, and portfolio release | Planned |
 | Post-1.0 | Advisory applied-AI capabilities outside critical financial decisions | Deferred |
@@ -109,7 +110,7 @@ Later-release technology remains excluded until the approved release sequence in
 
 ## Technology
 
-Current implemented stack through Release 0.2 Slice 2:
+Current implemented stack through Release 0.2 Slice 3:
 
 - Java 21
 - Spring Boot 4
@@ -118,11 +119,12 @@ Current implemented stack through Release 0.2 Slice 2:
 - PostgreSQL
 - Flyway
 - Apache Kafka
+- Resilience4j
 - Gradle Kotlin DSL
 - JUnit 5
 - Testcontainers
 
-The approved technology baseline is documented in the [Technical Design and Architecture Specification](docs/architecture/LedgerOps_Technical_Design_and_Architecture_Specification_v1.6.docx). Technologies are introduced only by their implementation slice. Slice 2 introduces Kafka command delivery and the minimal Provider-owned durable-work boundary; it does not make Provider HTTP calls or implement the Provider Simulator.
+The approved technology baseline is documented in the [Technical Design and Architecture Specification](docs/architecture/LedgerOps_Technical_Design_and_Architecture_Specification_v1.6.docx). Technologies are introduced only by their implementation slice. Slice 3 adds the separate Provider Simulator, signed Provider HTTP, Resilience4j policies, and immutable Provider evidence. Payment result application and recovery orchestration begin in later slices.
 
 ## Key repository paths
 
@@ -134,8 +136,12 @@ The approved technology baseline is documented in the [Technical Design and Arch
 │   ├── customer
 │   ├── payment
 │   ├── messaging
+│   ├── provider
 │   ├── risk
 │   └── ledger
+├── applications/provider-simulator
+├── packages/event-contracts
+├── packages/provider-contracts
 ├── src/main/resources/db/migration
 ├── src/test/java/com/ledgerops
 ├── docs
@@ -158,7 +164,7 @@ Prerequisites:
 - Java 21
 - Docker running locally
 
-The Gradle wrapper downloads the approved Gradle version. Testcontainers starts a real PostgreSQL container automatically.
+The Gradle wrapper downloads the approved Gradle version. Testcontainers starts real Core and Simulator PostgreSQL databases and Kafka where the selected tests require them.
 
 macOS or Linux:
 

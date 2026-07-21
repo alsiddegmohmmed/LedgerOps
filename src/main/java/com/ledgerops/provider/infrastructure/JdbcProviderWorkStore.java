@@ -39,7 +39,7 @@ class JdbcProviderWorkStore implements ProviderWorkStore {
                 """, UUID.randomUUID(), command.tenantId(), command.attemptId(),
                 command.paymentId(), command.providerId(), command.providerIdempotencyKey(),
                 command.requestIntentHash(), command.canonicalPayload(), Timestamp.from(now),
-                command.correlationId(), command.causationId(), Timestamp.from(now),
+                command.correlationId(), command.messageId(), Timestamp.from(now),
                 Timestamp.from(now));
 
         Boolean matches = jdbc.query("""

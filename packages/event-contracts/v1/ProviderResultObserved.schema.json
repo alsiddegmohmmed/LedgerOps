@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ledgerops.dev/contracts/v1/ProviderResultObserved.schema.json",
+  "title": "ProviderResultObserved v1",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "providerEvidenceId",
+    "providerResultId",
+    "attemptId",
+    "paymentId",
+    "providerId",
+    "providerIdempotencyKey",
+    "providerResultCategory",
+    "retryDisposition",
+    "evidenceOrigin",
+    "observedAt"
+  ],
+  "properties": {
+    "providerEvidenceId": { "type": "string", "format": "uuid" },
+    "providerResultId": { "type": "string", "format": "uuid" },
+    "attemptId": { "type": "string", "format": "uuid" },
+    "paymentId": { "type": "string", "format": "uuid" },
+    "providerId": { "const": "SIMULATOR" },
+    "providerIdempotencyKey": { "type": "string", "minLength": 1 },
+    "providerResultCategory": {
+      "enum": ["SUCCESS", "ACCEPTED", "DECLINED", "PENDING", "TEMPORARY_FAILURE", "PERMANENT_FAILURE", "UNKNOWN"]
+    },
+    "retryDisposition": {
+      "enum": ["SAFE_TO_RESUBMIT", "STATUS_RECOVERY_REQUIRED", "NOT_RETRYABLE"]
+    },
+    "providerReference": { "type": "string", "minLength": 1 },
+    "evidenceOrigin": {
+      "enum": ["SUBMISSION_RESPONSE", "STATUS_QUERY", "WEBHOOK"]
+    },
+    "observedAt": { "type": "string", "format": "date-time" }
+  }
+}

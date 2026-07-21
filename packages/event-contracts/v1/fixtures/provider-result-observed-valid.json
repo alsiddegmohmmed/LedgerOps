@@ -1,0 +1,13 @@
+{
+  "attemptId": "018f47f2-bd77-7d62-a90e-8e276d5608e8",
+  "evidenceOrigin": "SUBMISSION_RESPONSE",
+  "observedAt": "2026-07-21T03:00:00Z",
+  "paymentId": "018f47f2-bd77-7d62-a90e-8e276d5608e9",
+  "providerEvidenceId": "018f47f2-bd77-7d62-a90e-8e276d5608ea",
+  "providerId": "SIMULATOR",
+  "providerIdempotencyKey": "payment:018f47f2-bd77-7d62-a90e-8e276d5608e9",
+  "providerReference": "SIM-018f47f2-bd77-7d62-a90e-8e276d5608ec",
+  "providerResultCategory": "SUCCESS",
+  "providerResultId": "018f47f2-bd77-7d62-a90e-8e276d5608eb",
+  "retryDisposition": "NOT_RETRYABLE"
+}

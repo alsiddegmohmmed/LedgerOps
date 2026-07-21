@@ -45,7 +45,11 @@ class ProviderWorkPersistenceIntegrationTests {
         acceptance.accept(repeatedMessage, repeated);
 
         assertEquals(1, workCount(first));
-        cleanup(first);
+        assertEquals(first.messageId(), jdbc.queryForObject("""
+                SELECT causation_id FROM provider.work
+                 WHERE tenant_id = ? AND attempt_id = ?
+                """, UUID.class, first.tenantId(), first.attemptId()));
+        deactivate(first);
     }
 
     @Test
@@ -66,7 +70,7 @@ class ProviderWorkPersistenceIntegrationTests {
                 SELECT request_intent_hash FROM provider.work
                  WHERE tenant_id = ? AND attempt_id = ?
                 """, String.class, first.tenantId(), first.attemptId()));
-        cleanup(first);
+        deactivate(first);
     }
 
     @Test
@@ -116,8 +120,11 @@ class ProviderWorkPersistenceIntegrationTests {
                 """, Integer.class, command.tenantId(), command.attemptId());
     }
 
-    private void cleanup(ProviderSubmissionCommand command) {
-        jdbc.update("DELETE FROM messaging.inbox WHERE tenant_id = ?", command.tenantId());
-        jdbc.update("DELETE FROM provider.work WHERE tenant_id = ?", command.tenantId());
+    private void deactivate(ProviderSubmissionCommand command) {
+        jdbc.update("""
+                UPDATE provider.work SET status = 'UNRESOLVED'
+                 WHERE tenant_id = ? AND attempt_id = ?
+                """, command.tenantId(), command.attemptId());
     }
+
 }
