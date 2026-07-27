@@ -1,0 +1,116 @@
+# Release 0.3 API and contract plan
+
+## Contract rules
+
+- OpenAPI supersedes the unauthenticated v0.1 sandbox examples with authenticated Release 0.3 contracts.
+- RFC 7807 problems retain correlation, effect, retryable, and next-action fields.
+- JSON Schema contracts remain versioned and backward-compatibility tested.
+- No JPA/domain entity is an external or Kafka contract.
+- Human APIs use explicit Tenant route context.
+- Service Payment API derives Tenant/Merchant from credential.
+
+## Human API groups
+
+```text
+/api/v1/platform/tenants/...
+/api/v1/tenants/{tenantId}/memberships/...
+/api/v1/tenants/{tenantId}/merchants/...
+/api/v1/tenants/{tenantId}/credentials/...
+/api/v1/tenants/{tenantId}/payments/...
+/api/v1/tenants/{tenantId}/risk/...
+/api/v1/tenants/{tenantId}/provider/...
+/api/v1/tenants/{tenantId}/reversals/...
+/api/v1/tenants/{tenantId}/settlement-batches/...
+/api/v1/tenants/{tenantId}/reconciliation-runs/...
+/api/v1/tenants/{tenantId}/cases/...
+/api/v1/tenants/{tenantId}/ledger/...
+/api/v1/tenants/{tenantId}/audit/...
+/api/v1/tenants/{tenantId}/reports/...
+/api/v1/tenants/{tenantId}/notifications/...
+```
+
+The exact resources are introduced only by their slice.
+
+## Service Payment contract
+
+`POST /api/v1/payments`
+
+Request content:
+
+- merchant reference;
+- amount;
+- currency;
+- customer identifier;
+- payment-method category;
+- idempotency key.
+
+`tenantId` and `merchantId` are absent. They are derived from the active OAuth client/credential.
+
+Idempotency remains `tenantId + idempotencyKey`; Merchant is fingerprinted canonical content.
+
+## Sensitive actions
+
+Use explicit action resources rather than arbitrary status mutation, for example:
+
+```text
+POST .../reversals
+POST .../reversals/{id}/retry
+POST .../payments/{id}/retry-now
+POST .../risk-reviews/{id}/decisions
+POST .../reconciliation-runs/{id}/promote
+POST .../cases/{id}/resolution
+POST .../corrections
+```
+
+Each action has typed confirmation/reason fields where required and returns the stable logical result on exact replay.
+
+## Event contracts
+
+ADR-025 defines producers/topics/dedup keys. Required new JSON Schemas include:
+
+- `SubmitReversalToProvider`
+- `ProviderReversalResultObserved`
+- `ReversalCompleted`
+- `ReversalFailed`
+- `CreateCaseRequested`
+- Tenant/Merchant lifecycle events
+- Membership/Credential/Support lifecycle events
+- Risk review/configuration events
+- Case/Correction lifecycle events
+- Settlement batch/run/discrepancy/current/posting events
+
+## Merchant webhook contract
+
+Separate from Provider webhooks. Document:
+
+- endpoint registration/rotation/revocation;
+- stable event ID and versioned JSON payload;
+- exact HMAC canonical bytes and headers;
+- timestamp/replay guidance;
+- at-least-once behavior and recipient idempotency;
+- timeout/retry/final status;
+- sandbox-only data and URL restrictions.
+
+## Contract verification
+
+- OpenAPI schema validation and executable MockMvc contract tests;
+- valid/invalid JSON Schema fixtures;
+- cross-application Provider HMAC fixtures;
+- merchant webhook sender/receiver golden fixtures;
+- preceding-version consumer compatibility;
+- no undocumented endpoint or status mutation;
+- API auth/permission/Tenant/Merchant negative matrix.
+
+
+## Provider Simulator v2
+
+Payment and Reversal submission bodies include the pinned ADR-027 scenario profile ID, version, and canonical snapshot. HMAC canonicalization remains the ADR-021 body-hash contract. Status query remains stable-key based. The Simulator stores the scenario snapshot and uses it for responses, webhooks, and settlement generation.
+
+## SSE contract
+
+Tenant-scoped SSE uses persisted projection event IDs and supports `Last-Event-ID`. An unavailable cursor returns an explicit resync event; Tenant change closes the old stream before the new snapshot/stream opens.
+
+
+## Provider settlement file contract
+
+The exact Release 0.3 CSV format, validation semantics, dual canonical-record/physical-occurrence identity, deterministic matching, and settlement-posting relationship are defined in [Provider settlement file contract v1](provider-settlement-file-v1.md). Slice 7 must not invent another format or identity.
