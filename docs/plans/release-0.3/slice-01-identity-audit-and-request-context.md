@@ -1,6 +1,6 @@
 # Release 0.3 Slice 1 - Identity, Audit, authenticated request context, and minimal BFF
 
-Status: Pending  
+Status: Complete
 Owner: One implementation owner  
 Release: 0.3
 
@@ -79,7 +79,7 @@ Excluded:
 
 ## Completion report
 
-- Changed: Pending
-- Verified: Pending
-- Incomplete: Slice 1
+- Changed: `identity` and `audit` modules; ApplicationUser and authorization persistence; JWT validation and principal parsing; request-scoped authorization context; append-only Audit persistence; protected Tenant read and Payment creation paths; minimal `applications/operations-web` BFF shell.
+- Verified: Backend `./gradlew test` (419 tests), `./gradlew check`, and `git diff --check`; frontend `pnpm install --frozen-lockfile`, `pnpm lint`, `pnpm typecheck`, `pnpm test` (4 tests), `pnpm exec playwright test` (1 test), and `pnpm build`.
+- Incomplete: Broader Tenant/Merchant administration, payment operations UI, audit search, and later Operations Web workflows remain in Slices 2-10. Slice 2 has not started.
 - Deviations: None

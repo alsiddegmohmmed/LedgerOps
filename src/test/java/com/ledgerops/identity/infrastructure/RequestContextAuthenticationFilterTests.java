@@ -1,0 +1,126 @@
+package com.ledgerops.identity.infrastructure;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.ledgerops.identity.application.AuthorizedTenantContext;
+import com.ledgerops.identity.application.RequestContextService;
+import com.ledgerops.identity.domain.ApplicationUser;
+import com.ledgerops.identity.domain.ApplicationUserId;
+import com.ledgerops.identity.domain.ApplicationUserRepository;
+import com.ledgerops.identity.domain.KeycloakIdentity;
+import com.ledgerops.identity.domain.Permission;
+import com.ledgerops.identity.domain.PrincipalType;
+import com.ledgerops.identity.domain.ScopeMode;
+import org.junit.jupiter.api.Test;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
+import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.mock.web.MockHttpServletResponse;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.jwt.JwtException;
+import org.slf4j.MDC;
+
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.atomic.AtomicBoolean;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+class RequestContextAuthenticationFilterTests {
+
+    private static final Instant NOW = Instant.parse("2026-07-28T10:00:00Z");
+    private static final String ISSUER = "https://keycloak.example/realms/ledgerops";
+    private static final String AUDIENCE = "ledgerops-core";
+
+    @Test
+    void rejectsMissingMalformedAndInvalidBearerTokensWith401() throws Exception {
+        assertUnauthorized(null, "AUTHENTICATION_REQUIRED");
+        assertUnauthorized("Basic abc", "AUTHENTICATION_REQUIRED");
+        assertUnauthorized("Bearer invalid", "INVALID_AUTHENTICATION");
+    }
+
+    @Test
+    void attachesPostgresDerivedRequestContextForValidBearerToken() throws Exception {
+        UUID tenantId = UUID.randomUUID();
+        ApplicationUser user = ApplicationUser.create(ApplicationUserId.newId(),
+                new KeycloakIdentity(ISSUER, "subject-1"));
+        RequestContextAuthenticationFilter filter = filter(user, tenantId);
+        MockHttpServletRequest request = tenantRequest(tenantId);
+        request.addHeader(HttpHeaders.AUTHORIZATION, "Bearer valid");
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        AtomicBoolean continued = new AtomicBoolean();
+
+        try (MDC.MDCCloseable ignored = MDC.putCloseable("correlationId", "correlation-1")) {
+            filter.doFilter(request, response, (ignoredRequest, ignoredResponse) -> continued.set(true));
+        }
+
+        assertThat(response.getStatus()).isEqualTo(HttpStatus.OK.value());
+        assertThat(continued).isTrue();
+        assertThat(request.getAttribute(RequestContextAuthenticationFilter.CONTEXT_ATTRIBUTE))
+                .isInstanceOf(com.ledgerops.identity.api.AuthorizedRequestContext.class);
+    }
+
+    @Test
+    void rejectsMissingPaymentAuthenticationWith401() throws Exception {
+        UUID tenantId = UUID.randomUUID();
+        RequestContextAuthenticationFilter filter = filter(null, tenantId);
+        MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/v1/payments");
+        request.addHeader(RequestContextAuthenticationFilter.TENANT_SELECTION_HEADER, tenantId.toString());
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        filter.doFilter(request, response, (ignoredRequest, ignoredResponse) -> { });
+
+        assertThat(response.getStatus()).isEqualTo(HttpStatus.UNAUTHORIZED.value());
+        assertThat(response.getContentAsString()).contains("AUTHENTICATION_REQUIRED");
+    }
+
+    private void assertUnauthorized(String authorization, String code) throws Exception {
+        UUID tenantId = UUID.randomUUID();
+        RequestContextAuthenticationFilter filter = filter(null, tenantId);
+        MockHttpServletRequest request = tenantRequest(tenantId);
+        request.setAttribute(RequestContextAuthenticationFilter.AUTHENTICATION_REQUIRED_ATTRIBUTE, true);
+        if (authorization != null) {
+            request.addHeader(HttpHeaders.AUTHORIZATION, authorization);
+        }
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        filter.doFilter(request, response, (ignoredRequest, ignoredResponse) -> { });
+
+        assertThat(response.getStatus()).isEqualTo(HttpStatus.UNAUTHORIZED.value());
+        assertThat(response.getContentType()).startsWith("application/problem+json");
+        assertThat(response.getContentAsString()).contains(code);
+    }
+
+    private RequestContextAuthenticationFilter filter(ApplicationUser user, UUID tenantId) {
+        JwtPrincipalParser parser = new JwtPrincipalParser(token -> {
+            if ("invalid".equals(token)) {
+                throw new JwtException("invalid");
+            }
+            return new Jwt("valid", NOW.minusSeconds(60), NOW.plusSeconds(300),
+                    Map.of("alg", "none"), Map.of(
+                    "iss", ISSUER, "sub", "subject-1", "aud", Set.of(AUDIENCE),
+                    "preferred_username", "alice"));
+        }, ISSUER, AUDIENCE, Clock.fixed(NOW, ZoneOffset.UTC));
+        ApplicationUserRepository users = new ApplicationUserRepository() {
+            @Override public ApplicationUser save(ApplicationUser applicationUser) { return applicationUser; }
+            @Override public Optional<ApplicationUser> findById(ApplicationUserId id) { return Optional.empty(); }
+            @Override public Optional<ApplicationUser> findByKeycloakIdentity(KeycloakIdentity identity) {
+                return user != null && user.keycloakIdentity().equals(identity) ? Optional.of(user) : Optional.empty();
+            }
+        };
+        RequestContextService service = new RequestContextService(users, (id, type, client, selectedTenant) ->
+                user != null && selectedTenant.equals(tenantId)
+                        ? Optional.of(new AuthorizedTenantContext(tenantId, ScopeMode.TENANT_WIDE,
+                        Set.of(), Set.of(Permission.PAYMENT_READ), null))
+                        : Optional.empty());
+        return new RequestContextAuthenticationFilter(parser, service, new ObjectMapper());
+    }
+
+    private MockHttpServletRequest tenantRequest(UUID tenantId) {
+        return new MockHttpServletRequest("GET", "/api/v1/tenants/" + tenantId);
+    }
+}

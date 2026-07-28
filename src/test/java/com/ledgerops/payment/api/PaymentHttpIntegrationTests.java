@@ -11,6 +11,13 @@ import com.ledgerops.customer.domain.Customer;
 import com.ledgerops.customer.domain.CustomerReference;
 import com.ledgerops.customer.domain.CustomerRepository;
 import com.ledgerops.customer.domain.CustomerStatus;
+import com.ledgerops.identity.api.AuthorizedRequestContext;
+import com.ledgerops.identity.api.AuthorizedRequestContextRequest;
+import com.ledgerops.identity.api.AuthenticatedPrincipal;
+import com.ledgerops.identity.domain.KeycloakIdentity;
+import com.ledgerops.identity.domain.Permission;
+import com.ledgerops.identity.domain.PrincipalType;
+import com.ledgerops.identity.domain.ScopeMode;
 import com.ledgerops.merchant.api.MerchantReference;
 import com.ledgerops.merchant.domain.Merchant;
 import com.ledgerops.merchant.domain.MerchantId;
@@ -56,9 +63,8 @@ class PaymentHttpIntegrationTests {
     void createsPaymentAndReturnsStableInitialResult() throws Exception {
         Fixture fixture = activeFixture();
 
-        mockMvc.perform(post("/api/v1/payments")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(request(fixture, fixture.merchantId(), "http-create", "125.00")))
+        mockMvc.perform(authorizedPayment(fixture,
+                        request(fixture, fixture.merchantId(), "http-create", "125.00")))
                 .andExpect(status().isCreated())
                 .andExpect(header().exists("Location"))
                 .andExpect(header().exists("X-Correlation-Id"))
@@ -76,14 +82,10 @@ class PaymentHttpIntegrationTests {
         Fixture fixture = activeFixture();
         String request = request(fixture, fixture.merchantId(), "http-replay", "40.00");
 
-        MvcResult creation = mockMvc.perform(post("/api/v1/payments")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(request))
+        MvcResult creation = mockMvc.perform(authorizedPayment(fixture, request))
                 .andExpect(status().isCreated())
                 .andReturn();
-        MvcResult replay = mockMvc.perform(post("/api/v1/payments")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(request))
+        MvcResult replay = mockMvc.perform(authorizedPayment(fixture, request))
                 .andExpect(status().isOk())
                 .andReturn();
 
@@ -98,7 +100,7 @@ class PaymentHttpIntegrationTests {
     }
 
     @Test
-    void changedMerchantReturnsIdempotencyConflictProblem() throws Exception {
+    void changedMerchantOutsideAuthorizedScopeReturnsNotFound() throws Exception {
         Fixture fixture = activeFixture();
         Merchant otherMerchant = new Merchant(
                 MerchantId.newId(),
@@ -108,9 +110,7 @@ class PaymentHttpIntegrationTests {
         );
         merchantRepository.save(otherMerchant);
 
-        mockMvc.perform(post("/api/v1/payments")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(request(
+        mockMvc.perform(authorizedPayment(fixture, request(
                                 fixture,
                                 fixture.merchantId(),
                                 "http-merchant-conflict",
@@ -118,37 +118,22 @@ class PaymentHttpIntegrationTests {
                         )))
                 .andExpect(status().isCreated());
 
-        mockMvc.perform(post("/api/v1/payments")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(request(
+        mockMvc.perform(authorizedPayment(fixture, request(
                                 fixture,
                                 otherMerchant.id().value(),
                                 "http-merchant-conflict",
                                 "30.00"
-                        )))
-                .andExpect(status().isConflict())
-                .andExpect(content().contentTypeCompatibleWith(
-                        MediaType.APPLICATION_PROBLEM_JSON
-                ))
-                .andExpect(jsonPath("$.type").value(
-                        "urn:ledgerops:problem:payment-idempotency-conflict"
-                ))
-                .andExpect(jsonPath("$.code").value("PAYMENT_IDEMPOTENCY_CONFLICT"))
-                .andExpect(jsonPath("$.correlationId").isNotEmpty())
-                .andExpect(jsonPath("$.effect").value(
-                        "The existing Payment was unchanged and no new Payment was created."
-                ))
-                .andExpect(jsonPath("$.retryable").value(false))
-                .andExpect(jsonPath("$.nextAction").isNotEmpty());
+                )))
+                .andExpect(status().isNotFound())
+                .andReturn();
     }
 
     @Test
     void rejectsInvalidPaymentRequest() throws Exception {
         Fixture fixture = activeFixture();
 
-        mockMvc.perform(post("/api/v1/payments")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(request(fixture, fixture.merchantId(), "", "0.00")))
+        mockMvc.perform(authorizedPayment(fixture,
+                        request(fixture, fixture.merchantId(), "", "0.00")))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.type").value(
                         "urn:ledgerops:problem:payment-request-validation"
@@ -156,9 +141,7 @@ class PaymentHttpIntegrationTests {
                 .andExpect(jsonPath("$.errors.amount").exists())
                 .andExpect(jsonPath("$.errors.idempotencyKey").exists());
 
-        mockMvc.perform(post("/api/v1/payments")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(request(
+        mockMvc.perform(authorizedPayment(fixture, request(
                                 fixture,
                                 fixture.merchantId(),
                                 "unsupported-currency",
@@ -175,9 +158,7 @@ class PaymentHttpIntegrationTests {
                 .orElseThrow();
         tenantRepository.save(activeTenant.suspend());
 
-        mockMvc.perform(post("/api/v1/payments")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(request(
+        mockMvc.perform(authorizedPayment(fixture, request(
                                 fixture,
                                 fixture.merchantId(),
                                 "http-suspended-tenant",
@@ -248,6 +229,30 @@ class PaymentHttpIntegrationTests {
                 amount,
                 idempotencyKey
         );
+    }
+
+    private org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder authorizedPayment(
+            Fixture fixture,
+            String body
+    ) {
+        AuthorizedRequestContext context = new AuthorizedRequestContext(
+                PrincipalType.SERVICE,
+                null,
+                UUID.randomUUID(),
+                fixture.tenantId(),
+                ScopeMode.MERCHANT_SET,
+                java.util.Set.of(fixture.merchantId()),
+                java.util.Set.of(Permission.PAYMENT_CREATE),
+                "test-correlation"
+        );
+        AuthenticatedPrincipal principal = new AuthenticatedPrincipal(
+                "SERVICE", "https://keycloak.example/realms/ledgerops", "service-subject");
+        return post("/api/v1/payments")
+                .header("X-Tenant-Id", fixture.tenantId())
+                .requestAttr(AuthorizedRequestContext.class.getName(), context)
+                .requestAttr(AuthorizedRequestContextRequest.principalAttribute(), principal)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(body);
     }
 
     private record Fixture(

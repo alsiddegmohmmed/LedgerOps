@@ -2,6 +2,9 @@ package com.ledgerops.payment.api;
 
 import com.ledgerops.payment.application.PaymentCreationResult;
 import com.ledgerops.payment.application.PaymentCreationService;
+import com.ledgerops.identity.api.AuthorizedRequestContextRequest;
+import com.ledgerops.identity.api.AuthenticatedPrincipal;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -26,11 +29,16 @@ class PaymentController {
     @PostMapping
     ResponseEntity<PaymentResponse> createPayment(
             @Valid @RequestBody CreatePaymentRequest request
+            , HttpServletRequest httpRequest
     ) {
         PaymentCreationResult result;
 
         try {
-            result = paymentCreationService.createPayment(request.toCommand());
+            result = paymentCreationService.createPayment(
+                    request.toCommand(),
+                    AuthorizedRequestContextRequest.required(httpRequest),
+                    AuthorizedRequestContextRequest.principal(httpRequest)
+            );
         } catch (IllegalArgumentException exception) {
             throw new InvalidPaymentRequestException(
                     "The payment request contains an invalid value",

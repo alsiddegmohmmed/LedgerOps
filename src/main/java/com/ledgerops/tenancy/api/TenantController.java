@@ -1,9 +1,12 @@
 package com.ledgerops.tenancy.api;
 
 import com.ledgerops.tenancy.application.TenantManagementService;
+import com.ledgerops.identity.api.AuthorizedRequestContext;
+import com.ledgerops.identity.api.AuthorizedRequestContextRequest;
 import com.ledgerops.tenancy.domain.Tenant;
 import com.ledgerops.tenancy.domain.TenantId;
 import jakarta.validation.Valid;
+import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -41,9 +44,15 @@ class TenantController {
     }
 
     @GetMapping("/{tenantId}")
-    TenantResponse getTenant(@PathVariable UUID tenantId) {
+    TenantResponse getTenant(
+            @PathVariable UUID tenantId,
+            HttpServletRequest request
+    ) {
         return TenantResponse.from(
-                tenantManagementService.getTenant(TenantId.from(tenantId))
+                tenantManagementService.getAuthorizedTenant(
+                        TenantId.from(tenantId),
+                        AuthorizedRequestContextRequest.required(request)
+                )
         );
     }
 

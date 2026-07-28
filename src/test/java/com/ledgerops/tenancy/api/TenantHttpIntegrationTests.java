@@ -8,6 +8,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.ledgerops.support.PostgresTestConfiguration;
+import com.ledgerops.identity.api.AuthorizedRequestContext;
+import com.ledgerops.identity.domain.Permission;
+import com.ledgerops.identity.domain.PrincipalType;
+import com.ledgerops.identity.domain.ScopeMode;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -16,6 +20,9 @@ import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
+
+import java.util.Set;
+import java.util.UUID;
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -48,7 +55,9 @@ class TenantHttpIntegrationTests {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("SUSPENDED"));
 
-        mockMvc.perform(get(location))
+        UUID tenantId = UUID.fromString(location.substring(location.lastIndexOf('/') + 1));
+        mockMvc.perform(get(location)
+                        .requestAttr(AuthorizedRequestContext.class.getName(), readContext(tenantId)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("SUSPENDED"));
     }
@@ -101,9 +110,9 @@ class TenantHttpIntegrationTests {
 
     @Test
     void returnsProblemDetailForUnknownTenant() throws Exception {
-        mockMvc.perform(get(
-                        "/api/v1/tenants/00000000-0000-0000-0000-000000000001"
-                ))
+        UUID tenantId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        mockMvc.perform(get("/api/v1/tenants/" + tenantId)
+                        .requestAttr(AuthorizedRequestContext.class.getName(), readContext(tenantId)))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.type")
                         .value("urn:ledgerops:problem:tenant-not-found"));
@@ -155,5 +164,18 @@ class TenantHttpIntegrationTests {
                   "defaultLocale": "en-SA"
                 }
                 """.formatted(name);
+    }
+
+    private AuthorizedRequestContext readContext(UUID tenantId) {
+        return new AuthorizedRequestContext(
+                PrincipalType.HUMAN,
+                UUID.randomUUID(),
+                null,
+                tenantId,
+                ScopeMode.TENANT_WIDE,
+                Set.of(),
+                Set.of(Permission.TENANT_READ),
+                "test-correlation"
+        );
     }
 }

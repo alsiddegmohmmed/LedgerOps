@@ -4,6 +4,9 @@ import com.ledgerops.tenancy.domain.Tenant;
 import com.ledgerops.tenancy.domain.TenantId;
 import com.ledgerops.tenancy.domain.TenantRepository;
 import com.ledgerops.tenancy.domain.TenantStatus;
+import com.ledgerops.identity.api.AuthorizedRequestContext;
+import com.ledgerops.identity.api.AuthorizationPermissionDeniedException;
+import com.ledgerops.identity.api.AuthorizationResourceNotFoundException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -53,6 +56,17 @@ public class TenantManagementService {
 
     @Transactional(readOnly = true)
     public Tenant getTenant(TenantId tenantId) {
+        return findTenant(tenantId);
+    }
+
+    @Transactional(readOnly = true)
+    public Tenant getAuthorizedTenant(TenantId tenantId, AuthorizedRequestContext context) {
+        if (!context.tenantId().equals(tenantId.value())) {
+            throw new AuthorizationResourceNotFoundException();
+        }
+        if (!context.canReadTenant()) {
+            throw new AuthorizationPermissionDeniedException("tenant:read");
+        }
         return findTenant(tenantId);
     }
 

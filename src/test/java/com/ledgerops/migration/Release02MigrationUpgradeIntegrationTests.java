@@ -18,6 +18,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @Testcontainers(disabledWithoutDocker = true)
 class Release02MigrationUpgradeIntegrationTests {
 
+    private static final MigrationVersion RELEASE_02_FINAL_VERSION = MigrationVersion.fromVersion("14");
+
     @Container
     static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:17-alpine");
 
@@ -27,17 +29,17 @@ class Release02MigrationUpgradeIntegrationTests {
         createDatabase("ledgerops_fresh");
         createDatabase("ledgerops_upgrade");
 
-        Flyway fresh = flyway("ledgerops_fresh", null);
+        Flyway fresh = flyway("ledgerops_fresh", RELEASE_02_FINAL_VERSION);
         assertEquals(14, fresh.migrate().migrationsExecuted);
-        assertEquals("14", fresh.info().current().getVersion().getVersion());
+        assertEquals(RELEASE_02_FINAL_VERSION, fresh.info().current().getVersion());
 
         Flyway release01 = flyway("ledgerops_upgrade", MigrationVersion.fromVersion("7"));
         assertEquals(7, release01.migrate().migrationsExecuted);
         UUID tenantId = insertRelease01Evidence("ledgerops_upgrade");
 
-        Flyway release02 = flyway("ledgerops_upgrade", null);
+        Flyway release02 = flyway("ledgerops_upgrade", RELEASE_02_FINAL_VERSION);
         assertEquals(7, release02.migrate().migrationsExecuted);
-        assertEquals("14", release02.info().current().getVersion().getVersion());
+        assertEquals(RELEASE_02_FINAL_VERSION, release02.info().current().getVersion());
 
         try (var connection = DriverManager.getConnection(
                 databaseUrl("ledgerops_upgrade"), POSTGRES.getUsername(), POSTGRES.getPassword());

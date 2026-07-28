@@ -23,9 +23,9 @@ Every component must solve a documented business or failure problem. Technology 
 
 ## Current status
 
-**Latest completed milestone:** Release 0.2 — Distributed Processing
+**Latest completed milestone:** Release 0.3 Slice 1 — Identity, Audit, request context, and minimal Operations Web authentication shell
 
-**Next planned milestone:** Release 0.3 — Identity and Financial Operations
+**Next planned milestone:** Release 0.3 Slice 2 — Tenant membership, credentials, and support
 
 Selected verified foundations:
 
@@ -46,6 +46,8 @@ Selected verified foundations:
 ADR-016 reconciles the Payment lifecycle documentation. ADR-017 establishes the tenant-wide Payment API idempotency boundary. ADR-018 defines the minimal deterministic synchronous Risk model for Release 0.1. ADR-019 defines the Release 0.1 Ledger account model. Accepted ADR-020 defines the exact Payment-success posting and replay boundary. All nine Release 0.1 implementation slices are complete, including API and evidence hardening.
 
 Release 0.2 is complete under [accepted ADR-021](docs/adr/ADR-021-define-release-0.2-provider-and-messaging-semantics.md) and the [completed Release 0.2 implementation plan](docs/plans/release-0.2-distributed-processing.md). All seven implementation slices are complete. The repository now has immutable Payment Attempts; atomic Payment submission; at-least-once Kafka command and result delivery; fenced outbox, inbox, and Provider work; a separate Provider Simulator and database; signed submission, status-query, and webhook HTTP contracts; immutable Provider and webhook evidence; Payment-owned accepted-final evidence; exact Provider-result application; bounded status recovery; evidence-gated safe retries; OpenTelemetry trace propagation; Prometheus metrics; two Grafana dashboards; alerts; runbooks; and a reproducible local topology. `SUCCESS` still uses the unchanged ADR-020 completion boundary.
+
+Release 0.3 Slice 1 is complete. The new `identity` and `audit` modules provide ApplicationUser identity, immutable Keycloak issuer/subject links, JWT validation and principal parsing, PostgreSQL-owned Tenant membership/permission/Merchant scope authorization, request-scoped authorization context, and append-only Audit evidence. The representative protected paths are `GET /api/v1/tenants/{tenantId}` and `POST /api/v1/payments`; the latter records Audit evidence atomically and preserves existing idempotent replay behavior. `applications/operations-web` provides only the minimal BFF authentication shell: Authorization Code + PKCE, Redis-backed opaque Secure HttpOnly sessions, CSRF protection, explicit Tenant selection, and server-side Core Tenant lookup. Broader administration, dashboard, audit-search, and business workflow UI remain later Release 0.3 slices.
 
 The completed Release 0.1 baseline includes the immutable journal and account domains, V6/V7 persistence, atomic account validation, append-only postings, duplicate-source prevention, deferred database balance verification, tenant-scoped balance and statement queries, and the joined ADR-020 Payment-success transaction. Exact replay validation, inconsistency detection, forced-failure rollback, concurrency, tenant isolation, and Modulith boundary tests remain part of the Release 0.2 gate.
 
@@ -103,7 +105,7 @@ The [requirement traceability matrix](docs/requirements/TRACEABILITY.md) records
 |---|---|---|
 | 0.1 | Transactional core: tenancy, payments, idempotency, synchronous risk, ledger, and atomic completion | Completed |
 | 0.2 | Distributed processing with Kafka, transactional outbox, and idempotent consumers | Completed |
-| 0.3 | Keycloak, identity, tenant membership, permissions, merchant scope, authorization, tenant isolation, reconciliation, corrections, and financial operations | Planned — not started |
+| 0.3 | Identity, authorization, audit, tenant administration, reconciliation, corrections, and financial operations | Slice 1 completed; Slices 2-11 planned |
 | 1.0 | Security hardening and release evidence: deployment controls, scanning, secrets, operational verification, documentation, observability, and portfolio release | Planned |
 | Post-1.0 | Advisory applied-AI capabilities outside critical financial decisions | Deferred |
 
@@ -111,7 +113,7 @@ Later-release technology remains excluded until the approved release sequence in
 
 ## Technology
 
-Current implemented stack through Release 0.2:
+Current implemented stack through Release 0.3 Slice 1:
 
 - Java 21
 - Spring Boot 4
@@ -127,8 +129,15 @@ Current implemented stack through Release 0.2:
 - Gradle Kotlin DSL
 - JUnit 5
 - Testcontainers
+- Keycloak OIDC/OAuth
+- Redis session storage
+- Node.js 24.18.0 LTS
+- pnpm 11.4.0
+- Next.js 16.2.11 and React 19.2.0
 
-The approved technology baseline is documented in the [Technical Design and Architecture Specification](docs/architecture/LedgerOps_Technical_Design_and_Architecture_Specification_v1.6.docx). Technologies are introduced only by their implementation slice. Release 0.3 has not started.
+Local BFF development requires the approved Keycloak realm/client and Redis instance in addition to Core PostgreSQL. Tokens remain server-side; Redis is session storage only and PostgreSQL remains authorization truth.
+
+The approved technology baseline is documented in the [Technical Design and Architecture Specification](docs/architecture/LedgerOps_Technical_Design_and_Architecture_Specification_v1.6.docx). Technologies are introduced only by their implementation slice. Slice 1 is complete; later Release 0.3 slices have not started.
 
 ## Key repository paths
 
@@ -142,8 +151,11 @@ The approved technology baseline is documented in the [Technical Design and Arch
 │   ├── messaging
 │   ├── provider
 │   ├── risk
-│   └── ledger
+│   ├── ledger
+│   ├── identity
+│   └── audit
 ├── applications/provider-simulator
+├── applications/operations-web
 ├── observability
 │   ├── prometheus
 │   └── grafana
@@ -188,7 +200,7 @@ Windows:
 .\gradlew.bat check
 ```
 
-For the transactional baseline, follow the [Release 0.1 demo](docs/demo/release-0.1.md). For Kafka, the separate Provider Simulator, Prometheus, Grafana, signed Provider traffic, failure scenarios, and reset instructions, follow the [Release 0.2 demo](docs/demo/release-0.2.md). The executable client HTTP contract is [OpenAPI v0.1](docs/api/ledgerops-openapi-v0.1.yaml). These local sandboxes intentionally have no authentication and must not be exposed to an untrusted network; identity and authorization begin in Release 0.3.
+For the transactional baseline, follow the [Release 0.1 demo](docs/demo/release-0.1.md). For Kafka, the separate Provider Simulator, Prometheus, Grafana, signed Provider traffic, failure scenarios, and reset instructions, follow the [Release 0.2 demo](docs/demo/release-0.2.md). The executable client HTTP contract is [OpenAPI v0.1](docs/api/ledgerops-openapi-v0.1.yaml). The existing local demos remain unauthenticated and must not be exposed to an untrusted network; protected identity and authorization are proven by the Slice 1 representative paths and BFF shell.
 
 ## Engineering workflow
 

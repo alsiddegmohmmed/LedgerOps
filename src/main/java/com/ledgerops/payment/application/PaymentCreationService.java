@@ -2,6 +2,11 @@ package com.ledgerops.payment.application;
 
 import com.ledgerops.customer.api.CustomerActivityQuery;
 import com.ledgerops.customer.api.CustomerActivityStatus;
+import com.ledgerops.audit.api.AuditAppendPort;
+import com.ledgerops.identity.api.AuthorizedRequestContext;
+import com.ledgerops.identity.api.AuthenticatedPrincipal;
+import com.ledgerops.identity.api.AuthorizationPermissionDeniedException;
+import com.ledgerops.identity.api.AuthorizationResourceNotFoundException;
 import com.ledgerops.merchant.api.MerchantActivityQuery;
 import com.ledgerops.merchant.api.MerchantActivityStatus;
 import com.ledgerops.merchant.api.MerchantReference;
@@ -31,22 +36,37 @@ public class PaymentCreationService {
     private final TenantActivityQuery tenantActivityQuery;
     private final MerchantActivityQuery merchantActivityQuery;
     private final CustomerActivityQuery customerActivityQuery;
+    private final AuditAppendPort auditAppendPort;
 
     public PaymentCreationService(
             PaymentCreationStore paymentStore,
             TenantActivityQuery tenantActivityQuery,
             MerchantActivityQuery merchantActivityQuery,
-            CustomerActivityQuery customerActivityQuery
+            CustomerActivityQuery customerActivityQuery,
+            AuditAppendPort auditAppendPort
     ) {
         this.paymentStore = paymentStore;
         this.tenantActivityQuery = tenantActivityQuery;
         this.merchantActivityQuery = merchantActivityQuery;
         this.customerActivityQuery = customerActivityQuery;
+        this.auditAppendPort = auditAppendPort;
     }
 
     @Transactional
     public PaymentCreationResult createPayment(CreatePaymentCommand command) {
+        return createPayment(command, null, null);
+    }
+
+    @Transactional
+    public PaymentCreationResult createPayment(
+            CreatePaymentCommand command,
+            AuthorizedRequestContext context,
+            AuthenticatedPrincipal principal
+    ) {
         Objects.requireNonNull(command, "Create payment command must not be null");
+        if (context != null) {
+            authorize(command, context);
+        }
 
         MerchantReference merchantReference = MerchantReference.from(
                 command.tenantId(),
@@ -63,7 +83,7 @@ public class PaymentCreationService {
         );
         String requestFingerprint = PaymentRequestFingerprint.from(requestedPayment);
 
-        return paymentStore.findByTenantAndIdempotencyKey(
+        PaymentCreationResult result = paymentStore.findByTenantAndIdempotencyKey(
                         command.tenantId(),
                         idempotencyKey
                 )
@@ -72,6 +92,30 @@ public class PaymentCreationService {
                         requestedPayment,
                         requestFingerprint
                 ));
+        if (result.created() && context != null && principal != null) {
+            auditAppendPort.appendPaymentCreated(
+                    principal.issuer(),
+                    principal.subject(),
+                    principal.principalType(),
+                    context.tenantId(),
+                    result.payment().id().value(),
+                    context.correlationId()
+            );
+        }
+        return result;
+    }
+
+    private void authorize(CreatePaymentCommand command, AuthorizedRequestContext context) {
+        Objects.requireNonNull(context, "Authorized request context must not be null");
+        if (!context.tenantId().equals(command.tenantId())) {
+            throw new AuthorizationResourceNotFoundException();
+        }
+        if (!context.canCreatePayment()) {
+            throw new AuthorizationPermissionDeniedException("payment:create");
+        }
+        if (!context.includesMerchant(command.merchantId())) {
+            throw new AuthorizationResourceNotFoundException();
+        }
     }
 
     private PaymentCreationResult createAfterValidation(

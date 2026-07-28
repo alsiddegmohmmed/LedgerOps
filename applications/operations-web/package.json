@@ -1,0 +1,35 @@
+{
+  "name": "@ledgerops/operations-web",
+  "version": "0.3.0",
+  "private": true,
+  "packageManager": "pnpm@11.4.0",
+  "engines": {
+    "node": ">=24.18.0 <25"
+  },
+  "scripts": {
+    "dev": "next dev -p 3001",
+    "build": "next build",
+    "start": "next start -p 3001",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "playwright": "playwright test"
+  },
+  "dependencies": {
+    "ioredis": "5.8.2",
+    "jose": "6.1.0",
+    "next": "16.2.11",
+    "react": "19.2.0",
+    "react-dom": "19.2.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.56.1",
+    "@types/node": "24.10.0",
+    "@types/react": "19.2.2",
+    "@types/react-dom": "19.2.2",
+    "eslint": "9.39.1",
+    "eslint-config-next": "16.2.11",
+    "typescript": "5.9.3",
+    "vitest": "4.0.8"
+  }
+}
