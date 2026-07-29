@@ -31,6 +31,11 @@ class IdentitySecurityConfiguration {
     }
 
     @Bean
+    ObjectMapper identityProblemObjectMapper() {
+        return new ObjectMapper();
+    }
+
+    @Bean
     @Conditional(IdentityJwtConfigured.class)
     JwtPrincipalParser jwtPrincipalParser(IdentityJwtProperties properties) {
         JwtDecoder decoder = NimbusJwtDecoder.withJwkSetUri(properties.jwkSetUri()).build();

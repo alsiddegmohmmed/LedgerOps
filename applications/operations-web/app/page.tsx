@@ -1,5 +1,3 @@
-import Link from "next/link";
-
 export default function HomePage() {
   return (
     <main>
@@ -10,7 +8,7 @@ export default function HomePage() {
           Sign in through the local Keycloak realm, choose a Tenant, and let Core
           PostgreSQL revalidate the selected context on every request.
         </p>
-        <Link className="button" href="/api/auth/login">Sign in</Link>
+        <a className="button" href="/api/auth/login">Sign in</a>
       </section>
     </main>
   );

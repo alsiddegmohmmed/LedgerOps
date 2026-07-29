@@ -5,3 +5,6 @@ test-results
 .env
 *.tsbuildinfo
 pnpm-workspace.yaml
+!pnpm-workspace.yaml
+.e2e-ports.json
+.e2e-runtime.json

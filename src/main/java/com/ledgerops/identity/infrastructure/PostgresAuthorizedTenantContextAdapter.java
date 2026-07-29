@@ -18,14 +18,11 @@ import java.util.UUID;
 class PostgresAuthorizedTenantContextAdapter implements AuthorizedTenantContextPort {
 
     private final SpringDataTenantMembershipRepository memberships;
-    private final SpringDataServiceCredentialRepository serviceCredentials;
 
     PostgresAuthorizedTenantContextAdapter(
-            SpringDataTenantMembershipRepository memberships,
-            SpringDataServiceCredentialRepository serviceCredentials
+            SpringDataTenantMembershipRepository memberships
     ) {
         this.memberships = memberships;
-        this.serviceCredentials = serviceCredentials;
     }
 
     @Override
@@ -36,19 +33,7 @@ class PostgresAuthorizedTenantContextAdapter implements AuthorizedTenantContextP
             UUID tenantId
     ) {
         if (principalType != PrincipalType.HUMAN) {
-            if (principalType != PrincipalType.SERVICE || serviceClientId == null) {
-                return Optional.empty();
-            }
-            return serviceCredentials.findActive(
-                            applicationUserId.value(), serviceClientId, tenantId
-                    )
-                    .map(credential -> new AuthorizedTenantContext(
-                            credential.tenantId(),
-                            ScopeMode.MERCHANT_SET,
-                            Set.of(credential.merchantId()),
-                            Set.of(Permission.PAYMENT_CREATE),
-                            credential.id()
-                    ));
+            return Optional.empty();
         }
         return memberships.findActiveByApplicationUserIdAndTenantId(applicationUserId.value(), tenantId)
                 .filter(membership -> !membership.roleAssignments().isEmpty())

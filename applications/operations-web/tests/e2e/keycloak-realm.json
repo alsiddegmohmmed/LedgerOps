@@ -1,0 +1,50 @@
+{
+  "realm": "ledgerops",
+  "enabled": true,
+  "registrationAllowed": false,
+  "clients": [
+    {
+      "clientId": "operations-web",
+      "name": "Operations Web",
+      "enabled": true,
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": true,
+      "redirectUris": ["http://127.0.0.1:3001/api/auth/callback"],
+      "webOrigins": ["http://127.0.0.1:3001"],
+      "protocol": "openid-connect",
+      "protocolMappers": [
+        {
+          "name": "operations-web-audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.client.audience": "operations-web",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "userinfo.token.claim": "false"
+          }
+        }
+      ]
+    }
+  ],
+  "users": [
+    {
+      "id": "11111111-1111-4111-8111-111111111111",
+      "username": "slice1-human",
+      "enabled": true,
+      "emailVerified": true,
+      "email": "slice1-human@example.com",
+      "firstName": "Slice",
+      "lastName": "Human",
+      "requiredActions": [],
+      "credentials": [
+        {
+          "type": "password",
+          "value": "slice1-password",
+          "temporary": false
+        }
+      ]
+    }
+  ]
+}

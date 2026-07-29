@@ -27,7 +27,7 @@ export function authorizationUrl(transaction: OauthTransaction & { state: string
     client_id: config.keycloakClientId,
     redirect_uri: config.redirectUri,
     response_type: "code",
-    scope: "openid profile offline_access",
+    scope: "openid profile",
     state: transaction.state,
     nonce: transaction.nonce,
     code_challenge: codeChallenge(transaction.codeVerifier),
