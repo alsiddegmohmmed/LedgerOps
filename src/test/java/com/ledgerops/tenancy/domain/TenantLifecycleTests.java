@@ -1,68 +1,83 @@
 package com.ledgerops.tenancy.domain;
 
+import org.junit.jupiter.api.Test;
+
+import java.util.Currency;
+import java.util.Locale;
+import java.util.stream.Stream;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.util.Currency;
-import java.util.Locale;
-import org.junit.jupiter.api.Test;
-
 class TenantLifecycleTests {
+    private static final TenantActivationPrerequisites SATISFIED =
+            new TenantActivationPrerequisites(true, true, true);
 
     @Test
-    void activatesPendingTenant() {
-        Tenant pendingTenant = tenantWithStatus(TenantStatus.PENDING_ACTIVATION);
-
-        Tenant activeTenant = pendingTenant.activate();
+    void activatesPendingTenantWithExplicitSatisfiedFacts() {
+        Tenant activeTenant = tenantWithStatus(TenantStatus.PENDING_ACTIVATION)
+                .activate(SATISFIED);
 
         assertEquals(TenantStatus.ACTIVE, activeTenant.status());
         assertTrue(activeTenant.canCreateOperationalActivity());
     }
 
     @Test
-    void suspendsActiveTenant() {
-        Tenant activeTenant = tenantWithStatus(TenantStatus.ACTIVE);
+    void reactivatesSuspendedTenantWithExplicitSatisfiedFacts() {
+        Tenant activeTenant = tenantWithStatus(TenantStatus.SUSPENDED)
+                .activate(SATISFIED);
 
-        Tenant suspendedTenant = activeTenant.suspend();
+        assertEquals(TenantStatus.ACTIVE, activeTenant.status());
+    }
+
+    @Test
+    void preservesLegacyActivationTransitionUntilOrchestrationSuppliesPrerequisites() {
+        for (TenantStatus status : SetLike.activationSourceStatuses()) {
+            assertEquals(TenantStatus.ACTIVE, tenantWithStatus(status).activate().status());
+        }
+    }
+
+    @Test
+    void eachPrerequisiteIsRequiredForActivationAndReactivation() {
+        for (TenantStatus status : SetLike.activationSourceStatuses()) {
+            assertPrerequisitesRejected(status,
+                    new TenantActivationPrerequisites(false, true, true));
+            assertPrerequisitesRejected(status,
+                    new TenantActivationPrerequisites(true, false, true));
+            assertPrerequisitesRejected(status,
+                    new TenantActivationPrerequisites(true, true, false));
+            assertPrerequisitesRejected(status, null);
+        }
+    }
+
+    @Test
+    void suspendsActiveTenantAndGatesNewOperationalActivity() {
+        Tenant suspendedTenant = tenantWithStatus(TenantStatus.ACTIVE).suspend();
 
         assertEquals(TenantStatus.SUSPENDED, suspendedTenant.status());
         assertFalse(suspendedTenant.canCreateOperationalActivity());
     }
 
     @Test
-    void reactivatesSuspendedTenant() {
-        Tenant suspendedTenant = tenantWithStatus(TenantStatus.SUSPENDED);
-
-        Tenant activeTenant = suspendedTenant.activate();
-
-        assertEquals(TenantStatus.ACTIVE, activeTenant.status());
+    void rejectsInvalidLifecycleTransitions() {
+        assertThrows(IllegalStateException.class,
+                () -> tenantWithStatus(TenantStatus.PENDING_ACTIVATION).suspend());
+        assertThrows(IllegalStateException.class,
+                () -> tenantWithStatus(TenantStatus.ACTIVE).activate(SATISFIED));
+        assertThrows(IllegalStateException.class,
+                () -> tenantWithStatus(TenantStatus.ARCHIVED).activate(SATISFIED));
+        assertThrows(IllegalStateException.class,
+                () -> tenantWithStatus(TenantStatus.ARCHIVED).archive());
     }
 
-    @Test
-    void rejectsSuspendingPendingTenant() {
-        Tenant pendingTenant = tenantWithStatus(TenantStatus.PENDING_ACTIVATION);
-
-        IllegalStateException exception = assertThrows(
-                IllegalStateException.class,
-                pendingTenant::suspend
-        );
-
-        assertEquals(
-                "Tenant cannot transition from PENDING_ACTIVATION to SUSPENDED",
-                exception.getMessage()
-        );
-    }
-
-    @Test
-    void archivedTenantCannotBeReactivated() {
-        Tenant archivedTenant = tenantWithStatus(TenantStatus.ARCHIVED);
-
-        assertThrows(
-                IllegalStateException.class,
-                archivedTenant::activate
-        );
+    private void assertPrerequisitesRejected(
+            TenantStatus status,
+            TenantActivationPrerequisites prerequisites
+    ) {
+        assertThrows(IllegalStateException.class,
+                () -> tenantWithStatus(status).activate(prerequisites));
     }
 
     private Tenant tenantWithStatus(TenantStatus status) {
@@ -73,5 +88,13 @@ class TenantLifecycleTests {
                 Locale.forLanguageTag("en-SA"),
                 status
         );
+    }
+
+    private static final class SetLike {
+        private SetLike() { }
+
+        private static Iterable<TenantStatus> activationSourceStatuses() {
+            return Stream.of(TenantStatus.PENDING_ACTIVATION, TenantStatus.SUSPENDED).toList();
+        }
     }
 }

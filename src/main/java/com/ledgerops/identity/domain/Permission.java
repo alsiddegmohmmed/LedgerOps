@@ -1,7 +1,15 @@
 package com.ledgerops.identity.domain;
 
 public enum Permission {
+    PLATFORM_TENANT_CREATE("platform:tenant-create"),
+    PLATFORM_TENANT_ACTIVATE("platform:tenant-activate"),
+    PLATFORM_TENANT_SUSPEND("platform:tenant-suspend"),
+    PLATFORM_TENANT_REACTIVATE("platform:tenant-reactivate"),
+    PLATFORM_TENANT_ARCHIVE("platform:tenant-archive"),
+    PLATFORM_PROVIDER_SCENARIO_MANAGE("platform:provider-scenario-manage"),
+    PLATFORM_HEALTH_READ("platform:health-read"),
     PLATFORM_AUDIT_READ("platform:audit-read"),
+    SUPPORT_TENANT_READ("support:tenant-read"),
     TENANT_READ("tenant:read"),
     TENANT_CONFIGURE("tenant:configure"),
     TENANT_MEMBERSHIP_MANAGE("tenant:membership-manage"),
@@ -39,7 +47,6 @@ public enum Permission {
     NOTIFICATION_READ("notification:read"),
     WEBHOOK_ENDPOINT_MANAGE("webhook:endpoint-manage"),
     WEBHOOK_TEST_TRIGGER("webhook:test-trigger"),
-    SUPPORT_TENANT_READ("support:tenant-read"),
     PAYMENT_CREATE("payment:create");
 
     private final String value;

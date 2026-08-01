@@ -70,6 +70,28 @@ class MerchantTests {
         );
     }
 
+    @Test
+    void suspendingMerchantGatesNewActivityAndReactivationRestoresIt() {
+        Merchant active = merchantNamed("Acme Merchant");
+        Merchant suspended = active.suspend();
+
+        assertEquals(MerchantStatus.SUSPENDED, suspended.status());
+        org.junit.jupiter.api.Assertions.assertFalse(suspended.canCreateNewActivity());
+        org.junit.jupiter.api.Assertions.assertFalse(suspended.canCreateCredential());
+        org.junit.jupiter.api.Assertions.assertFalse(suspended.canChangeConfiguration());
+        org.junit.jupiter.api.Assertions.assertTrue(suspended.allowsCommittedRecovery());
+        assertEquals(MerchantStatus.ACTIVE, suspended.activate().status());
+    }
+
+    @Test
+    void rejectsEveryInvalidMerchantLifecycleTransition() {
+        Merchant active = merchantNamed("Acme Merchant");
+        Merchant suspended = active.suspend();
+
+        assertThrows(IllegalStateException.class, active::activate);
+        assertThrows(IllegalStateException.class, suspended::suspend);
+    }
+
     private Merchant merchantNamed(String name) {
         return new Merchant(
                 MerchantId.newId(),

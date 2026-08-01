@@ -37,6 +37,18 @@ public final class Tenant {
         return withStatus(TenantStatus.ACTIVE);
     }
 
+    public Tenant activate(TenantActivationPrerequisites prerequisites) {
+        if (status != TenantStatus.PENDING_ACTIVATION
+                && status != TenantStatus.SUSPENDED) {
+            throw invalidTransition(TenantStatus.ACTIVE);
+        }
+        if (prerequisites == null || !prerequisites.satisfied()) {
+            throw new IllegalStateException("Tenant activation prerequisites are not satisfied");
+        }
+
+        return withStatus(TenantStatus.ACTIVE);
+    }
+
     public Tenant suspend() {
         if (status != TenantStatus.ACTIVE) {
             throw invalidTransition(TenantStatus.SUSPENDED);

@@ -44,6 +44,46 @@ public final class Merchant {
         return status;
     }
 
+    public Merchant activate() {
+        if (status != MerchantStatus.SUSPENDED) {
+            throw invalidTransition(MerchantStatus.ACTIVE);
+        }
+        return withStatus(MerchantStatus.ACTIVE);
+    }
+
+    public Merchant suspend() {
+        if (status != MerchantStatus.ACTIVE) {
+            throw invalidTransition(MerchantStatus.SUSPENDED);
+        }
+        return withStatus(MerchantStatus.SUSPENDED);
+    }
+
+    public boolean canCreateNewActivity() {
+        return status == MerchantStatus.ACTIVE;
+    }
+
+    public boolean canCreateCredential() {
+        return status == MerchantStatus.ACTIVE;
+    }
+
+    public boolean canChangeConfiguration() {
+        return status == MerchantStatus.ACTIVE;
+    }
+
+    public boolean allowsCommittedRecovery() {
+        return true;
+    }
+
+    private Merchant withStatus(MerchantStatus newStatus) {
+        return new Merchant(id, tenantReference, name, newStatus);
+    }
+
+    private IllegalStateException invalidTransition(MerchantStatus targetStatus) {
+        return new IllegalStateException(
+                "Merchant cannot transition from " + status + " to " + targetStatus
+        );
+    }
+
     private static String requireName(String name) {
         if (name == null || name.isBlank()) {
             throw new IllegalArgumentException("Merchant name must not be blank");

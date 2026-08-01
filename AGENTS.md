@@ -22,7 +22,7 @@ Stop only for a real conflict/change to an approved Product requirement, module/
 
 **Active milestone: Release 0.3 - Identity and Financial Operations.**
 
-Slice 0 documentation is complete. **Slice 1 is next.** Do not implement later-slice behavior early.
+Slice 0 and Slice 1 are complete. **Slice 2 is active.** Do not implement later-slice behavior early.
 
 Release 0.3 includes Keycloak/Core authorization, Tenant/Merchant administration, credentials, audited support, Operations Web, Payment/Ledger operations, manual Risk/Provider controls, full Reversal, merchant webhook testing, settlement ingestion, Reconciliation, Cases, narrow corrections, dashboard/live activity/notifications/reports, developer workflows, and Arabic/English parity.
 

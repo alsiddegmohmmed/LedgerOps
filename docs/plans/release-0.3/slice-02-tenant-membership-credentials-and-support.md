@@ -1,6 +1,6 @@
 # Release 0.3 Slice 2 - Tenant/Merchant onboarding, membership, credentials, and support
 
-Status: Pending  
+Status: Active
 Owner: One implementation owner  
 Release: 0.3
 
