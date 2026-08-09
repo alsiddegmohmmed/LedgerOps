@@ -3,6 +3,11 @@ package com.ledgerops.identity.api;
 import java.util.Objects;
 import java.util.UUID;
 
+/**
+ * Request for a new credential. When {@code replacesCredentialId} is set,
+ * the service treats the request as rotation and takes Tenant, Merchant,
+ * creator, and label from the persisted old credential.
+ */
 public record ServiceCredentialProvisioningRequest(
         UUID tenantId,
         UUID merchantId,

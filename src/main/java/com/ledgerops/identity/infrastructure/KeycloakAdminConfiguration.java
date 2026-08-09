@@ -62,6 +62,7 @@ class KeycloakAdminConfiguration {
             ServiceCredentialRepository credentials,
             CredentialProvisioningOperationRepository operations,
             KeycloakCredentialProvisioner keycloak,
+            KeycloakCredentialDisabler disabler,
             TransactionTemplate transactions,
             Clock clock
     ) {
@@ -69,6 +70,7 @@ class KeycloakAdminConfiguration {
                 credentials,
                 operations,
                 keycloak,
+                disabler,
                 transactions,
                 clock
         );

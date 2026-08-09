@@ -13,4 +13,15 @@ public interface ServiceCredentialProvisioningPort {
     ServiceCredentialProvisioningResult provision(ServiceCredentialProvisioningRequest request);
 
     ServiceCredentialProvisioningResult retry(UUID operationId);
+
+    /**
+     * Provisions a replacement for the active credential and returns its
+     * one-time secret after local rotation has committed.
+     */
+    ServiceCredentialProvisioningResult rotate(UUID credentialId);
+
+    /**
+     * Retries disabling the old external client after a completed rotation.
+     */
+    void retryRotationCleanup(UUID replacementCredentialId);
 }

@@ -174,6 +174,7 @@ class ServiceCredentialProvisioningServiceIntegrationTests {
                 credentials,
                 operations,
                 keycloak,
+                keycloak,
                 transactions,
                 Clock.fixed(NOW, ZoneOffset.UTC)
         );
@@ -203,7 +204,8 @@ class ServiceCredentialProvisioningServiceIntegrationTests {
         return userId;
     }
 
-    private static final class RecordingKeycloak implements KeycloakCredentialProvisioner {
+    private static final class RecordingKeycloak
+            implements KeycloakCredentialProvisioner, KeycloakCredentialDisabler {
         private final List<ProvisioningRequest> calls = new ArrayList<>();
         private final List<Boolean> transactionWasActive = new ArrayList<>();
         private KeycloakCredentialProvisioningException failure;
@@ -216,6 +218,11 @@ class ServiceCredentialProvisioningServiceIntegrationTests {
                 throw failure;
             }
             return new ProvisionedClient("secret-returned-once");
+        }
+
+        @Override
+        public void disable(DisableRequest request) {
+            // Rotation is covered by ServiceCredentialRotationIntegrationTests.
         }
     }
 }

@@ -10,6 +10,7 @@ import com.ledgerops.identity.domain.CredentialProvisioningOperationRepository;
 import com.ledgerops.identity.domain.ServiceCredential;
 import com.ledgerops.identity.domain.ServiceCredentialId;
 import com.ledgerops.identity.domain.ServiceCredentialRepository;
+import com.ledgerops.identity.domain.ServiceCredentialStatus;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.Clock;
@@ -30,6 +31,7 @@ public final class ServiceCredentialProvisioningService implements ServiceCreden
     private final ServiceCredentialRepository credentials;
     private final CredentialProvisioningOperationRepository operations;
     private final KeycloakCredentialProvisioner keycloak;
+    private final KeycloakCredentialDisabler disabler;
     private final TransactionTemplate transactions;
     private final Clock clock;
 
@@ -37,12 +39,14 @@ public final class ServiceCredentialProvisioningService implements ServiceCreden
             ServiceCredentialRepository credentials,
             CredentialProvisioningOperationRepository operations,
             KeycloakCredentialProvisioner keycloak,
+            KeycloakCredentialDisabler disabler,
             TransactionTemplate transactions,
             Clock clock
     ) {
         this.credentials = Objects.requireNonNull(credentials, "Credential repository must not be null");
         this.operations = Objects.requireNonNull(operations, "Operation repository must not be null");
         this.keycloak = Objects.requireNonNull(keycloak, "Keycloak provisioner must not be null");
+        this.disabler = Objects.requireNonNull(disabler, "Keycloak disabler must not be null");
         this.transactions = Objects.requireNonNull(transactions, "Transaction template must not be null");
         this.clock = Objects.requireNonNull(clock, "Clock must not be null");
     }
@@ -50,7 +54,9 @@ public final class ServiceCredentialProvisioningService implements ServiceCreden
     @Override
     public ServiceCredentialProvisioningResult provision(ServiceCredentialProvisioningRequest request) {
         Objects.requireNonNull(request, "Provisioning request must not be null");
-        PendingProvisioning pending = inTransaction(() -> createPending(request));
+        PendingProvisioning pending = inTransaction(() -> request.replacesCredentialId() == null
+                ? createPending(request)
+                : createRotationPending(ServiceCredentialId.from(request.replacesCredentialId())));
         return callKeycloakAndFinalize(pending);
     }
 
@@ -60,6 +66,22 @@ public final class ServiceCredentialProvisioningService implements ServiceCreden
         PendingProvisioning pending = inTransaction(
                 () -> prepareRetry(CredentialProvisioningOperationId.from(operationId)));
         return callKeycloakAndFinalize(pending);
+    }
+
+    @Override
+    public ServiceCredentialProvisioningResult rotate(UUID credentialId) {
+        Objects.requireNonNull(credentialId, "Credential ID must not be null");
+        PendingProvisioning pending = inTransaction(
+                () -> createRotationPending(ServiceCredentialId.from(credentialId)));
+        return callKeycloakAndFinalize(pending);
+    }
+
+    @Override
+    public void retryRotationCleanup(UUID replacementCredentialId) {
+        Objects.requireNonNull(replacementCredentialId, "Replacement credential ID must not be null");
+        RotationCleanupTarget target = inTransaction(
+                () -> prepareRotationCleanup(ServiceCredentialId.from(replacementCredentialId)));
+        disableOldClient(target, ServiceCredentialId.from(replacementCredentialId));
     }
 
     private PendingProvisioning createPending(ServiceCredentialProvisioningRequest request) {
@@ -73,8 +95,7 @@ public final class ServiceCredentialProvisioningService implements ServiceCreden
                 request.label(),
                 new ApplicationUserId(request.createdByApplicationUserId()),
                 operationId,
-                request.replacesCredentialId() == null
-                        ? null : ServiceCredentialId.from(request.replacesCredentialId()),
+                null,
                 now
         );
         CredentialProvisioningOperation operation = CredentialProvisioningOperation.pending(
@@ -86,6 +107,39 @@ public final class ServiceCredentialProvisioningService implements ServiceCreden
         credentials.save(credential);
         operations.save(operation);
         return PendingProvisioning.from(credential, operation);
+    }
+
+    private PendingProvisioning createRotationPending(ServiceCredentialId oldCredentialId) {
+        ServiceCredential oldCredential = credentials.findByIdForUpdate(oldCredentialId)
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "Service credential does not exist: " + oldCredentialId.value()));
+        if (oldCredential.status() != ServiceCredentialStatus.ACTIVE) {
+            throw new IllegalStateException(
+                    "Only an active credential can be rotated: " + oldCredentialId.value());
+        }
+
+        Instant now = clock.instant();
+        ServiceCredentialId replacementId = ServiceCredentialId.newId();
+        CredentialProvisioningOperationId operationId = CredentialProvisioningOperationId.newId();
+        ServiceCredential replacement = ServiceCredential.provisioning(
+                replacementId,
+                oldCredential.tenantId(),
+                oldCredential.merchantId(),
+                oldCredential.label(),
+                oldCredential.createdBy(),
+                operationId,
+                oldCredential.id(),
+                now
+        );
+        CredentialProvisioningOperation operation = CredentialProvisioningOperation.pending(
+                operationId,
+                replacementId,
+                oldCredential.tenantId(),
+                now
+        );
+        credentials.save(replacement);
+        operations.save(operation);
+        return PendingProvisioning.from(replacement, operation);
     }
 
     private PendingProvisioning prepareRetry(CredentialProvisioningOperationId operationId) {
@@ -135,7 +189,12 @@ public final class ServiceCredentialProvisioningService implements ServiceCreden
         }
 
         String clientSecret = provisionedClient.clientSecret();
-        return inTransaction(() -> activateAndComplete(pending, clientSecret));
+        FinalizedProvisioning finalized = inTransaction(
+                () -> activateAndComplete(pending, clientSecret));
+        if (finalized.cleanupTarget() != null) {
+            disableOldClient(finalized.cleanupTarget(), pending.credential.id());
+        }
+        return finalized.result();
     }
 
     private void markFailed(
@@ -156,10 +215,13 @@ public final class ServiceCredentialProvisioningService implements ServiceCreden
         });
     }
 
-    private ServiceCredentialProvisioningResult activateAndComplete(
+    private FinalizedProvisioning activateAndComplete(
             PendingProvisioning pending,
             String clientSecret
     ) {
+        if (pending.credential.replacesCredentialId() != null) {
+            return activateReplacementAndComplete(pending, clientSecret);
+        }
         ServiceCredential credential = credentials.findByIdForUpdate(pending.credential.id())
                 .orElseThrow(() -> new IllegalStateException(
                         "Credential disappeared during activation"));
@@ -175,12 +237,99 @@ public final class ServiceCredentialProvisioningService implements ServiceCreden
         CredentialProvisioningOperation completed = operation.complete(now);
         credentials.save(active);
         operations.save(completed);
+        return new FinalizedProvisioning(
+                result(active, completed, clientSecret),
+                null
+        );
+    }
+
+    private FinalizedProvisioning activateReplacementAndComplete(
+            PendingProvisioning pending,
+            String clientSecret
+    ) {
+        ServiceCredentialId oldCredentialId = pending.credential.replacesCredentialId();
+        ServiceCredential oldCredential = credentials.findByIdForUpdate(oldCredentialId)
+                .orElseThrow(() -> new IllegalStateException(
+                        "Old credential for rotation does not exist: " + oldCredentialId.value()));
+        ServiceCredential replacement = credentials.findByIdForUpdate(pending.credential.id())
+                .orElseThrow(() -> new IllegalStateException(
+                        "Replacement credential disappeared during activation"));
+        CredentialProvisioningOperation operation = operations.findByIdForUpdate(
+                        pending.operation.id())
+                .orElseThrow(() -> new IllegalStateException(
+                        "Replacement operation disappeared during activation"));
+        if (!replacement.provisioningOperationId().equals(operation.id())
+                || !operation.credentialId().equals(replacement.id())
+                || !operation.tenantId().equals(replacement.tenantId())
+                || !operation.keycloakClientId().equals(replacement.keycloakClientId())) {
+            throw new IllegalStateException("Replacement credential and operation are not linked");
+        }
+        if (oldCredential.status() != ServiceCredentialStatus.ACTIVE) {
+            throw new IllegalStateException(
+                    "Old credential is no longer active; rotation cannot complete: "
+                            + oldCredential.id().value());
+        }
+
+        Instant now = clock.instant();
+        ServiceCredential activeReplacement = replacement.activate(now);
+        ServiceCredential revokedOld = oldCredential.revoke(now);
+        CredentialProvisioningOperation completed = operation.complete(now);
+        credentials.save(activeReplacement);
+        credentials.save(revokedOld);
+        operations.save(completed);
+        return new FinalizedProvisioning(
+                result(activeReplacement, completed, clientSecret),
+                new RotationCleanupTarget(revokedOld)
+        );
+    }
+
+    private RotationCleanupTarget prepareRotationCleanup(ServiceCredentialId replacementCredentialId) {
+        ServiceCredential replacement = credentials.findByIdForUpdate(replacementCredentialId)
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "Replacement credential does not exist: " + replacementCredentialId.value()));
+        ServiceCredentialId oldCredentialId = replacement.replacesCredentialId();
+        if (oldCredentialId == null || replacement.status() != ServiceCredentialStatus.ACTIVE) {
+            throw new IllegalStateException(
+                    "Only an active replacement credential can retry rotation cleanup");
+        }
+        ServiceCredential oldCredential = credentials.findByIdForUpdate(oldCredentialId)
+                .orElseThrow(() -> new IllegalStateException(
+                        "Old credential for rotation does not exist: " + oldCredentialId.value()));
+        if (oldCredential.status() != ServiceCredentialStatus.REVOKED) {
+            throw new IllegalStateException(
+                    "Rotation cleanup requires the old credential to be locally revoked");
+        }
+        return new RotationCleanupTarget(oldCredential);
+    }
+
+    private void disableOldClient(RotationCleanupTarget target, ServiceCredentialId replacementCredentialId) {
+        try {
+            disabler.disable(new KeycloakCredentialDisabler.DisableRequest(
+                    target.oldCredential().id().value(),
+                    target.oldCredential().keycloakClientId()
+            ));
+        } catch (KeycloakCredentialProvisioningException exception) {
+            throw new ServiceCredentialRotationFailedException(
+                    replacementCredentialId,
+                    target.oldCredential().id(),
+                    exception.code(),
+                    exception.getMessage(),
+                    exception
+            );
+        }
+    }
+
+    private static ServiceCredentialProvisioningResult result(
+            ServiceCredential credential,
+            CredentialProvisioningOperation operation,
+            String clientSecret
+    ) {
         return new ServiceCredentialProvisioningResult(
-                active.id().value(),
-                completed.id().value(),
-                active.tenantId(),
-                active.merchantId(),
-                active.keycloakClientId(),
+                credential.id().value(),
+                operation.id().value(),
+                credential.tenantId(),
+                credential.merchantId(),
+                credential.keycloakClientId(),
                 clientSecret
         );
     }
@@ -215,6 +364,21 @@ public final class ServiceCredentialProvisioningService implements ServiceCreden
                 CredentialProvisioningOperation operation
         ) {
             return new PendingProvisioning(credential, operation);
+        }
+    }
+
+    private record FinalizedProvisioning(
+            ServiceCredentialProvisioningResult result,
+            RotationCleanupTarget cleanupTarget
+    ) {
+        private FinalizedProvisioning {
+            Objects.requireNonNull(result, "Finalized provisioning result must not be null");
+        }
+    }
+
+    private record RotationCleanupTarget(ServiceCredential oldCredential) {
+        private RotationCleanupTarget {
+            Objects.requireNonNull(oldCredential, "Old rotation credential must not be null");
         }
     }
 }
