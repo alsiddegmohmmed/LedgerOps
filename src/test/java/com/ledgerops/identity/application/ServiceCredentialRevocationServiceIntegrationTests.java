@@ -82,7 +82,7 @@ class ServiceCredentialRevocationServiceIntegrationTests {
                 .satisfies(thrown -> {
                     ServiceCredentialRevocationFailedException failure =
                             (ServiceCredentialRevocationFailedException) thrown;
-                    assertThat(failure.credentialId()).isEqualTo(active.credential.id());
+                    assertThat(failure.credentialId()).isEqualTo(active.credential.id().value());
                     assertThat(failure.failureCode()).isEqualTo("KEYCLOAK_UNAVAILABLE");
                 });
 

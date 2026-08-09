@@ -33,6 +33,11 @@ class OpenApiContractTests {
     private static final Path CONTRACT = Path.of(
             "docs/api/ledgerops-openapi-v0.1.yaml"
     );
+    private static final Set<String> RELEASE01_CONTROLLERS = Set.of(
+            "com.ledgerops.tenancy.api.TenantController",
+            "com.ledgerops.administration.api.AdministrationController",
+            "com.ledgerops.payment.api.PaymentController"
+    );
 
     @Autowired
     @Qualifier("requestMappingHandlerMapping")
@@ -99,10 +104,7 @@ class OpenApiContractTests {
             throws IOException {
         Set<String> runtimeOperations = new LinkedHashSet<>();
         handlerMapping.getHandlerMethods().forEach((mapping, method) -> {
-            String packageName = method.getBeanType().getPackageName();
-            if (!packageName.equals("com.ledgerops.tenancy.api")
-                    && !packageName.equals("com.ledgerops.administration.api")
-                    && !packageName.equals("com.ledgerops.payment.api")) {
+            if (!RELEASE01_CONTROLLERS.contains(method.getBeanType().getName())) {
                 return;
             }
             for (String path : mapping.getPatternValues()) {

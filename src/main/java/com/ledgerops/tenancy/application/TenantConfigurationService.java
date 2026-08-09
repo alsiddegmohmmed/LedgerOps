@@ -66,12 +66,35 @@ public class TenantConfigurationService {
         return configuration;
     }
 
+    @Transactional(readOnly = true)
+    public TenantConfiguration current(
+            TenantReference tenant,
+            AuthorizedRequestContext context
+    ) {
+        TenantId tenantId = authorizeRead(tenant, context);
+        return configurations.current(tenantId)
+                .orElseThrow(() -> new TenantConfigurationNotFoundException(tenantId));
+    }
+
     private TenantId authorize(TenantReference tenant, AuthorizedRequestContext context) {
         if (!context.tenantId().equals(tenant.value())) {
             throw new AuthorizationResourceNotFoundException();
         }
         if (!context.isHuman() || !context.canConfigureTenant()) {
             throw new AuthorizationPermissionDeniedException("tenant:configure");
+        }
+        return TenantId.from(tenant.value());
+    }
+
+    private TenantId authorizeRead(
+            TenantReference tenant,
+            AuthorizedRequestContext context
+    ) {
+        if (!context.tenantId().equals(tenant.value())) {
+            throw new AuthorizationResourceNotFoundException();
+        }
+        if (!context.isHuman() || !context.canReadTenant()) {
+            throw new AuthorizationPermissionDeniedException("tenant:read");
         }
         return TenantId.from(tenant.value());
     }

@@ -38,6 +38,19 @@ create, rotate, and revoke actions. Further projections and search filters
 remain separate contracts introduced only when their read models are
 implemented.
 
+The first published Tenant configuration boundary is the authenticated
+`/api/v1/tenants/{tenantId}/configuration` resource. `GET` returns the current
+append-only configuration version and returns `404` before the first version
+exists. `PUT` appends a new version and requires Tenant-wide
+`tenant:configure` authority. The request contains one or more ISO 4217
+`allowedCurrencies`, a BCP 47 `defaultLocale`, an IANA `timezone`, and a
+JSON-object `displaySettings`. The response includes the generated version and
+creation timestamp. Both operations require the selected Tenant to match the
+route and never expose authorization internals or bearer tokens.
+
+Operational contacts remain a separate contract and are not implied by this
+resource.
+
 During the Slice 2B HTTP migration, the existing
 `POST /api/v1/tenants/{tenantId}/activate` compatibility route is owned by the
 Administration module and requires an authenticated Platform Admin. The

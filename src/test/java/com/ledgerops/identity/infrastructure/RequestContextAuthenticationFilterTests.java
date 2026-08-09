@@ -96,7 +96,9 @@ class RequestContextAuthenticationFilterTests {
                 "POST /api/v1/tenants/" + tenantId + "/credentials/"
                         + UUID.randomUUID() + "/rotate",
                 "POST /api/v1/tenants/" + tenantId + "/credentials/"
-                        + UUID.randomUUID() + "/revoke"
+                        + UUID.randomUUID() + "/revoke",
+                "GET /api/v1/tenants/" + tenantId + "/configuration",
+                "PUT /api/v1/tenants/" + tenantId + "/configuration"
         }) {
             String[] parts = methodAndPath.split(" ", 2);
             MockHttpServletRequest request = new MockHttpServletRequest(parts[0], parts[1]);

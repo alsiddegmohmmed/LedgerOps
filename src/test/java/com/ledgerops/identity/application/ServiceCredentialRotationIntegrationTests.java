@@ -130,7 +130,7 @@ class ServiceCredentialRotationIntegrationTests {
                 .isInstanceOf(ServiceCredentialRotationFailedException.class)
                 .satisfies(thrown -> {
                     captured[0] = (ServiceCredentialRotationFailedException) thrown;
-                    assertThat(captured[0].oldCredentialId()).isEqualTo(old.credential.id());
+                    assertThat(captured[0].oldCredentialId()).isEqualTo(old.credential.id().value());
                     assertThat(captured[0].failureCode()).isEqualTo("KEYCLOAK_UNAVAILABLE");
                 });
 
