@@ -17,7 +17,9 @@ public record TenantConfigurationCommand(
         Set<Currency> allowedCurrencies,
         Locale defaultLocale,
         ZoneId timezone,
-        String displaySettingsJson
+        String displaySettingsJson,
+        boolean confirmation,
+        String reason
 ) {
 
     public TenantConfigurationCommand {
@@ -28,5 +30,18 @@ public record TenantConfigurationCommand(
         Objects.requireNonNull(defaultLocale, "Default locale must not be null");
         Objects.requireNonNull(timezone, "Timezone must not be null");
         Objects.requireNonNull(displaySettingsJson, "Display settings must not be null");
+        if (!confirmation) {
+            throw new IllegalArgumentException(
+                    "Tenant configuration changes require explicit confirmation");
+        }
+        reason = requireReason(reason);
+    }
+
+    private static String requireReason(String value) {
+        if (value == null || value.isBlank()) {
+            throw new IllegalArgumentException(
+                    "Tenant configuration change reason must not be blank");
+        }
+        return value.trim();
     }
 }

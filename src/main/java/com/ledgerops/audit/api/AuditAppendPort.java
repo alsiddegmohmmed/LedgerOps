@@ -56,6 +56,7 @@ public interface AuditAppendPort {
             String actorSubject,
             UUID tenantId,
             long version,
+            String reason,
             String correlationId
     );
 

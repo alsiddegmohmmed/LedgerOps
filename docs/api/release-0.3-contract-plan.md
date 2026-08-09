@@ -44,9 +44,11 @@ append-only configuration version and returns `404` before the first version
 exists. `PUT` appends a new version and requires Tenant-wide
 `tenant:configure` authority. The request contains one or more ISO 4217
 `allowedCurrencies`, a BCP 47 `defaultLocale`, an IANA `timezone`, and a
-JSON-object `displaySettings`. The response includes the generated version and
-creation timestamp. Both operations require the selected Tenant to match the
-route and never expose authorization internals or bearer tokens.
+JSON-object `displaySettings`, plus `confirmation: true` and a non-blank
+`reason`. The response includes the generated version and creation timestamp.
+The reason is preserved in immutable audit evidence. Both operations require
+the selected Tenant to match the route and never expose authorization
+internals or bearer tokens.
 
 Operational contacts remain a separate contract and are not implied by this
 resource.

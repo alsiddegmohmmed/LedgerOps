@@ -7,6 +7,7 @@ import com.ledgerops.tenancy.application.TenantConfigurationCommand;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.AssertTrue;
 
 import java.time.ZoneId;
 import java.util.Currency;
@@ -19,7 +20,9 @@ record TenantConfigurationRequest(
         @NotEmpty Set<@NotBlank String> allowedCurrencies,
         @NotBlank String defaultLocale,
         @NotBlank String timezone,
-        @NotNull Map<String, Object> displaySettings
+        @NotNull Map<String, Object> displaySettings,
+        @AssertTrue(message = "confirmation must be true") boolean confirmation,
+        @NotBlank String reason
 ) {
 
     TenantConfigurationCommand toCommand(
@@ -71,7 +74,9 @@ record TenantConfigurationRequest(
                     currencies,
                     locale,
                     zone,
-                    objectMapper.writeValueAsString(displaySettings)
+                    objectMapper.writeValueAsString(displaySettings),
+                    confirmation,
+                    reason
             );
         } catch (Exception exception) {
             throw new InvalidTenantConfigurationRequestException(

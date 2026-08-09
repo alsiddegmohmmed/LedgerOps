@@ -61,6 +61,7 @@ public class TenantConfigurationService {
                 command.actor().subject(),
                 tenantId.value(),
                 version,
+                command.reason(),
                 command.context().correlationId()
         );
         return configuration;

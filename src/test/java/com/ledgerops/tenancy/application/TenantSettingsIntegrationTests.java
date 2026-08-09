@@ -56,7 +56,9 @@ class TenantSettingsIntegrationTests {
                 Set.of(Currency.getInstance("SAR")),
                 Locale.forLanguageTag("en-SA"),
                 ZoneId.of("Asia/Riyadh"),
-                "{\"dateFormat\":\"yyyy-MM-dd\"}"
+                "{\"dateFormat\":\"yyyy-MM-dd\"}",
+                true,
+                "Configure initial Tenant display settings"
         ));
         TenantConfiguration second = configurations.update(new TenantConfigurationCommand(
                 com.ledgerops.tenancy.api.TenantReference.from(tenantId),
@@ -65,7 +67,9 @@ class TenantSettingsIntegrationTests {
                 Set.of(Currency.getInstance("SAR"), Currency.getInstance("USD")),
                 Locale.forLanguageTag("en-US"),
                 ZoneId.of("UTC"),
-                "{\"dateFormat\":\"MM/dd/yyyy\"}"
+                "{\"dateFormat\":\"MM/dd/yyyy\"}",
+                true,
+                "Update Tenant display settings"
         ));
 
         assertThat(first.version()).isEqualTo(1);
@@ -167,7 +171,9 @@ class TenantSettingsIntegrationTests {
                 Set.of(Currency.getInstance("SAR")),
                 Locale.forLanguageTag("en-SA"),
                 ZoneId.of("Asia/Riyadh"),
-                "{}"
+                "{}",
+                true,
+                "Attempt unauthorized Tenant configuration"
         ))).isInstanceOf(AuthorizationPermissionDeniedException.class);
     }
 
@@ -237,7 +243,9 @@ class TenantSettingsIntegrationTests {
                 Set.of(Currency.getInstance("SAR")),
                 Locale.forLanguageTag("en-SA"),
                 ZoneId.of("Asia/Riyadh"),
-                displaySettings
+                displaySettings,
+                true,
+                "Update Tenant configuration during concurrency test"
         );
     }
 

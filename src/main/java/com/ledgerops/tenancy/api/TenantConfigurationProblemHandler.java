@@ -33,6 +33,12 @@ class TenantConfigurationProblemHandler {
         );
     }
 
+    @ExceptionHandler(IllegalArgumentException.class)
+    ProblemDetail handleInvalidValue(IllegalArgumentException exception) {
+        return handleInvalidRequest(new InvalidTenantConfigurationRequestException(
+                exception.getMessage(), exception));
+    }
+
     @ExceptionHandler(TenantConfigurationNotFoundException.class)
     ProblemDetail handleNotFound(TenantConfigurationNotFoundException exception) {
         ProblemDetail problem = problem(

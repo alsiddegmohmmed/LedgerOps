@@ -413,6 +413,7 @@ class CredentialAdministrationServiceTests {
         @Override
         public void appendTenantConfigurationChanged(String actorIssuer, String actorSubject,
                                                      UUID tenantId, long version,
+                                                     String reason,
                                                      String correlationId) {
         }
 

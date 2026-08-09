@@ -181,6 +181,7 @@ class AuditRecordPersistenceAdapter implements AuditRecordRepository, AuditAppen
             String actorSubject,
             UUID tenantId,
             long version,
+            String reason,
             String correlationId
     ) {
         append(AuditRecord.create(
@@ -192,7 +193,7 @@ class AuditRecordPersistenceAdapter implements AuditRecordRepository, AuditAppen
                 new AuditTargetType("tenant-configuration"),
                 tenantId + ":" + version,
                 correlationId,
-                new AuditReason("Tenant configuration change"),
+                new AuditReason(reason),
                 new AuditDetails("{\"version\":" + version + "}"),
                 clock
         ));

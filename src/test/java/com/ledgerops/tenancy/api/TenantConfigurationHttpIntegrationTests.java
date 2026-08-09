@@ -81,6 +81,12 @@ class TenantConfigurationHttpIntegrationTests {
                 Integer.class,
                 tenantId
         )).isEqualTo(1);
+        assertThat(jdbc.queryForObject(
+                "SELECT reason FROM audit.audit_records WHERE tenant_id = ? "
+                        + "AND action_type = 'tenant.configuration.changed'",
+                String.class,
+                tenantId
+        )).isEqualTo("Update Tenant display settings during HTTP coverage");
     }
 
     @Test
@@ -134,6 +140,31 @@ class TenantConfigurationHttpIntegrationTests {
                         .value("TENANT_CONFIGURATION_NOT_FOUND"));
     }
 
+    @Test
+    void configurationChangeRequiresConfirmationAndReason() throws Exception {
+        UUID tenantId = insertTenant("ACTIVE");
+
+        mockMvc.perform(put("/api/v1/tenants/{tenantId}/configuration", tenantId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(configurationRequest()
+                                .replace("\"confirmation\": true", "\"confirmation\": false")
+                                .replace("\"reason\": \"Update Tenant display settings during HTTP coverage\"",
+                                        "\"reason\": \"\""))
+                        .with(request -> {
+                            attachTenantContext(request, tenantId, Permission.TENANT_CONFIGURE);
+                            return request;
+                        }))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code")
+                        .value("TENANT_CONFIGURATION_VALIDATION"));
+
+        assertThat(jdbc.queryForObject(
+                "SELECT count(*) FROM tenancy.tenant_configurations WHERE tenant_id = ?",
+                Integer.class,
+                tenantId
+        )).isZero();
+    }
+
     private void attachTenantContext(
             jakarta.servlet.http.HttpServletRequest request,
             UUID tenantId,
@@ -164,7 +195,9 @@ class TenantConfigurationHttpIntegrationTests {
                   "allowedCurrencies": ["SAR", "USD"],
                   "defaultLocale": "en-SA",
                   "timezone": "Asia/Riyadh",
-                  "displaySettings": {"dateFormat": "yyyy-MM-dd"}
+                  "displaySettings": {"dateFormat": "yyyy-MM-dd"},
+                  "confirmation": true,
+                  "reason": "Update Tenant display settings during HTTP coverage"
                 }
                 """;
     }
