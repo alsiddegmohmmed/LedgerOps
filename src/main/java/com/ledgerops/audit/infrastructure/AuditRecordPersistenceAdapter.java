@@ -206,6 +206,7 @@ class AuditRecordPersistenceAdapter implements AuditRecordRepository, AuditAppen
             UUID tenantId,
             UUID contactId,
             long version,
+            String reason,
             String correlationId
     ) {
         append(AuditRecord.create(
@@ -217,7 +218,7 @@ class AuditRecordPersistenceAdapter implements AuditRecordRepository, AuditAppen
                 new AuditTargetType("operational-contact"),
                 contactId + ":" + version,
                 correlationId,
-                new AuditReason("Operational contact change"),
+                new AuditReason(reason),
                 new AuditDetails("{\"contactId\":\"" + contactId
                         + "\",\"version\":" + version + "}"),
                 clock

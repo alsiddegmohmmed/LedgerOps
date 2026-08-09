@@ -108,7 +108,9 @@ class TenantSettingsIntegrationTests {
                 "Finance Team",
                 "FINANCE@EXAMPLE.COM",
                 "settlement",
-                true
+                true,
+                true,
+                "Add settlement operations contact"
         ));
         contacts.update(new OperationalContactCommand(
                 com.ledgerops.tenancy.api.TenantReference.from(tenantId),
@@ -118,7 +120,9 @@ class TenantSettingsIntegrationTests {
                 "Finance Team",
                 "finance@example.com",
                 "settlement",
-                false
+                false,
+                true,
+                "Deactivate settlement operations contact"
         ));
 
         assertThat(jdbc.queryForObject(

@@ -37,6 +37,17 @@ export type CoreTenantConfiguration = {
   createdAt: string;
 };
 
+export type CoreOperationalContact = {
+  tenantId: string;
+  contactId: string;
+  version: number;
+  displayName: string;
+  email: string;
+  purpose: string;
+  active: boolean;
+  createdAt: string;
+};
+
 export type CoreCredentialActionResult = {
   previousCredentialId?: string;
   credentialId: string;
@@ -52,6 +63,11 @@ export type CoreTenantConfigurationUpdateResponse =
   | { kind: "unauthenticated" }
   | { kind: "error"; status: number; code?: string }
   | { kind: "ok"; result: CoreTenantConfiguration };
+
+export type CoreOperationalContactUpdateResponse =
+  | { kind: "unauthenticated" }
+  | { kind: "error"; status: number; code?: string }
+  | { kind: "ok"; result: CoreOperationalContact };
 
 export async function getTenant(tenantId: string, accessToken: string) {
   const response = await fetch(`${config.coreBaseUrl}/api/v1/tenants/${encodeURIComponent(tenantId)}`, {
@@ -142,6 +158,62 @@ export async function updateTenantConfiguration(
     return { kind: "error", status: 502, code: "unexpected_core_response" };
   }
   return { kind: "ok", result: await response.json() as CoreTenantConfiguration };
+}
+
+export async function getOperationalContacts(tenantId: string, accessToken: string) {
+  const response = await fetch(
+    `${config.coreBaseUrl}/api/v1/tenants/${encodeURIComponent(tenantId)}/operational-contacts`,
+    {
+      headers: { authorization: `Bearer ${accessToken}` },
+      cache: "no-store",
+    },
+  );
+  if (response.status === 401) return { kind: "unauthenticated" as const };
+  if (response.status === 403 || response.status === 404) return { kind: "unavailable" as const };
+  if (!response.ok) return { kind: "error" as const };
+  return { kind: "ok" as const, contacts: await response.json() as CoreOperationalContact[] };
+}
+
+export async function updateOperationalContact(
+  tenantId: string,
+  contactId: string,
+  accessToken: string,
+  body: {
+    displayName: string;
+    email: string;
+    purpose: string;
+    active: boolean;
+    confirmation: true;
+    reason: string;
+  },
+): Promise<CoreOperationalContactUpdateResponse> {
+  const response = await fetch(
+    `${config.coreBaseUrl}/api/v1/tenants/${encodeURIComponent(tenantId)}/operational-contacts/${encodeURIComponent(contactId)}`,
+    {
+      method: "PUT",
+      headers: {
+        authorization: `Bearer ${accessToken}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify(body),
+      cache: "no-store",
+    },
+  );
+  if (response.status === 401) return { kind: "unauthenticated" };
+  if (!response.ok) {
+    let code: string | undefined;
+    try {
+      const problem = await response.json() as { code?: unknown };
+      if (typeof problem.code === "string") code = problem.code;
+    } catch {
+      // The BFF maps an unparseable Core response to a generic action error.
+    }
+    return { kind: "error", status: response.status, code };
+  }
+  if (response.status !== 200) {
+    return { kind: "error", status: 502, code: "unexpected_core_response" };
+  }
+  return { kind: "ok", result: await response.json() as CoreOperationalContact };
 }
 
 export type CoreCredentialActionResponse =

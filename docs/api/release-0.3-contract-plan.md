@@ -53,6 +53,23 @@ internals or bearer tokens.
 Operational contacts remain a separate contract and are not implied by this
 resource.
 
+The operational-contact contract is Tenant-scoped and versioned:
+
+```text
+GET /api/v1/tenants/{tenantId}/operational-contacts
+GET /api/v1/tenants/{tenantId}/operational-contacts/{contactId}
+PUT /api/v1/tenants/{tenantId}/operational-contacts/{contactId}
+```
+
+The collection returns the current version of each contact. A contact update
+appends a new immutable version for the same `contactId`; its Tenant ownership
+cannot change. The request contains `displayName`, `email`, `purpose`, and
+`active`, plus `confirmation: true` and a non-blank `reason`. Email is
+normalized to lowercase, the update requires Tenant-wide `tenant:configure`,
+reads require `tenant:read`, and the reason is preserved in audit evidence.
+The item read returns `404` when the contact does not exist. Release 0.3 does
+not send email; these records are operational contact evidence only.
+
 During the Slice 2B HTTP migration, the existing
 `POST /api/v1/tenants/{tenantId}/activate` compatibility route is owned by the
 Administration module and requires an authenticated Platform Admin. The

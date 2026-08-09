@@ -420,7 +420,8 @@ class CredentialAdministrationServiceTests {
         @Override
         public void appendOperationalContactChanged(String actorIssuer, String actorSubject,
                                                     UUID tenantId, UUID contactId,
-                                                    long version, String correlationId) {
+                                                    long version, String reason,
+                                                    String correlationId) {
         }
 
         @Override

@@ -15,7 +15,9 @@ public record OperationalContactCommand(
         String displayName,
         String email,
         String purpose,
-        boolean active
+        boolean active,
+        boolean confirmation,
+        String reason
 ) {
 
     public OperationalContactCommand {
@@ -26,5 +28,14 @@ public record OperationalContactCommand(
         Objects.requireNonNull(displayName, "Display name must not be null");
         Objects.requireNonNull(email, "Contact email must not be null");
         Objects.requireNonNull(purpose, "Contact purpose must not be null");
+        if (!confirmation) {
+            throw new IllegalArgumentException(
+                    "Operational contact changes require explicit confirmation");
+        }
+        if (reason == null || reason.isBlank()) {
+            throw new IllegalArgumentException(
+                    "Operational contact change reason must not be blank");
+        }
+        reason = reason.trim();
     }
 }

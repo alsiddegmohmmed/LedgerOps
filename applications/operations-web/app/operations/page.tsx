@@ -53,6 +53,9 @@ export default async function OperationsPage() {
             <h2>Tenant configuration</h2>
             <p>Manage versioned currencies, locale, timezone, and display settings.</p>
             <a className="button secondary" href="/operations/configuration">Open configuration</a>
+            <h2>Operational contacts</h2>
+            <p>Maintain audited contacts used by Tenant operations.</p>
+            <a className="button secondary" href="/operations/contacts">Open contacts</a>
           </div>
         )}
         <form action="/api/auth/logout" method="post">

@@ -63,9 +63,30 @@ public class OperationalContactService {
                 tenantId.value(),
                 command.contactId(),
                 version,
+                command.reason(),
                 command.context().correlationId()
         );
         return contact;
+    }
+
+    @Transactional(readOnly = true)
+    public java.util.List<OperationalContact> current(
+            TenantReference tenant,
+            AuthorizedRequestContext context
+    ) {
+        TenantId tenantId = authorizeRead(tenant, context);
+        return contacts.currentAll(tenantId);
+    }
+
+    @Transactional(readOnly = true)
+    public OperationalContact current(
+            TenantReference tenant,
+            java.util.UUID contactId,
+            AuthorizedRequestContext context
+    ) {
+        TenantId tenantId = authorizeRead(tenant, context);
+        return contacts.current(tenantId, contactId)
+                .orElseThrow(() -> new OperationalContactNotFoundException(tenantId, contactId));
     }
 
     private TenantId authorize(TenantReference tenant, AuthorizedRequestContext context) {
@@ -74,6 +95,16 @@ public class OperationalContactService {
         }
         if (!context.isHuman() || !context.canConfigureTenant()) {
             throw new AuthorizationPermissionDeniedException("tenant:configure");
+        }
+        return TenantId.from(tenant.value());
+    }
+
+    private TenantId authorizeRead(TenantReference tenant, AuthorizedRequestContext context) {
+        if (!context.tenantId().equals(tenant.value())) {
+            throw new AuthorizationResourceNotFoundException();
+        }
+        if (!context.isHuman() || !context.canReadTenant()) {
+            throw new AuthorizationPermissionDeniedException("tenant:read");
         }
         return TenantId.from(tenant.value());
     }

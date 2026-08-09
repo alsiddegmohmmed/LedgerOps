@@ -11,6 +11,7 @@ import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.List;
 import java.util.UUID;
 
 @Repository
@@ -77,6 +78,27 @@ class OperationalContactPersistenceAdapter implements OperationalContactReposito
                 )
                 .stream()
                 .findFirst();
+    }
+
+    @Override
+    public List<OperationalContact> currentAll(TenantId tenantId) {
+        return jdbc.query(
+                """
+                SELECT tenant_id, contact_id, version, display_name, email,
+                       purpose, active, created_at, actor_identity
+                  FROM (
+                        SELECT contact.*, ROW_NUMBER() OVER (
+                            PARTITION BY contact_id ORDER BY version DESC
+                        ) AS row_number
+                          FROM tenancy.operational_contacts contact
+                         WHERE tenant_id = ?
+                  ) current_contacts
+                 WHERE row_number = 1
+                 ORDER BY display_name, contact_id
+                """,
+                this::map,
+                tenantId.value()
+        );
     }
 
     private OperationalContact map(ResultSet resultSet, int rowNumber) throws SQLException {

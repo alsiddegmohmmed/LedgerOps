@@ -1,7 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   getCredentialPage,
+  getOperationalContacts,
   getTenantConfiguration,
+  updateOperationalContact,
   provisionCredential,
   updateTenantConfiguration,
 } from "../lib/core";
@@ -114,5 +116,41 @@ describe("Core credential metadata client", () => {
       "content-type": "application/json",
     });
     expect(JSON.parse(String(init.body))).toMatchObject({ confirmation: true, reason: "Update display settings" });
+  });
+
+  it("keeps operational-contact bearer access on the server-side Core client", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify([]), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        tenantId: "tenant-id",
+        contactId: "contact-id",
+        version: 1,
+        displayName: "Operations",
+        email: "operations@example.com",
+        purpose: "settlement",
+        active: true,
+        createdAt: "2026-08-09T00:00:00Z",
+      }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(getOperationalContacts("tenant-id", "server-only-token")).resolves.toEqual({
+      kind: "ok",
+      contacts: [],
+    });
+    await expect(updateOperationalContact("tenant-id", "contact-id", "server-only-token", {
+      displayName: "Operations",
+      email: "operations@example.com",
+      purpose: "settlement",
+      active: true,
+      confirmation: true,
+      reason: "Add operations contact",
+    })).resolves.toMatchObject({ kind: "ok", result: { version: 1 } });
+
+    const [url, init] = fetchMock.mock.calls[1] as unknown as [string, RequestInit];
+    expect(url).toContain("/operational-contacts/contact-id");
+    expect(init.headers).toEqual({
+      authorization: "Bearer server-only-token",
+      "content-type": "application/json",
+    });
   });
 });
