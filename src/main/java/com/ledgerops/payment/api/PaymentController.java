@@ -3,7 +3,6 @@ package com.ledgerops.payment.api;
 import com.ledgerops.payment.application.PaymentCreationResult;
 import com.ledgerops.payment.application.PaymentCreationService;
 import com.ledgerops.identity.api.AuthorizedRequestContextRequest;
-import com.ledgerops.identity.api.AuthenticatedPrincipal;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -28,15 +27,16 @@ class PaymentController {
 
     @PostMapping
     ResponseEntity<PaymentResponse> createPayment(
-            @Valid @RequestBody CreatePaymentRequest request
-            , HttpServletRequest httpRequest
+            @Valid @RequestBody CreatePaymentRequest request,
+            HttpServletRequest httpRequest
     ) {
         PaymentCreationResult result;
 
         try {
+            var context = AuthorizedRequestContextRequest.required(httpRequest);
             result = paymentCreationService.createPayment(
-                    request.toCommand(),
-                    AuthorizedRequestContextRequest.required(httpRequest),
+                    request.toCommand(context),
+                    context,
                     AuthorizedRequestContextRequest.principal(httpRequest)
             );
         } catch (IllegalArgumentException exception) {

@@ -47,8 +47,7 @@ class RequestContextServiceTests {
     }
 
     @Test
-    void preservesServicePrincipalTypeButUsesApplicationAuthorizationData() {
-        ApplicationUser user = user(PrincipalType.SERVICE);
+    void derivesServiceContextWithoutAnApplicationUserOrTenantSelection() {
         UUID tenantId = UUID.randomUUID();
         UUID credentialId = UUID.randomUUID();
         AuthorizedTenantContext authorization = new AuthorizedTenantContext(
@@ -59,15 +58,49 @@ class RequestContextServiceTests {
                 credentialId
         );
 
-        AuthorizedRequestContext context = service(user, authorization).create(
-                new ValidatedPrincipal(PrincipalType.SERVICE, user.keycloakIdentity(), "client-id"),
-                tenantId,
+        RequestContextService service = new RequestContextService(
+                repositoryFor(null),
+                (id, type, client, selectedTenant) -> id == null
+                        && type == PrincipalType.SERVICE
+                        && "client-id".equals(client)
+                        && selectedTenant == null
+                        ? Optional.of(authorization)
+                        : Optional.empty()
+        );
+
+        AuthorizedRequestContext context = service.create(
+                new ValidatedPrincipal(
+                        PrincipalType.SERVICE,
+                        new KeycloakIdentity("issuer", "service-subject"),
+                        "client-id"
+                ),
+                UUID.randomUUID(),
                 "correlation-2"
         );
 
         assertThat(context.principalType()).isEqualTo(PrincipalType.SERVICE);
+        assertThat(context.applicationUserId()).isNull();
+        assertThat(context.tenantId()).isEqualTo(tenantId);
         assertThat(context.serviceCredentialId()).isEqualTo(credentialId);
         assertThat(context.permissions()).containsExactly(Permission.PAYMENT_CREATE);
+    }
+
+    @Test
+    void rejectsAServicePrincipalWhenItsCredentialCannotBeResolved() {
+        RequestContextService service = new RequestContextService(
+                repositoryFor(null),
+                (id, type, client, selectedTenant) -> Optional.empty()
+        );
+
+        assertThatThrownBy(() -> service.create(
+                new ValidatedPrincipal(
+                        PrincipalType.SERVICE,
+                        new KeycloakIdentity("issuer", "service-subject"),
+                        "unknown-client"
+                ),
+                UUID.randomUUID(),
+                "correlation-service-missing"
+        )).isInstanceOf(InvalidTenantSelectionException.class);
     }
 
     @Test

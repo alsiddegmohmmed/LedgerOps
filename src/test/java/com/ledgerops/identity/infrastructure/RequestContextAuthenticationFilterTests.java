@@ -1,6 +1,7 @@
 package com.ledgerops.identity.infrastructure;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.ledgerops.RequestCorrelationFilter;
 import com.ledgerops.identity.application.AuthorizedTenantContext;
 import com.ledgerops.identity.application.RequestContextService;
 import com.ledgerops.identity.domain.ApplicationUser;
@@ -105,6 +106,65 @@ class RequestContextAuthenticationFilterTests {
                 .isNull();
     }
 
+    @Test
+    void servicePaymentDoesNotRequireOrTrustTheTenantSelectionHeader() throws Exception {
+        UUID credentialTenantId = UUID.randomUUID();
+        UUID credentialMerchantId = UUID.randomUUID();
+        UUID credentialId = UUID.randomUUID();
+        JwtPrincipalParser parser = new JwtPrincipalParser(token -> new Jwt(
+                "valid",
+                NOW.minusSeconds(60),
+                NOW.plusSeconds(300),
+                Map.of("alg", "none"),
+                Map.of(
+                        "iss", ISSUER,
+                        "sub", "service-subject",
+                        "aud", Set.of(AUDIENCE),
+                        "preferred_username", "service-account-ledgerops",
+                        "azp", "ledgerops-sandbox-client"
+                )
+        ), ISSUER, AUDIENCE, Clock.fixed(NOW, ZoneOffset.UTC));
+        ApplicationUserRepository users = emptyUsers();
+        RequestContextService service = new RequestContextService(
+                users,
+                (applicationUserId, principalType, serviceClientId, selectedTenantId) ->
+                        applicationUserId == null
+                                && principalType == PrincipalType.SERVICE
+                                && "ledgerops-sandbox-client".equals(serviceClientId)
+                                && selectedTenantId == null
+                                ? Optional.of(new AuthorizedTenantContext(
+                                credentialTenantId,
+                                ScopeMode.MERCHANT_SET,
+                                Set.of(credentialMerchantId),
+                                Set.of(Permission.PAYMENT_CREATE),
+                                credentialId
+                        ))
+                                : Optional.empty()
+        );
+        RequestContextAuthenticationFilter filter = new RequestContextAuthenticationFilter(
+                parser,
+                service,
+                new ObjectMapper()
+        );
+        MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/v1/payments");
+        request.addHeader(HttpHeaders.AUTHORIZATION, "Bearer valid");
+        request.addHeader(RequestContextAuthenticationFilter.TENANT_SELECTION_HEADER,
+                UUID.randomUUID().toString());
+        request.setAttribute(RequestCorrelationFilter.CORRELATION_ID, "service-correlation");
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        AtomicBoolean continued = new AtomicBoolean();
+
+        filter.doFilter(request, response, (ignoredRequest, ignoredResponse) -> continued.set(true));
+
+        assertThat(response.getStatus()).isEqualTo(HttpStatus.OK.value());
+        assertThat(continued).isTrue();
+        var context = (com.ledgerops.identity.api.AuthorizedRequestContext)
+                request.getAttribute(RequestContextAuthenticationFilter.CONTEXT_ATTRIBUTE);
+        assertThat(context.tenantId()).isEqualTo(credentialTenantId);
+        assertThat(context.merchantIds()).containsExactly(credentialMerchantId);
+        assertThat(context.serviceCredentialId()).isEqualTo(credentialId);
+    }
+
     private void assertUnauthorized(String authorization, String code) throws Exception {
         UUID tenantId = UUID.randomUUID();
         RequestContextAuthenticationFilter filter = filter(null, tenantId);
@@ -145,6 +205,16 @@ class RequestContextAuthenticationFilterTests {
                         Set.of(), Set.of(Permission.PAYMENT_READ), null))
                         : Optional.empty());
         return new RequestContextAuthenticationFilter(parser, service, new ObjectMapper());
+    }
+
+    private ApplicationUserRepository emptyUsers() {
+        return new ApplicationUserRepository() {
+            @Override public ApplicationUser save(ApplicationUser applicationUser) { return applicationUser; }
+            @Override public Optional<ApplicationUser> findById(ApplicationUserId id) { return Optional.empty(); }
+            @Override public Optional<ApplicationUser> findByKeycloakIdentity(KeycloakIdentity identity) {
+                return Optional.empty();
+            }
+        };
     }
 
     private MockHttpServletRequest tenantRequest(UUID tenantId) {

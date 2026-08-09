@@ -5,7 +5,10 @@ import com.ledgerops.identity.application.AuthorizedTenantContextPort;
 import com.ledgerops.identity.domain.ApplicationUserId;
 import com.ledgerops.identity.domain.Permission;
 import com.ledgerops.identity.domain.PrincipalType;
+import com.ledgerops.identity.domain.ServiceCredential;
 import com.ledgerops.identity.domain.ScopeMode;
+import com.ledgerops.identity.domain.ServiceCredentialRepository;
+import com.ledgerops.identity.domain.ServiceCredentialStatus;
 import com.ledgerops.identity.domain.TenantRole;
 import org.springframework.stereotype.Repository;
 
@@ -18,11 +21,14 @@ import java.util.UUID;
 class PostgresAuthorizedTenantContextAdapter implements AuthorizedTenantContextPort {
 
     private final SpringDataTenantMembershipRepository memberships;
+    private final ServiceCredentialRepository credentials;
 
     PostgresAuthorizedTenantContextAdapter(
-            SpringDataTenantMembershipRepository memberships
+            SpringDataTenantMembershipRepository memberships,
+            ServiceCredentialRepository credentials
     ) {
         this.memberships = memberships;
+        this.credentials = credentials;
     }
 
     @Override
@@ -32,12 +38,34 @@ class PostgresAuthorizedTenantContextAdapter implements AuthorizedTenantContextP
             String serviceClientId,
             UUID tenantId
     ) {
-        if (principalType != PrincipalType.HUMAN) {
+        if (principalType == PrincipalType.SERVICE) {
+            return findServiceCredential(serviceClientId);
+        }
+        if (principalType != PrincipalType.HUMAN || applicationUserId == null) {
             return Optional.empty();
         }
         return memberships.findActiveByApplicationUserIdAndTenantId(applicationUserId.value(), tenantId)
                 .filter(membership -> !membership.roleAssignments().isEmpty())
                 .map(this::toAuthorizedTenantContext);
+    }
+
+    private Optional<AuthorizedTenantContext> findServiceCredential(String serviceClientId) {
+        if (serviceClientId == null || serviceClientId.isBlank()) {
+            return Optional.empty();
+        }
+        return credentials.findByClientId(serviceClientId)
+                .filter(credential -> credential.status() == ServiceCredentialStatus.ACTIVE)
+                .map(this::toServiceAuthorizedTenantContext);
+    }
+
+    private AuthorizedTenantContext toServiceAuthorizedTenantContext(ServiceCredential credential) {
+        return new AuthorizedTenantContext(
+                credential.tenantId(),
+                ScopeMode.MERCHANT_SET,
+                Set.of(credential.merchantId()),
+                Set.of(Permission.PAYMENT_CREATE),
+                credential.id().value()
+        );
     }
 
     private AuthorizedTenantContext toAuthorizedTenantContext(TenantMembershipJpaEntity membership) {

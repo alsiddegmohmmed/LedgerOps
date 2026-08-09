@@ -297,7 +297,7 @@ class TenantAuthorizationSchemaIntegrationTests {
     }
 
     @Test
-    void servicePrincipalCannotObtainCredentialDerivedPaymentAuthorityInSliceOne() {
+    void servicePrincipalReceivesOnlyTheActiveCredentialDerivedPaymentAuthority() {
         UUID userId = UUID.randomUUID();
         UUID credentialId = UUID.randomUUID();
         UUID operationId = UUID.randomUUID();
@@ -330,10 +330,27 @@ class TenantAuthorizationSchemaIntegrationTests {
             );
         });
 
-        var context = tenantContexts.find(new ApplicationUserId(userId), PrincipalType.SERVICE,
-                "ledgerops-sandbox-credential-" + credentialId, tenantId);
+        var context = tenantContexts.find(
+                null,
+                PrincipalType.SERVICE,
+                "ledgerops-sandbox-credential-" + credentialId,
+                UUID.randomUUID()
+        );
 
-        assertThat(context).isEmpty();
+        assertThat(context).hasValueSatisfying(value -> {
+            assertThat(value.tenantId()).isEqualTo(tenantId);
+            assertThat(value.merchantIds()).containsExactly(merchantId);
+            assertThat(value.permissions()).containsExactly(com.ledgerops.identity.domain.Permission.PAYMENT_CREATE);
+            assertThat(value.serviceCredentialId()).isEqualTo(credentialId);
+        });
+
+        jdbc.update("update identity.service_credentials set status = 'REVOKED' where id = ?", credentialId);
+        assertThat(tenantContexts.find(
+                null,
+                PrincipalType.SERVICE,
+                "ledgerops-sandbox-credential-" + credentialId,
+                tenantId
+        )).isEmpty();
     }
 
     private void insertTenant(UUID tenantId, Timestamp now) {

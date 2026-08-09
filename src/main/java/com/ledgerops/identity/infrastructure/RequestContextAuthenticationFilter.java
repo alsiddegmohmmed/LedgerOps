@@ -11,6 +11,7 @@ import com.ledgerops.identity.application.InvalidTenantSelectionException;
 import com.ledgerops.identity.application.RequestContextService;
 import com.ledgerops.identity.application.UnknownApplicationIdentityException;
 import com.ledgerops.identity.application.ValidatedPrincipal;
+import com.ledgerops.identity.domain.PrincipalType;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -85,9 +86,12 @@ final class RequestContextAuthenticationFilter extends OncePerRequestFilter {
                 filterChain.doFilter(request, response);
                 return;
             }
+            UUID selectedTenantId = principal.principalType() == PrincipalType.SERVICE
+                    ? null
+                    : tenantId(request);
             AuthorizedRequestContext context = requestContextService.create(
                     principal,
-                    tenantId(request),
+                    selectedTenantId,
                     correlationId(request)
             );
             request.setAttribute(CONTEXT_ATTRIBUTE, context);

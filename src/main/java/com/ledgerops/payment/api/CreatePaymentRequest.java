@@ -1,6 +1,7 @@
 package com.ledgerops.payment.api;
 
 import com.ledgerops.payment.application.CreatePaymentCommand;
+import com.ledgerops.identity.api.AuthorizedRequestContext;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -10,12 +11,6 @@ import java.math.BigDecimal;
 import java.util.UUID;
 
 record CreatePaymentRequest(
-        @NotNull(message = "tenantId is required")
-        UUID tenantId,
-
-        @NotNull(message = "merchantId is required")
-        UUID merchantId,
-
         @NotNull(message = "customerId is required")
         UUID customerId,
 
@@ -34,10 +29,15 @@ record CreatePaymentRequest(
         String idempotencyKey
 ) {
 
-    CreatePaymentCommand toCommand() {
+    CreatePaymentCommand toCommand(AuthorizedRequestContext context) {
+        if (context == null || context.merchantIds().size() != 1) {
+            throw new IllegalArgumentException(
+                    "The protected Payment contract requires one credential-derived Merchant"
+            );
+        }
         return new CreatePaymentCommand(
-                tenantId,
-                merchantId,
+                context.tenantId(),
+                context.merchantIds().iterator().next(),
                 customerId,
                 amount,
                 currency,

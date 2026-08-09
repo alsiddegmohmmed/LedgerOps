@@ -34,23 +34,26 @@ public final class RequestContextService {
             String correlationId
     ) {
         Objects.requireNonNull(principal, "Validated principal must not be null");
-        if (selectedTenantId == null) {
+        boolean servicePrincipal = principal.principalType() == PrincipalType.SERVICE;
+        if (!servicePrincipal && selectedTenantId == null) {
             throw new InvalidTenantSelectionException();
         }
 
-        ApplicationUser user = applicationUserRepository
-                .findByKeycloakIdentity(principal.keycloakIdentity())
-                .orElseThrow(UnknownApplicationIdentityException::new);
+        ApplicationUser user = servicePrincipal
+                ? null
+                : applicationUserRepository
+                        .findByKeycloakIdentity(principal.keycloakIdentity())
+                        .orElseThrow(UnknownApplicationIdentityException::new);
 
-        if (user.status() == ApplicationUserStatus.DEACTIVATED) {
+        if (user != null && user.status() == ApplicationUserStatus.DEACTIVATED) {
             throw new InactiveApplicationUserException();
         }
 
         AuthorizedTenantContext tenantContext = authorizedTenantContextPort.find(
-                        user.id(),
+                        user == null ? null : user.id(),
                         principal.principalType(),
                         principal.serviceClientId(),
-                        selectedTenantId
+                        servicePrincipal ? null : selectedTenantId
                 )
                 .orElseThrow(InvalidTenantSelectionException::new);
 
@@ -59,7 +62,7 @@ public final class RequestContextService {
                 : null;
         return new AuthorizedRequestContext(
                 principal.principalType(),
-                user.id().value(),
+                user == null ? null : user.id().value(),
                 serviceCredentialId,
                 tenantContext.tenantId(),
                 tenantContext.scopeMode(),

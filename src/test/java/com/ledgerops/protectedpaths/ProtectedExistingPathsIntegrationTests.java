@@ -113,9 +113,8 @@ class ProtectedExistingPathsIntegrationTests {
     }
 
     @Test
-    void paymentOutsideMerchantScopeIs404AndFailedCreationLeavesNoAudit() throws Exception {
+    void inactiveReferencesAndCredentialDerivedMissingMerchantLeaveNoAudit() throws Exception {
         Fixture fixture = fixture(TenantStatus.SUSPENDED);
-        UUID otherMerchant = UUID.randomUUID();
         AuthorizedRequestContext context = serviceContext(fixture.tenantId(), fixture.merchantId());
         AuthenticatedPrincipal principal = servicePrincipal();
 
@@ -127,9 +126,12 @@ class ProtectedExistingPathsIntegrationTests {
                 Integer.class, fixture.tenantId()
         )).isZero();
 
-        mockMvc.perform(paymentPost(fixture, serviceContext(fixture.tenantId(), otherMerchant),
-                        principal, paymentRequest(fixture, "protected-payment-3")))
-                .andExpect(status().isNotFound());
+        Fixture activeFixture = fixture(TenantStatus.ACTIVE);
+        UUID missingMerchant = UUID.randomUUID();
+        mockMvc.perform(paymentPost(activeFixture, serviceContext(activeFixture.tenantId(), missingMerchant),
+                        principal, paymentRequest(activeFixture, "protected-payment-3")))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.referenceType").value("MERCHANT"));
     }
 
     @Test
@@ -207,9 +209,9 @@ class ProtectedExistingPathsIntegrationTests {
 
     private String paymentRequest(Fixture fixture, String idempotencyKey) {
         return """
-                {"tenantId":"%s","merchantId":"%s","customerId":"%s","amount": "10.00",
+                {"customerId":"%s","amount": "10.00",
                  "currency":"SAR","paymentMethodCategory":"card","idempotencyKey":"%s"}
-                """.formatted(fixture.tenantId(), fixture.merchantId(), fixture.customerId(), idempotencyKey);
+                """.formatted(fixture.customerId(), idempotencyKey);
     }
 
     private record Fixture(UUID tenantId, UUID merchantId, UUID customerId) {
