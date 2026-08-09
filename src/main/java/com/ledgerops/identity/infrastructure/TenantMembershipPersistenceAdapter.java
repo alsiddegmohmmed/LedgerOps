@@ -55,6 +55,12 @@ class TenantMembershipPersistenceAdapter implements TenantMembershipRepository {
     }
 
     @Override
+    @Transactional
+    public Optional<TenantMembership> findByIdForUpdate(TenantMembershipId membershipId) {
+        return repository.findAggregateByIdForUpdate(membershipId.value()).map(this::toDomain);
+    }
+
+    @Override
     @Transactional(readOnly = true)
     public List<TenantMembership> findAllByTenantId(UUID tenantId) {
         return repository.findAggregatesByTenantId(tenantId).stream()

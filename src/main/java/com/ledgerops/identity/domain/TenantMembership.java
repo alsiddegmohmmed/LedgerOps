@@ -51,7 +51,9 @@ public final class TenantMembership {
         }
         this.roleAssignments = Set.copyOf(Objects.requireNonNull(
                 roleAssignments, "Role assignments must not be null"));
-        if (status != TenantMembershipStatus.INVITED && this.roleAssignments.isEmpty()) {
+        if ((status == TenantMembershipStatus.ACTIVE
+                || status == TenantMembershipStatus.SUSPENDED)
+                && this.roleAssignments.isEmpty()) {
             throw new InvalidMembershipTransitionException(
                     "Membership must have at least one role assignment");
         }

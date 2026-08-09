@@ -22,6 +22,16 @@ public interface AuditAppendPort {
             String correlationId
     );
 
+    void appendIdentityInvitationRevoked(
+            String actorIssuer,
+            String actorSubject,
+            UUID tenantId,
+            UUID membershipId,
+            UUID invitationId,
+            String reason,
+            String correlationId
+    );
+
     void appendTenantOnboarded(
             String actorIssuer,
             String actorSubject,

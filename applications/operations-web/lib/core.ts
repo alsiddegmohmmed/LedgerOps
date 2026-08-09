@@ -92,6 +92,15 @@ export type CoreCredentialActionResult = {
   status: string;
 };
 
+export type CoreInvitationRevocationResult = {
+  tenantId: string;
+  membershipId: string;
+  invitationId: string;
+  membershipStatus: string;
+  invitationStatus: string;
+  membershipVersion: number;
+};
+
 export type CoreTenantConfigurationUpdateResponse =
   | { kind: "unauthenticated" }
   | { kind: "error"; status: number; code?: string }
@@ -353,4 +362,53 @@ export function revokeCredential(
     body,
     200,
   );
+}
+
+export type CoreInvitationRevocationResponse =
+  | { kind: "unauthenticated" }
+  | { kind: "error"; status: number; code?: string }
+  | { kind: "ok"; result: CoreInvitationRevocationResult };
+
+export function revokeInvitation(
+  tenantId: string,
+  membershipId: string,
+  accessToken: string,
+  body: { confirmation: boolean; reason: string },
+): Promise<CoreInvitationRevocationResponse> {
+  return postMembershipAction(
+    `/api/v1/tenants/${encodeURIComponent(tenantId)}/memberships/${encodeURIComponent(membershipId)}/invitation/revoke`,
+    accessToken,
+    body,
+  );
+}
+
+async function postMembershipAction(
+  path: string,
+  accessToken: string,
+  body: Record<string, unknown>,
+): Promise<CoreInvitationRevocationResponse> {
+  const response = await fetch(`${config.coreBaseUrl}${path}`, {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${accessToken}`,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify(body),
+    cache: "no-store",
+  });
+  if (response.status === 401) return { kind: "unauthenticated" };
+  if (!response.ok) {
+    let code: string | undefined;
+    try {
+      const problem = await response.json() as { code?: unknown };
+      if (typeof problem.code === "string") code = problem.code;
+    } catch {
+      // The BFF maps an unparseable Core response to a generic action error.
+    }
+    return { kind: "error", status: response.status, code };
+  }
+  if (response.status !== 200) {
+    return { kind: "error", status: 502, code: "unexpected_core_response" };
+  }
+  return { kind: "ok", result: await response.json() as CoreInvitationRevocationResult };
 }

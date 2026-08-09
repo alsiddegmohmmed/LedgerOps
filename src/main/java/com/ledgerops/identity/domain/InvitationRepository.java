@@ -10,6 +10,8 @@ public interface InvitationRepository {
 
     Optional<Invitation> findByMembershipId(TenantMembershipId membershipId);
 
+    Optional<Invitation> findByMembershipIdForUpdate(TenantMembershipId membershipId);
+
     Optional<TenantMembershipId> findMembershipId(InvitationId invitationId);
 
     Optional<Invitation> findPendingByTokenHash(InvitationTokenHash tokenHash);

@@ -27,3 +27,17 @@ test("shows the selected Tenant memberships without exposing invitation secrets"
   expect(await page.content()).not.toContain("Bearer ");
   expect(await page.content()).not.toContain("tokenHash");
 });
+
+test("revokes a pending invitation with confirmation and an audit reason", async ({ page }) => {
+  await signInAndSelectTenant(page);
+  await page.goto("/operations/memberships");
+
+  const invitedRow = page.getByRole("row", { name: /invite@example\.com/ });
+  await expect(invitedRow).toBeVisible();
+  await invitedRow.getByLabel("Invitation revocation reason").fill("No longer required");
+  await invitedRow.getByLabel("Confirm revocation").check();
+  await invitedRow.getByRole("button", { name: "Revoke invitation" }).click();
+
+  await expect(page.getByRole("row", { name: /invite@example\.com.*REVOKED/ })).toBeVisible();
+  expect(await page.content()).not.toContain("aaaaaaaaaaaaaaaaaaaaaaaa");
+});

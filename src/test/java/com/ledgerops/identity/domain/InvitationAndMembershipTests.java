@@ -142,6 +142,14 @@ class InvitationAndMembershipTests {
     }
 
     @Test
+    void revokingAnUnacceptedInvitationDoesNotRequireActiveRoleAssignments() {
+        TenantMembership invited = TenantMembership.invited(
+                TenantMembershipId.newId(), UUID.randomUUID(), Set.of());
+
+        assertThat(invited.revoke().status()).isEqualTo(TenantMembershipStatus.REVOKED);
+    }
+
+    @Test
     void protectsLastActiveAdminForSuspensionAndRevocation() {
         UUID tenant = UUID.randomUUID();
         TenantMembership admin = activeAdmin(TenantMembershipId.newId(), tenant);

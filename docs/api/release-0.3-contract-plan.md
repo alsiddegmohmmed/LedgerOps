@@ -83,6 +83,25 @@ scope assignments, and a safe invitation summary with intended email, status,
 and expiry. It never includes the invitation token hash or other secret
 material. Membership and invitation mutation remain separate action contracts.
 
+The first Membership mutation is invitation revocation:
+
+```text
+POST /api/v1/tenants/{tenantId}/memberships/{membershipId}/invitation/revoke
+```
+
+The request requires `confirmation: true` and a non-blank audit `reason` of at
+most 512 characters. A human caller with `tenant:membership-manage` may revoke
+a pending invitation in the selected Tenant; Merchant-scoped callers may only
+revoke invitations whose proposed Merchant scope intersects their effective
+Merchant set. An unavailable or out-of-scope invitation is returned as `404`.
+
+Revocation locks the invitation and membership in one Core PostgreSQL
+transaction, changes `INVITED/PENDING` to `REVOKED/REVOKED`, appends the audit
+evidence, and emits the versioned `IdentityLifecycleChanged` outbox event. A
+consumed or already revoked invitation returns `409`. The response contains
+only Tenant, membership, invitation, status, and membership-version metadata;
+it never contains the invitation token hash or other secret material.
+
 The operational-contact contract is Tenant-scoped and versioned:
 
 ```text

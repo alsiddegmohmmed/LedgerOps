@@ -85,4 +85,39 @@ final class IdentityLifecycleOutboxFactory {
             throw new IllegalStateException("Identity lifecycle payload cannot be encoded", exception);
         }
     }
+
+    static OutboxMessageDraft invitationRevoked(
+            UUID tenantId,
+            UUID membershipId,
+            UUID invitationId,
+            long membershipVersion,
+            UUID correlationId,
+            Instant occurredAt
+    ) {
+        LinkedHashMap<String, Object> payload = new LinkedHashMap<>();
+        payload.put("aggregateType", "TenantMembership");
+        payload.put("aggregateId", membershipId.toString());
+        payload.put("event", "REVOKED");
+        payload.put("version", membershipVersion);
+        payload.put("invitationId", invitationId.toString());
+
+        try {
+            return new OutboxMessageDraft(
+                    ProducerName.IDENTITY,
+                    "identity-event:TenantMembership:" + membershipId + ":" + membershipVersion,
+                    "IdentityLifecycleChanged",
+                    1,
+                    membershipId,
+                    tenantId,
+                    "ledgerops.identity.lifecycle.v1",
+                    tenantId.toString(),
+                    JSON.writeValueAsString(payload),
+                    correlationId,
+                    invitationId,
+                    occurredAt
+            );
+        } catch (Exception exception) {
+            throw new IllegalStateException("Identity lifecycle payload cannot be encoded", exception);
+        }
+    }
 }

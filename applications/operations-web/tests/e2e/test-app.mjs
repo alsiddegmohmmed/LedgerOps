@@ -209,6 +209,7 @@ async function verifyTopology() {
 
 async function seedWithPsql() {
   const sql = `
+BEGIN;
 INSERT INTO tenancy.tenants
   (id, name, default_currency, default_locale, status, version, created_at, updated_at)
 VALUES
@@ -228,6 +229,16 @@ VALUES ('20000000-0000-4000-8000-000000000001', '10000000-0000-4000-8000-0000000
 INSERT INTO identity.tenant_role_assignments
   (id, membership_id, role, scope_mode)
 VALUES ('30000000-0000-4000-8000-000000000001', '20000000-0000-4000-8000-000000000001', 'TENANT_ADMIN', 'TENANT_WIDE');
+INSERT INTO identity.tenant_memberships
+  (id, application_user_id, tenant_id, status, is_initial, version, created_at, updated_at)
+VALUES ('20000000-0000-4000-8000-000000000002', NULL, '00000000-0000-4000-8000-000000000001', 'INVITED', false, 0, now(), now());
+INSERT INTO identity.invitations
+  (id, tenant_id, membership_id, intended_email, token_hash, status, version, created_at, expires_at, updated_at)
+VALUES ('40000000-0000-4000-8000-000000000001', '00000000-0000-4000-8000-000000000001', '20000000-0000-4000-8000-000000000002', 'invite@example.com', repeat('a', 64), 'PENDING', 0, now(), now() + interval '7 days', now());
+INSERT INTO identity.invitation_grants
+  (invitation_id, assignment_id, tenant_id, role, scope_mode)
+VALUES ('40000000-0000-4000-8000-000000000001', '50000000-0000-4000-8000-000000000001', '00000000-0000-4000-8000-000000000001', 'VIEWER', 'TENANT_WIDE');
+COMMIT;
 `;
   await new Promise((resolvePromise, reject) => {
     const child = spawn(docker, ["compose", "-p", projectName, "-f", composeFile, "exec", "-T", "postgres", "psql", "-v", "ON_ERROR_STOP=1", "-U", "ledgerops", "-d", "ledgerops"], {

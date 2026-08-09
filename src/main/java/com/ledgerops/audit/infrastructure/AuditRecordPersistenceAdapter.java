@@ -96,6 +96,31 @@ class AuditRecordPersistenceAdapter implements AuditRecordRepository, AuditAppen
     }
 
     @Override
+    public void appendIdentityInvitationRevoked(
+            String actorIssuer,
+            String actorSubject,
+            UUID tenantId,
+            UUID membershipId,
+            UUID invitationId,
+            String reason,
+            String correlationId
+    ) {
+        append(AuditRecord.create(
+                AuditRecordId.newId(),
+                new AuditActorIdentity(actorIssuer, actorSubject),
+                AuditPrincipalType.HUMAN,
+                tenantId,
+                new AuditActionType("identity.membership.invitation-revoked", true),
+                new AuditTargetType("tenant-membership"),
+                membershipId.toString(),
+                correlationId,
+                new AuditReason(reason),
+                new AuditDetails("{\"invitationId\":\"" + invitationId + "\"}"),
+                clock
+        ));
+    }
+
+    @Override
     public void appendTenantOnboarded(
             String actorIssuer,
             String actorSubject,

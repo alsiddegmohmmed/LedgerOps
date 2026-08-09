@@ -391,6 +391,13 @@ class CredentialAdministrationServiceTests {
         }
 
         @Override
+        public void appendIdentityInvitationRevoked(String actorIssuer, String actorSubject,
+                                                     UUID tenantId, UUID membershipId,
+                                                     UUID invitationId, String reason,
+                                                     String correlationId) {
+        }
+
+        @Override
         public void appendTenantOnboarded(String actorIssuer, String actorSubject,
                                           UUID tenantId, UUID merchantId,
                                           UUID membershipId, UUID invitationId,

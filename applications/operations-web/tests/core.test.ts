@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   getCredentialPage,
   getMemberships,
+  revokeInvitation,
   getMerchants,
   getOperationalContacts,
   getTenantConfiguration,
@@ -156,6 +157,37 @@ describe("Core credential metadata client", () => {
       "content-type": "application/json",
     });
     expect(JSON.parse(String(init.body))).toMatchObject({ label: "Checkout", confirmation: true });
+  });
+
+  it("posts invitation revocation with the bearer token only on the server-side request", async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({
+      tenantId: "tenant-id",
+      membershipId: "membership-id",
+      invitationId: "invitation-id",
+      membershipStatus: "REVOKED",
+      invitationStatus: "REVOKED",
+      membershipVersion: 1,
+    }), { status: 200, headers: { "content-type": "application/json" } }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(revokeInvitation(
+      "tenant-id",
+      "membership-id",
+      "server-only-token",
+      { confirmation: true, reason: "No longer required" },
+    )).resolves.toMatchObject({ kind: "ok", result: { invitationStatus: "REVOKED" } });
+
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toContain("/api/v1/tenants/tenant-id/memberships/membership-id/invitation/revoke");
+    expect(init.method).toBe("POST");
+    expect(init.headers).toEqual({
+      authorization: "Bearer server-only-token",
+      "content-type": "application/json",
+    });
+    expect(JSON.parse(String(init.body))).toEqual({
+      confirmation: true,
+      reason: "No longer required",
+    });
   });
 
   it("reads and updates configuration through the server-side Core client", async () => {

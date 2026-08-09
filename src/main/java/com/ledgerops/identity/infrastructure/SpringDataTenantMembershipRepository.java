@@ -1,6 +1,8 @@
 package com.ledgerops.identity.infrastructure;
 
+import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 
 import java.util.List;
@@ -16,6 +18,15 @@ interface SpringDataTenantMembershipRepository extends JpaRepository<TenantMembe
             where membership.id = :membershipId
             """)
     Optional<TenantMembershipJpaEntity> findAggregateById(UUID membershipId);
+
+    @Query("""
+            select distinct membership from TenantMembershipJpaEntity membership
+            left join fetch membership.roleAssignments assignment
+            left join fetch assignment.merchantIds
+            where membership.id = :membershipId
+            """)
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    Optional<TenantMembershipJpaEntity> findAggregateByIdForUpdate(UUID membershipId);
 
     @Query("""
             select distinct membership from TenantMembershipJpaEntity membership

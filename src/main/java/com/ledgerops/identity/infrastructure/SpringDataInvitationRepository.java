@@ -15,6 +15,15 @@ interface SpringDataInvitationRepository extends JpaRepository<InvitationJpaEnti
 
     @Query("""
             select invitation from InvitationJpaEntity invitation
+            where invitation.membershipId = :membershipId
+            """)
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    Optional<InvitationJpaEntity> findByMembershipIdForUpdate(
+            @Param("membershipId") UUID membershipId
+    );
+
+    @Query("""
+            select invitation from InvitationJpaEntity invitation
             where invitation.tokenHash = :tokenHash
               and invitation.status = 'PENDING'
             """)

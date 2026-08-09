@@ -10,6 +10,8 @@ public interface TenantMembershipRepository {
 
     Optional<TenantMembership> findById(TenantMembershipId membershipId);
 
+    Optional<TenantMembership> findByIdForUpdate(TenantMembershipId membershipId);
+
     List<TenantMembership> findAllByTenantId(UUID tenantId);
 
     Optional<TenantMembership> findActiveByApplicationUserAndTenant(

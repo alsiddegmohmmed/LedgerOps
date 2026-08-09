@@ -137,7 +137,7 @@ final class RequestContextAuthenticationFilter extends OncePerRequestFilter {
                 || TENANT_OPERATIONAL_CONTACTS_PATH.matcher(request.getRequestURI()).matches()
                 || ("GET".equals(request.getMethod())
                 && TENANT_MERCHANTS_PATH.matcher(request.getRequestURI()).matches())
-                || ("GET".equals(request.getMethod())
+                || (("GET".equals(request.getMethod()) || "POST".equals(request.getMethod()))
                 && TENANT_MEMBERSHIPS_PATH.matcher(request.getRequestURI()).matches())
                 || ("POST".equals(request.getMethod())
                 && isPlatformTenantOperationPath(request))

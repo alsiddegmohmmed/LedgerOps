@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { getMemberships, getTenant } from "../../../lib/core";
 import { redis } from "../../../lib/redis";
 import { isSessionExpired, readSession, SESSION_COOKIE } from "../../../lib/session";
+import { InvitationRevokeAction } from "./invitation-revoke-action";
 
 export const dynamic = "force-dynamic";
 
@@ -76,6 +77,7 @@ export default async function MembershipsPage() {
                   <th scope="col">Roles and scopes</th>
                   <th scope="col">Invitation</th>
                   <th scope="col">Membership ID</th>
+                  <th scope="col">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -110,6 +112,12 @@ export default async function MembershipsPage() {
                       )}
                     </td>
                     <td className="monospace">{membership.membershipId}</td>
+                    <td>
+                      <InvitationRevokeAction
+                        membership={membership}
+                        csrfToken={session.csrfToken}
+                      />
+                    </td>
                   </tr>
                 ))}
               </tbody>
