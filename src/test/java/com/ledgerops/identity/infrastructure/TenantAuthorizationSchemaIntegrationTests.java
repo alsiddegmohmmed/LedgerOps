@@ -300,16 +300,38 @@ class TenantAuthorizationSchemaIntegrationTests {
     void servicePrincipalCannotObtainCredentialDerivedPaymentAuthorityInSliceOne() {
         UUID userId = UUID.randomUUID();
         UUID credentialId = UUID.randomUUID();
+        UUID operationId = UUID.randomUUID();
         UUID tenantId = UUID.randomUUID();
         UUID merchantId = UUID.randomUUID();
         Timestamp now = Timestamp.from(Instant.now());
         jdbc.update("insert into identity.application_users (id, issuer, subject, status, version, created_at, updated_at) values (?, ?, ?, 'ACTIVE', 0, ?, ?)",
                 userId, "issuer-" + userId, "subject-" + userId, now, now);
-        jdbc.update("insert into identity.service_credentials (id, application_user_id, client_id, tenant_id, merchant_id, status, created_at, updated_at) values (?, ?, ?, ?, ?, 'ACTIVE', ?, ?)",
-                credentialId, userId, "ledger-client", tenantId, merchantId, now, now);
+        transactions.executeWithoutResult(status -> {
+            String clientId = "ledgerops-sandbox-credential-" + credentialId;
+            jdbc.update(
+                    """
+                    INSERT INTO identity.service_credentials (
+                        id, application_user_id, client_id, tenant_id, merchant_id,
+                        status, label, provisioning_operation_id, disclosure_status,
+                        disclosure_consumed_at, created_at, updated_at
+                    ) VALUES (?, ?, ?, ?, ?, 'ACTIVE', ?, ?, 'CONSUMED', ?, ?, ?)
+                    """,
+                    credentialId, userId, clientId, tenantId, merchantId,
+                    "legacy test credential", operationId, now, now, now
+            );
+            jdbc.update(
+                    """
+                    INSERT INTO identity.service_credential_provisioning_operations (
+                        id, credential_id, tenant_id, keycloak_client_id, status,
+                        attempt_count, created_at, updated_at
+                    ) VALUES (?, ?, ?, ?, 'COMPLETED', 0, ?, ?)
+                    """,
+                    operationId, credentialId, tenantId, clientId, now, now
+            );
+        });
 
         var context = tenantContexts.find(new ApplicationUserId(userId), PrincipalType.SERVICE,
-                "ledger-client", tenantId);
+                "ledgerops-sandbox-credential-" + credentialId, tenantId);
 
         assertThat(context).isEmpty();
     }
