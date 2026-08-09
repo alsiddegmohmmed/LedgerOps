@@ -27,6 +27,16 @@ export type CoreCredentialPage = {
   nextCursor: string | null;
 };
 
+export type CoreTenantConfiguration = {
+  tenantId: string;
+  version: number;
+  allowedCurrencies: string[];
+  defaultLocale: string;
+  timezone: string;
+  displaySettings: Record<string, unknown>;
+  createdAt: string;
+};
+
 export type CoreCredentialActionResult = {
   previousCredentialId?: string;
   credentialId: string;
@@ -37,6 +47,11 @@ export type CoreCredentialActionResult = {
   clientSecret?: string;
   status: string;
 };
+
+export type CoreTenantConfigurationUpdateResponse =
+  | { kind: "unauthenticated" }
+  | { kind: "error"; status: number; code?: string }
+  | { kind: "ok"; result: CoreTenantConfiguration };
 
 export async function getTenant(tenantId: string, accessToken: string) {
   const response = await fetch(`${config.coreBaseUrl}/api/v1/tenants/${encodeURIComponent(tenantId)}`, {
@@ -71,6 +86,62 @@ export async function getCredentialPage(
   if (response.status === 403 || response.status === 404) return { kind: "unavailable" as const };
   if (!response.ok) return { kind: "error" as const };
   return { kind: "ok" as const, page: (await response.json()) as CoreCredentialPage };
+}
+
+export async function getTenantConfiguration(tenantId: string, accessToken: string) {
+  const response = await fetch(
+    `${config.coreBaseUrl}/api/v1/tenants/${encodeURIComponent(tenantId)}/configuration`,
+    {
+      headers: { authorization: `Bearer ${accessToken}` },
+      cache: "no-store",
+    },
+  );
+  if (response.status === 401) return { kind: "unauthenticated" as const };
+  if (response.status === 403) return { kind: "unavailable" as const };
+  if (response.status === 404) return { kind: "missing" as const };
+  if (!response.ok) return { kind: "error" as const };
+  return { kind: "ok" as const, configuration: (await response.json()) as CoreTenantConfiguration };
+}
+
+export async function updateTenantConfiguration(
+  tenantId: string,
+  accessToken: string,
+  body: {
+    allowedCurrencies: string[];
+    defaultLocale: string;
+    timezone: string;
+    displaySettings: Record<string, unknown>;
+    confirmation: true;
+    reason: string;
+  },
+): Promise<CoreTenantConfigurationUpdateResponse> {
+  const response = await fetch(
+    `${config.coreBaseUrl}/api/v1/tenants/${encodeURIComponent(tenantId)}/configuration`,
+    {
+      method: "PUT",
+      headers: {
+        authorization: `Bearer ${accessToken}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify(body),
+      cache: "no-store",
+    },
+  );
+  if (response.status === 401) return { kind: "unauthenticated" };
+  if (!response.ok) {
+    let code: string | undefined;
+    try {
+      const problem = await response.json() as { code?: unknown };
+      if (typeof problem.code === "string") code = problem.code;
+    } catch {
+      // The BFF maps an unparseable Core response to a generic action error.
+    }
+    return { kind: "error", status: response.status, code };
+  }
+  if (response.status !== 200) {
+    return { kind: "error", status: 502, code: "unexpected_core_response" };
+  }
+  return { kind: "ok", result: await response.json() as CoreTenantConfiguration };
 }
 
 export type CoreCredentialActionResponse =

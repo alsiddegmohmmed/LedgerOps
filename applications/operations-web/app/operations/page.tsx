@@ -50,6 +50,9 @@ export default async function OperationsPage() {
             <h2>Credentials</h2>
             <p>Review non-secret metadata for this Tenant&apos;s sandbox credentials.</p>
             <a className="button" href="/operations/credentials">Open credentials</a>
+            <h2>Tenant configuration</h2>
+            <p>Manage versioned currencies, locale, timezone, and display settings.</p>
+            <a className="button secondary" href="/operations/configuration">Open configuration</a>
           </div>
         )}
         <form action="/api/auth/logout" method="post">

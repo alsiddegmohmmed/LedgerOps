@@ -1,5 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { getCredentialPage, provisionCredential } from "../lib/core";
+import {
+  getCredentialPage,
+  getTenantConfiguration,
+  provisionCredential,
+  updateTenantConfiguration,
+} from "../lib/core";
 
 describe("Core credential metadata client", () => {
   afterEach(() => vi.unstubAllGlobals());
@@ -66,5 +71,48 @@ describe("Core credential metadata client", () => {
       "content-type": "application/json",
     });
     expect(JSON.parse(String(init.body))).toMatchObject({ label: "Checkout", confirmation: true });
+  });
+
+  it("reads and updates configuration through the server-side Core client", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        tenantId: "tenant-id",
+        version: 2,
+        allowedCurrencies: ["SAR"],
+        defaultLocale: "en-SA",
+        timezone: "Asia/Riyadh",
+        displaySettings: { compactTables: true },
+        createdAt: "2026-08-09T00:00:00Z",
+      }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        tenantId: "tenant-id",
+        version: 3,
+        allowedCurrencies: ["SAR", "USD"],
+        defaultLocale: "en-SA",
+        timezone: "Asia/Riyadh",
+        displaySettings: { compactTables: false },
+        createdAt: "2026-08-09T00:01:00Z",
+      }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(getTenantConfiguration("tenant-id", "server-only-token")).resolves.toMatchObject({
+      kind: "ok",
+      configuration: { version: 2 },
+    });
+    await expect(updateTenantConfiguration("tenant-id", "server-only-token", {
+      allowedCurrencies: ["SAR", "USD"],
+      defaultLocale: "en-SA",
+      timezone: "Asia/Riyadh",
+      displaySettings: { compactTables: false },
+      confirmation: true,
+      reason: "Update display settings",
+    })).resolves.toMatchObject({ kind: "ok", result: { version: 3 } });
+
+    const [, init] = fetchMock.mock.calls[1] as unknown as [string, RequestInit];
+    expect(init.headers).toEqual({
+      authorization: "Bearer server-only-token",
+      "content-type": "application/json",
+    });
+    expect(JSON.parse(String(init.body))).toMatchObject({ confirmation: true, reason: "Update display settings" });
   });
 });

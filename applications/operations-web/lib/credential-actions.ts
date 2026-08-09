@@ -70,6 +70,7 @@ export function mapCredentialActionResponse(
     result: unknown;
   },
   successStatus: number,
+  fallbackErrorCode = "credential_action_failed",
 ) {
   if (result.kind === "unauthenticated") {
     return NextResponse.json(
@@ -79,7 +80,7 @@ export function mapCredentialActionResponse(
   }
   if (result.kind === "error") {
     return NextResponse.json(
-      { type: result.code ?? "credential_action_failed" },
+      { type: result.code ?? fallbackErrorCode },
       { status: result.status },
     );
   }
