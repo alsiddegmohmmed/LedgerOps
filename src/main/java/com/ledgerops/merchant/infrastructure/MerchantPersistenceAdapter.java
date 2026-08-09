@@ -54,6 +54,26 @@ class MerchantPersistenceAdapter implements MerchantRepository {
     }
 
     @Override
+    @Transactional
+    public Optional<Merchant> findByIdForUpdate(
+            TenantReference tenantReference,
+            MerchantId merchantId
+    ) {
+        return repository.findByTenantIdAndIdForUpdate(
+                        tenantReference.value(), merchantId.value())
+                .map(this::toDomain);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public boolean existsActiveByTenant(TenantReference tenantReference) {
+        return repository.existsByTenantIdAndStatus(
+                tenantReference.value(),
+                MerchantStatus.ACTIVE.name()
+        );
+    }
+
+    @Override
     @Transactional(readOnly = true)
     public boolean existsByName(
             TenantReference tenantReference,
@@ -86,11 +106,12 @@ class MerchantPersistenceAdapter implements MerchantRepository {
     }
 
     private Merchant toDomain(MerchantJpaEntity entity) {
-        return new Merchant(
+        return Merchant.reconstitute(
                 MerchantId.from(entity.id()),
                 TenantReference.from(entity.tenantId()),
                 entity.name(),
-                MerchantStatus.valueOf(entity.status())
+                MerchantStatus.valueOf(entity.status()),
+                entity.version()
         );
     }
 }

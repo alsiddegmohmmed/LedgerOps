@@ -11,6 +11,7 @@ public final class Tenant {
     private final Currency defaultCurrency;
     private final Locale defaultLocale;
     private final TenantStatus status;
+    private final long version;
 
     public Tenant(
             TenantId id,
@@ -19,6 +20,17 @@ public final class Tenant {
             Locale defaultLocale,
             TenantStatus status
     ) {
+        this(id, name, defaultCurrency, defaultLocale, status, 0);
+    }
+
+    private Tenant(
+            TenantId id,
+            String name,
+            Currency defaultCurrency,
+            Locale defaultLocale,
+            TenantStatus status,
+            long version
+    ) {
         this.id = Objects.requireNonNull(id, "Tenant ID must not be null");
         this.name = requireName(name);
         this.defaultCurrency =
@@ -26,6 +38,21 @@ public final class Tenant {
         this.defaultLocale =
                 Objects.requireNonNull(defaultLocale, "Default locale must not be null");
         this.status = Objects.requireNonNull(status, "Tenant status must not be null");
+        if (version < 0) {
+            throw new IllegalArgumentException("Tenant version must not be negative");
+        }
+        this.version = version;
+    }
+
+    public static Tenant reconstitute(
+            TenantId id,
+            String name,
+            Currency defaultCurrency,
+            Locale defaultLocale,
+            TenantStatus status,
+            long version
+    ) {
+        return new Tenant(id, name, defaultCurrency, defaultLocale, status, version);
     }
 
     public Tenant activate() {
@@ -89,13 +116,18 @@ public final class Tenant {
         return status;
     }
 
+    public long version() {
+        return version;
+    }
+
     private Tenant withStatus(TenantStatus newStatus) {
         return new Tenant(
                 id,
                 name,
                 defaultCurrency,
                 defaultLocale,
-                newStatus
+                newStatus,
+                version
         );
     }
 

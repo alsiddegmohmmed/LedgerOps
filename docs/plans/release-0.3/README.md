@@ -4,7 +4,8 @@ Follow the slices in numeric order. The active release plan is [`../release-0.3-
 
 - Slice 0: documentation/authorization - completed.
 - Slice 1: identity/audit/request context - completed.
-- Slices 2-10: functional vertical slices - next.
+- Slice 2: active; its persistence/onboarding checkpoint is implemented in the current worktree.
+- Slices 3-10: pending.
 - Slice 11: release verification gate.
 
 Use [`ORCHESTRATION.md`](ORCHESTRATION.md) for agent ownership and contradiction handling.

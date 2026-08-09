@@ -11,18 +11,47 @@ public final class TenantMembership {
     private final ApplicationUserId applicationUserId;
     private final TenantMembershipStatus status;
     private final Set<TenantRoleAssignment> roleAssignments;
+    private final long version;
+    private final boolean initial;
 
     private TenantMembership(TenantMembershipId id, UUID tenantId,
                              ApplicationUserId applicationUserId,
                              TenantMembershipStatus status,
                              Set<TenantRoleAssignment> roleAssignments) {
+        this(id, tenantId, applicationUserId, status, roleAssignments, 0);
+    }
+
+    private TenantMembership(TenantMembershipId id, UUID tenantId,
+                             ApplicationUserId applicationUserId,
+                             TenantMembershipStatus status,
+                             Set<TenantRoleAssignment> roleAssignments,
+                             long version) {
+        this(id, tenantId, applicationUserId, status, roleAssignments, version, false);
+    }
+
+    private TenantMembership(TenantMembershipId id, UUID tenantId,
+                             ApplicationUserId applicationUserId,
+                             TenantMembershipStatus status,
+                             Set<TenantRoleAssignment> roleAssignments,
+                             long version,
+                             boolean initial) {
         this.id = Objects.requireNonNull(id, "Membership ID must not be null");
         this.tenantId = Objects.requireNonNull(tenantId, "Membership Tenant ID must not be null");
         this.applicationUserId = applicationUserId;
         this.status = Objects.requireNonNull(status, "Membership status must not be null");
+        if (status == TenantMembershipStatus.INVITED && applicationUserId != null) {
+            throw new InvalidMembershipTransitionException(
+                    "Invited membership must not be linked to an application user");
+        }
+        if ((status == TenantMembershipStatus.ACTIVE
+                || status == TenantMembershipStatus.SUSPENDED)
+                && applicationUserId == null) {
+            throw new InvalidMembershipTransitionException(
+                    "Non-invited membership must be linked to an application user");
+        }
         this.roleAssignments = Set.copyOf(Objects.requireNonNull(
                 roleAssignments, "Role assignments must not be null"));
-        if (this.roleAssignments.isEmpty()) {
+        if (status != TenantMembershipStatus.INVITED && this.roleAssignments.isEmpty()) {
             throw new InvalidMembershipTransitionException(
                     "Membership must have at least one role assignment");
         }
@@ -31,12 +60,28 @@ public final class TenantMembership {
                 throw new InvalidMembershipTransitionException("Role assignment belongs to another Tenant");
             }
         }
+        if (version < 0) {
+            throw new IllegalArgumentException("Membership version must not be negative");
+        }
+        this.version = version;
+        this.initial = initial;
     }
 
     public static TenantMembership invited(TenantMembershipId id, UUID tenantId,
                                            Set<TenantRoleAssignment> roleAssignments) {
         return new TenantMembership(id, tenantId, null, TenantMembershipStatus.INVITED,
                 roleAssignments);
+    }
+
+    public static TenantMembership invitedInitial(
+            TenantMembershipId id,
+            UUID tenantId,
+            Set<TenantRoleAssignment> roleAssignments
+    ) {
+        return new TenantMembership(
+                id, tenantId, null, TenantMembershipStatus.INVITED,
+                roleAssignments, 0, true
+        );
     }
 
     public static TenantMembership active(TenantMembershipId id, UUID tenantId,
@@ -46,6 +91,43 @@ public final class TenantMembership {
                 Objects.requireNonNull(applicationUserId,
                         "Active membership user ID must not be null"),
                 TenantMembershipStatus.ACTIVE, roleAssignments);
+    }
+
+    public static TenantMembership reconstitute(
+            TenantMembershipId id,
+            UUID tenantId,
+            ApplicationUserId applicationUserId,
+            TenantMembershipStatus status,
+            Set<TenantRoleAssignment> roleAssignments
+    ) {
+        return new TenantMembership(id, tenantId, applicationUserId, status, roleAssignments);
+    }
+
+    public static TenantMembership reconstitute(
+            TenantMembershipId id,
+            UUID tenantId,
+            ApplicationUserId applicationUserId,
+            TenantMembershipStatus status,
+            Set<TenantRoleAssignment> roleAssignments,
+            long version
+    ) {
+        return new TenantMembership(
+                id, tenantId, applicationUserId, status, roleAssignments, version
+        );
+    }
+
+    public static TenantMembership reconstitute(
+            TenantMembershipId id,
+            UUID tenantId,
+            ApplicationUserId applicationUserId,
+            TenantMembershipStatus status,
+            Set<TenantRoleAssignment> roleAssignments,
+            long version,
+            boolean initial
+    ) {
+        return new TenantMembership(
+                id, tenantId, applicationUserId, status, roleAssignments, version, initial
+        );
     }
 
     public TenantMembership activate() {
@@ -65,6 +147,24 @@ public final class TenantMembership {
         }
         return copy(TenantMembershipStatus.ACTIVE,
                 Objects.requireNonNull(acceptedUser, "Accepted user must not be null"));
+    }
+
+    public TenantMembership accept(
+            ApplicationUserId acceptedUser,
+            Set<TenantRoleAssignment> acceptedAssignments
+    ) {
+        if (status != TenantMembershipStatus.INVITED) {
+            throw invalid(TenantMembershipStatus.ACTIVE);
+        }
+        return new TenantMembership(
+                id,
+                tenantId,
+                Objects.requireNonNull(acceptedUser, "Accepted user must not be null"),
+                TenantMembershipStatus.ACTIVE,
+                acceptedAssignments,
+                version,
+                initial
+        );
     }
 
     public TenantMembership suspend() {
@@ -184,8 +284,16 @@ public final class TenantMembership {
         return roleAssignments;
     }
 
+    public long version() {
+        return version;
+    }
+
+    public boolean initial() {
+        return initial;
+    }
+
     private TenantMembership copy(TenantMembershipStatus next, ApplicationUserId userId) {
-        return new TenantMembership(id, tenantId, userId, next, roleAssignments);
+        return new TenantMembership(id, tenantId, userId, next, roleAssignments, version, initial);
     }
 
     private void requireGuardedAdminRemoval() {

@@ -14,6 +14,8 @@ import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
+import java.util.UUID;
+
 @Repository
 class AuditRecordPersistenceAdapter implements AuditRecordRepository, AuditAppendPort {
 
@@ -65,6 +67,158 @@ class AuditRecordPersistenceAdapter implements AuditRecordRepository, AuditAppen
                 correlationId,
                 new AuditReason("Payment creation"),
                 AuditDetails.empty(),
+                clock
+        ));
+    }
+
+    @Override
+    public void appendIdentityMembershipAccepted(
+            String actorIssuer,
+            String actorSubject,
+            UUID tenantId,
+            UUID membershipId,
+            UUID applicationUserId,
+            String correlationId
+    ) {
+        append(AuditRecord.create(
+                AuditRecordId.newId(),
+                new AuditActorIdentity(actorIssuer, actorSubject),
+                AuditPrincipalType.HUMAN,
+                tenantId,
+                new AuditActionType("identity.membership.accepted", true),
+                new AuditTargetType("tenant-membership"),
+                membershipId.toString(),
+                correlationId,
+                new AuditReason("Invitation acceptance"),
+                new AuditDetails("{\"applicationUserId\":\"" + applicationUserId + "\"}"),
+                clock
+        ));
+    }
+
+    @Override
+    public void appendTenantOnboarded(
+            String actorIssuer,
+            String actorSubject,
+            UUID tenantId,
+            UUID merchantId,
+            UUID membershipId,
+            UUID invitationId,
+            String correlationId
+    ) {
+        append(AuditRecord.create(
+                AuditRecordId.newId(),
+                new AuditActorIdentity(actorIssuer, actorSubject),
+                AuditPrincipalType.HUMAN,
+                tenantId,
+                new AuditActionType("tenant.onboarded", true),
+                new AuditTargetType("tenant"),
+                tenantId.toString(),
+                correlationId,
+                new AuditReason("Tenant onboarding"),
+                new AuditDetails("{\"merchantId\":\"" + merchantId
+                        + "\",\"membershipId\":\"" + membershipId
+                        + "\",\"invitationId\":\"" + invitationId + "\"}"),
+                clock
+        ));
+    }
+
+    @Override
+    public void appendMerchantLifecycleChanged(
+            String actorIssuer,
+            String actorSubject,
+            UUID tenantId,
+            UUID merchantId,
+            String previousStatus,
+            String status,
+            String correlationId
+    ) {
+        append(AuditRecord.create(
+                AuditRecordId.newId(),
+                new AuditActorIdentity(actorIssuer, actorSubject),
+                AuditPrincipalType.HUMAN,
+                tenantId,
+                new AuditActionType(
+                        "merchant." + status.toLowerCase(java.util.Locale.ROOT), true),
+                new AuditTargetType("merchant"),
+                merchantId.toString(),
+                correlationId,
+                new AuditReason("Merchant lifecycle change"),
+                new AuditDetails("{\"previousStatus\":\"" + previousStatus
+                        + "\",\"status\":\"" + status + "\"}"),
+                clock
+        ));
+    }
+
+    @Override
+    public void appendTenantLifecycleChanged(
+            String actorIssuer,
+            String actorSubject,
+            UUID tenantId,
+            String previousStatus,
+            String status,
+            String correlationId
+    ) {
+        append(AuditRecord.create(
+                AuditRecordId.newId(),
+                new AuditActorIdentity(actorIssuer, actorSubject),
+                AuditPrincipalType.HUMAN,
+                tenantId,
+                new AuditActionType(
+                        "tenant." + status.toLowerCase(java.util.Locale.ROOT), true),
+                new AuditTargetType("tenant"),
+                tenantId.toString(),
+                correlationId,
+                new AuditReason("Tenant lifecycle change"),
+                new AuditDetails("{\"previousStatus\":\"" + previousStatus
+                        + "\",\"status\":\"" + status + "\"}"),
+                clock
+        ));
+    }
+
+    @Override
+    public void appendTenantConfigurationChanged(
+            String actorIssuer,
+            String actorSubject,
+            UUID tenantId,
+            long version,
+            String correlationId
+    ) {
+        append(AuditRecord.create(
+                AuditRecordId.newId(),
+                new AuditActorIdentity(actorIssuer, actorSubject),
+                AuditPrincipalType.HUMAN,
+                tenantId,
+                new AuditActionType("tenant.configuration.changed", true),
+                new AuditTargetType("tenant-configuration"),
+                tenantId + ":" + version,
+                correlationId,
+                new AuditReason("Tenant configuration change"),
+                new AuditDetails("{\"version\":" + version + "}"),
+                clock
+        ));
+    }
+
+    @Override
+    public void appendOperationalContactChanged(
+            String actorIssuer,
+            String actorSubject,
+            UUID tenantId,
+            UUID contactId,
+            long version,
+            String correlationId
+    ) {
+        append(AuditRecord.create(
+                AuditRecordId.newId(),
+                new AuditActorIdentity(actorIssuer, actorSubject),
+                AuditPrincipalType.HUMAN,
+                tenantId,
+                new AuditActionType("tenant.operational-contact.changed", true),
+                new AuditTargetType("operational-contact"),
+                contactId + ":" + version,
+                correlationId,
+                new AuditReason("Operational contact change"),
+                new AuditDetails("{\"contactId\":\"" + contactId
+                        + "\",\"version\":" + version + "}"),
                 clock
         ));
     }

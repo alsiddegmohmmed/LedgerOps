@@ -2,7 +2,10 @@ package com.ledgerops.messaging.api;
 
 public enum ProducerName {
     PAYMENT("payment"),
-    PROVIDER("provider");
+    PROVIDER("provider"),
+    TENANCY("tenancy"),
+    MERCHANT("merchant"),
+    IDENTITY("identity");
 
     private final String value;
 

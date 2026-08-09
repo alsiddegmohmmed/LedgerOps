@@ -16,7 +16,10 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.jdbc.core.JdbcTemplate;
 
+import java.sql.Timestamp;
+import java.time.Instant;
 import java.util.UUID;
 
 @SpringBootTest
@@ -25,6 +28,9 @@ class MerchantPersistenceIntegrationTests {
 
     @Autowired
     private MerchantRepository merchantRepository;
+
+    @Autowired
+    private JdbcTemplate jdbc;
 
     @Test
     void savesAndLoadsMerchantInsideOwningTenant() {
@@ -157,6 +163,20 @@ class MerchantPersistenceIntegrationTests {
     }
 
     private TenantReference tenantReference() {
-        return TenantReference.from(UUID.randomUUID());
+        UUID tenantId = UUID.randomUUID();
+        Instant now = Instant.now();
+        jdbc.update(
+                """
+                INSERT INTO tenancy.tenants (
+                    id, name, default_currency, default_locale, status,
+                    version, created_at, updated_at
+                ) VALUES (?, ?, 'SAR', 'en-SA', 'PENDING_ACTIVATION', 0, ?, ?)
+                """,
+                tenantId,
+                "Merchant Persistence Tenant " + tenantId,
+                Timestamp.from(now),
+                Timestamp.from(now)
+        );
+        return TenantReference.from(tenantId);
     }
 }

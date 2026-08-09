@@ -113,12 +113,13 @@ class TenantPersistenceAdapter implements TenantRepository {
     }
 
     private Tenant toDomain(TenantJpaEntity entity) {
-        return new Tenant(
+        return Tenant.reconstitute(
                 TenantId.from(entity.id()),
                 entity.name(),
                 Currency.getInstance(entity.defaultCurrency()),
                 Locale.forLanguageTag(entity.defaultLocale()),
-                TenantStatus.valueOf(entity.status())
+                TenantStatus.valueOf(entity.status()),
+                entity.version()
         );
     }
 }

@@ -71,7 +71,7 @@ Excluded:
 
 ## Completion report
 
-- Changed: Pending
-- Verified: Pending
-- Incomplete: Slice 2
+- Changed: Sequence item 2 implemented in the current worktree: forward Identity/Tenancy/Merchant migrations, persistence adapters, joined onboarding and lifecycle application services, transaction evidence, database constraints/locking, and Administration-owned onboarding/activation/suspension/archive HTTP boundaries.
+- Verified: Focused Slice 2B HTTP/security/contract/module/logging tests passed; `GRADLE_USER_HOME=/Users/Siddegx/.ledgerops-slice-2b-gradle-home ./gradlew check --console=plain` passed; `git diff --check` passed.
+- Incomplete: Sequence items 3 and 4 remain: Keycloak credential provisioning/recovery and the Administration/credential/support UI plus end-to-end tests. Slice 2 is not complete.
 - Deviations: None

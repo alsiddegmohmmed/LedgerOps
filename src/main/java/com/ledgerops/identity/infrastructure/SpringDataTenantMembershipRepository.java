@@ -12,6 +12,14 @@ interface SpringDataTenantMembershipRepository extends JpaRepository<TenantMembe
             select distinct membership from TenantMembershipJpaEntity membership
             left join fetch membership.roleAssignments assignment
             left join fetch assignment.merchantIds
+            where membership.id = :membershipId
+            """)
+    Optional<TenantMembershipJpaEntity> findAggregateById(UUID membershipId);
+
+    @Query("""
+            select distinct membership from TenantMembershipJpaEntity membership
+            left join fetch membership.roleAssignments assignment
+            left join fetch assignment.merchantIds
             where membership.applicationUserId = :applicationUserId
               and membership.tenantId = :tenantId
               and membership.status = 'ACTIVE'

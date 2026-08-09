@@ -9,6 +9,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.ledgerops.support.PostgresTestConfiguration;
 import com.ledgerops.identity.api.AuthorizedRequestContext;
+import com.ledgerops.identity.api.AuthorizedRequestContextRequest;
+import com.ledgerops.identity.api.AuthenticatedPrincipal;
 import com.ledgerops.identity.domain.Permission;
 import com.ledgerops.identity.domain.PrincipalType;
 import com.ledgerops.identity.domain.ScopeMode;
@@ -20,46 +22,50 @@ import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
+import org.springframework.test.context.TestPropertySource;
 
+import java.nio.charset.StandardCharsets;
 import java.util.Set;
 import java.util.UUID;
 
 @SpringBootTest
 @AutoConfigureMockMvc
 @Import(PostgresTestConfiguration.class)
+@TestPropertySource(properties = {
+        "ledgerops.identity.platform-admin.bootstrap-enabled=true",
+        "ledgerops.identity.platform-admin.issuer=https://issuer.example",
+        "ledgerops.identity.platform-admin.subject=platform-admin"
+})
 class TenantHttpIntegrationTests {
 
     @Autowired
     private MockMvc mockMvc;
 
     @Test
-    void createsReadsAndTransitionsTenant() throws Exception {
+    void createsAndReadsPendingTenant() throws Exception {
         MvcResult creation = mockMvc.perform(post("/api/v1/tenants")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(validRequest("HTTP Lifecycle Payments")))
+                        .content(validRequest("HTTP Lifecycle Payments"))
+                        .requestAttr(AuthorizedRequestContextRequest.principalAttribute(), platformAdmin()))
                 .andExpect(status().isCreated())
                 .andExpect(header().exists("Location"))
-                .andExpect(jsonPath("$.name").value("HTTP Lifecycle Payments"))
-                .andExpect(jsonPath("$.defaultCurrency").value("SAR"))
-                .andExpect(jsonPath("$.defaultLocale").value("en-SA"))
-                .andExpect(jsonPath("$.status").value("PENDING_ACTIVATION"))
+                .andExpect(jsonPath("$.tenantId").isNotEmpty())
+                .andExpect(jsonPath("$.merchantId").isNotEmpty())
+                .andExpect(jsonPath("$.membershipId").isNotEmpty())
+                .andExpect(jsonPath("$.invitationId").isNotEmpty())
                 .andReturn();
 
         String location = creation.getResponse().getHeader("Location");
 
         mockMvc.perform(post(location + "/activate"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.status").value("ACTIVE"));
-
-        mockMvc.perform(post(location + "/suspend"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.status").value("SUSPENDED"));
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("AUTHENTICATION_REQUIRED"));
 
         UUID tenantId = UUID.fromString(location.substring(location.lastIndexOf('/') + 1));
         mockMvc.perform(get(location)
                         .requestAttr(AuthorizedRequestContext.class.getName(), readContext(tenantId)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.status").value("SUSPENDED"));
+                .andExpect(jsonPath("$.status").value("PENDING_ACTIVATION"));
     }
 
     @Test
@@ -68,12 +74,14 @@ class TenantHttpIntegrationTests {
 
         mockMvc.perform(post("/api/v1/tenants")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(request))
+                        .content(request)
+                        .requestAttr(AuthorizedRequestContextRequest.principalAttribute(), platformAdmin()))
                 .andExpect(status().isCreated());
 
         mockMvc.perform(post("/api/v1/tenants")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(request))
+                        .content(request)
+                        .requestAttr(AuthorizedRequestContextRequest.principalAttribute(), platformAdmin()))
                 .andExpect(status().isConflict())
                 .andExpect(header().exists("X-Correlation-Id"))
                 .andExpect(content().contentTypeCompatibleWith(
@@ -98,9 +106,13 @@ class TenantHttpIntegrationTests {
                                 {
                                   "name": "",
                                   "defaultCurrency": "sar",
-                                  "defaultLocale": "en-SA"
+                                  "defaultLocale": "en-SA",
+                                  "merchantName": "HTTP Invalid Merchant",
+                                  "initialAdminEmail": "admin@example.com",
+                                  "invitationTokenHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
                                 }
-                                """))
+                                """ )
+                        .requestAttr(AuthorizedRequestContextRequest.principalAttribute(), platformAdmin()))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.type")
                         .value("urn:ledgerops:problem:tenant-request-validation"))
@@ -127,9 +139,14 @@ class TenantHttpIntegrationTests {
                                 {
                                   "name": "Unsupported Currency Payments",
                                   "defaultCurrency": "ZZZ",
-                                  "defaultLocale": "en-SA"
+                                  "defaultLocale": "en-SA",
+                                  "merchantName": "HTTP Unsupported Merchant",
+                                  "initialAdminEmail": "admin@example.com",
+                                  "invitationTokenHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
                                 }
-                                """))
+                                """
+                        )
+                        .requestAttr(AuthorizedRequestContextRequest.principalAttribute(), platformAdmin()))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("INVALID_TENANT_REQUEST"));
 
@@ -143,13 +160,15 @@ class TenantHttpIntegrationTests {
     void returnsProblemDetailForInvalidLifecycleTransition() throws Exception {
         MvcResult creation = mockMvc.perform(post("/api/v1/tenants")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(validRequest("HTTP Invalid Transition Payments")))
+                        .content(validRequest("HTTP Invalid Transition Payments"))
+                        .requestAttr(AuthorizedRequestContextRequest.principalAttribute(), platformAdmin()))
                 .andExpect(status().isCreated())
                 .andReturn();
 
         String location = creation.getResponse().getHeader("Location");
 
-        mockMvc.perform(post(location + "/suspend"))
+        mockMvc.perform(post(location + "/suspend")
+                        .requestAttr(AuthorizedRequestContextRequest.principalAttribute(), platformAdmin()))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.type")
                         .value("urn:ledgerops:problem:invalid-tenant-transition"))
@@ -161,9 +180,25 @@ class TenantHttpIntegrationTests {
                 {
                   "name": "%s",
                   "defaultCurrency": "SAR",
-                  "defaultLocale": "en-SA"
+                  "defaultLocale": "en-SA",
+                  "merchantName": "%s Merchant",
+                  "initialAdminEmail": "admin-%s@example.com",
+                  "invitationTokenHash": "%s"
                 }
-                """.formatted(name);
+                """.formatted(
+                name,
+                name.replace(" ", "-"),
+                name.replace(" ", "-").toLowerCase(),
+                UUID.nameUUIDFromBytes(name.getBytes(StandardCharsets.UTF_8))
+                        .toString()
+                        .replace("-", "")
+                        .repeat(2)
+        );
+    }
+
+    private AuthenticatedPrincipal platformAdmin() {
+        return new AuthenticatedPrincipal(
+                "HUMAN", "https://issuer.example", "platform-admin");
     }
 
     private AuthorizedRequestContext readContext(UUID tenantId) {

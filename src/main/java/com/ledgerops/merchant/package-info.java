@@ -1,5 +1,9 @@
 @org.springframework.modulith.ApplicationModule(
         displayName = "Merchant",
-        allowedDependencies = "tenancy::api"
+        allowedDependencies = {
+                "audit::api",
+                "messaging::api",
+                "tenancy::api"
+        }
 )
 package com.ledgerops.merchant;

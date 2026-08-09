@@ -36,11 +36,13 @@ class TenantAuthorizationSchemaIntegrationTests {
         UUID userId = UUID.randomUUID();
         UUID membershipId = UUID.randomUUID();
         UUID assignmentId = UUID.randomUUID();
+        UUID tenantId = UUID.randomUUID();
         Timestamp now = Timestamp.from(Instant.now());
+        insertTenant(tenantId, now);
         jdbc.update("insert into identity.application_users (id, issuer, subject, status, version, created_at, updated_at) values (?, ?, ?, 'ACTIVE', 0, ?, ?)",
                 userId, "issuer-" + userId, "subject-" + userId, now, now);
         jdbc.update("insert into identity.tenant_memberships (id, application_user_id, tenant_id, status, created_at, updated_at) values (?, ?, ?, 'ACTIVE', ?, ?)",
-                membershipId, userId, UUID.randomUUID(), now, now);
+                membershipId, userId, tenantId, now, now);
 
         assertThatThrownBy(() -> jdbc.update("insert into identity.tenant_role_assignments (id, membership_id, role, scope_mode) values (?, ?, 'MERCHANT_ADMIN', 'MERCHANT_SET')",
                 assignmentId, membershipId)).isInstanceOf(Exception.class);
@@ -52,6 +54,46 @@ class TenantAuthorizationSchemaIntegrationTests {
     }
 
     @Test
+    void rejectsActiveAuthorityForANonexistentTenant() {
+        UUID userId = UUID.randomUUID();
+        Timestamp now = Timestamp.from(Instant.now());
+        jdbc.update("insert into identity.application_users (id, issuer, subject, status, version, created_at, updated_at) values (?, ?, ?, 'ACTIVE', 0, ?, ?)",
+                userId, "issuer-" + userId, "subject-" + userId, now, now);
+
+        assertThatThrownBy(() -> jdbc.update(
+                "insert into identity.tenant_memberships (id, application_user_id, tenant_id, status, created_at, updated_at) values (?, ?, ?, 'ACTIVE', ?, ?)",
+                UUID.randomUUID(), userId, UUID.randomUUID(), now, now
+        )).isInstanceOf(Exception.class);
+    }
+
+    @Test
+    void rejectsPhysicalDeletionOfStandaloneRevokedMembershipHistory() {
+        UUID tenantId = UUID.randomUUID();
+        UUID membershipId = UUID.randomUUID();
+        Timestamp now = Timestamp.from(Instant.now());
+        insertTenant(tenantId, now);
+        jdbc.update(
+                """
+                INSERT INTO identity.tenant_memberships
+                    (id, application_user_id, tenant_id, status, version, created_at, updated_at)
+                VALUES (?, NULL, ?, 'REVOKED', 0, ?, ?)
+                """,
+                membershipId, tenantId, now, now
+        );
+
+        assertThatThrownBy(() -> jdbc.update(
+                "DELETE FROM identity.tenant_memberships WHERE id = ?",
+                membershipId
+        )).isInstanceOf(Exception.class);
+
+        assertThat(jdbc.queryForObject(
+                "SELECT status FROM identity.tenant_memberships WHERE id = ?",
+                String.class,
+                membershipId
+        )).isEqualTo("REVOKED");
+    }
+
+    @Test
     void derivesPermissionsAndMerchantScopeFromActivePostgresMembership() {
         UUID userId = UUID.randomUUID();
         UUID membershipId = UUID.randomUUID();
@@ -60,6 +102,7 @@ class TenantAuthorizationSchemaIntegrationTests {
         UUID merchantId = UUID.randomUUID();
         Timestamp now = Timestamp.from(Instant.now());
         var context = transactions.execute(status -> {
+            insertTenant(tenantId, now);
             jdbc.update("insert into identity.application_users (id, issuer, subject, status, version, created_at, updated_at) values (?, ?, ?, 'ACTIVE', 0, ?, ?)",
                     userId, "issuer-" + userId, "subject-" + userId, now, now);
             jdbc.update("insert into identity.tenant_memberships (id, application_user_id, tenant_id, status, created_at, updated_at) values (?, ?, ?, 'ACTIVE', ?, ?)",
@@ -90,6 +133,8 @@ class TenantAuthorizationSchemaIntegrationTests {
         UUID merchantTenantId = UUID.randomUUID();
         UUID merchantId = UUID.randomUUID();
         Timestamp now = Timestamp.from(Instant.now());
+        insertTenant(membershipTenantId, now);
+        insertTenant(merchantTenantId, now);
         jdbc.update("insert into identity.application_users (id, issuer, subject, status, version, created_at, updated_at) values (?, ?, ?, 'ACTIVE', 0, ?, ?)",
                 userId, "issuer-" + userId, "subject-" + userId, now, now);
         jdbc.update("insert into identity.tenant_memberships (id, application_user_id, tenant_id, status, created_at, updated_at) values (?, ?, ?, 'ACTIVE', ?, ?)",
@@ -113,6 +158,7 @@ class TenantAuthorizationSchemaIntegrationTests {
         UUID tenantId = UUID.randomUUID();
         UUID merchantId = UUID.randomUUID();
         Timestamp now = Timestamp.from(Instant.now());
+        insertTenant(tenantId, now);
         jdbc.update("insert into identity.application_users (id, issuer, subject, status, version, created_at, updated_at) values (?, ?, ?, 'ACTIVE', 0, ?, ?)",
                 userId, "issuer-" + userId, "subject-" + userId, now, now);
         jdbc.update("insert into identity.tenant_memberships (id, application_user_id, tenant_id, status, created_at, updated_at) values (?, ?, ?, 'ACTIVE', ?, ?)",
@@ -137,6 +183,8 @@ class TenantAuthorizationSchemaIntegrationTests {
         UUID otherTenantId = UUID.randomUUID();
         UUID merchantId = UUID.randomUUID();
         Timestamp now = Timestamp.from(Instant.now());
+        insertTenant(tenantId, now);
+        insertTenant(otherTenantId, now);
         jdbc.update("insert into identity.application_users (id, issuer, subject, status, version, created_at, updated_at) values (?, ?, ?, 'ACTIVE', 0, ?, ?)",
                 userId, "issuer-" + userId, "subject-" + userId, now, now);
         jdbc.update("insert into identity.tenant_memberships (id, application_user_id, tenant_id, status, created_at, updated_at) values (?, ?, ?, 'ACTIVE', ?, ?)",
@@ -164,6 +212,8 @@ class TenantAuthorizationSchemaIntegrationTests {
         UUID otherTenantId = UUID.randomUUID();
         UUID merchantId = UUID.randomUUID();
         Timestamp now = Timestamp.from(Instant.now());
+        insertTenant(tenantId, now);
+        insertTenant(otherTenantId, now);
         jdbc.update("insert into identity.application_users (id, issuer, subject, status, version, created_at, updated_at) values (?, ?, ?, 'ACTIVE', 0, ?, ?)",
                 userId, "issuer-" + userId, "subject-" + userId, now, now);
         jdbc.update("insert into identity.tenant_memberships (id, application_user_id, tenant_id, status, created_at, updated_at) values (?, ?, ?, 'ACTIVE', ?, ?)",
@@ -189,6 +239,7 @@ class TenantAuthorizationSchemaIntegrationTests {
         UUID tenantId = UUID.randomUUID();
         UUID merchantId = UUID.randomUUID();
         Timestamp now = Timestamp.from(Instant.now());
+        insertTenant(tenantId, now);
         jdbc.update("insert into identity.application_users (id, issuer, subject, status, version, created_at, updated_at) values (?, ?, ?, 'ACTIVE', 0, ?, ?)",
                 userId, "issuer-" + userId, "subject-" + userId, now, now);
         jdbc.update("insert into identity.tenant_memberships (id, application_user_id, tenant_id, status, created_at, updated_at) values (?, ?, ?, 'ACTIVE', ?, ?)",
@@ -207,7 +258,7 @@ class TenantAuthorizationSchemaIntegrationTests {
     }
 
     @Test
-    void permitsDeferredMultiRowTenantMoveWhenTheFinalScopedStateIsValid() {
+    void rejectsDeferredMultiRowTenantMoveBecauseOwnershipIsPermanent() {
         UUID userId = UUID.randomUUID();
         UUID membershipId = UUID.randomUUID();
         UUID assignmentId = UUID.randomUUID();
@@ -232,15 +283,15 @@ class TenantAuthorizationSchemaIntegrationTests {
                     assignmentId, merchantId);
         });
 
-        transactions.executeWithoutResult(status -> {
+        assertThatThrownBy(() -> transactions.executeWithoutResult(status -> {
             jdbc.update("update identity.tenant_memberships set tenant_id = ? where id = ?", tenantB, membershipId);
             jdbc.update("update merchant.merchants set tenant_id = ? where id = ?", tenantB, merchantId);
-        });
+        })).isInstanceOf(Exception.class);
 
         assertThat(jdbc.queryForObject("select tenant_id from identity.tenant_memberships where id = ?", UUID.class, membershipId))
-                .isEqualTo(tenantB);
+                .isEqualTo(tenantA);
         assertThat(jdbc.queryForObject("select tenant_id from merchant.merchants where id = ?", UUID.class, merchantId))
-                .isEqualTo(tenantB);
+                .isEqualTo(tenantA);
         assertThat(jdbc.queryForObject("select count(*) from identity.role_assignment_merchant_scopes where role_assignment_id = ? and merchant_id = ?",
                 Integer.class, assignmentId, merchantId)).isEqualTo(1);
     }
@@ -261,5 +312,12 @@ class TenantAuthorizationSchemaIntegrationTests {
                 "ledger-client", tenantId);
 
         assertThat(context).isEmpty();
+    }
+
+    private void insertTenant(UUID tenantId, Timestamp now) {
+        jdbc.update(
+                "insert into tenancy.tenants (id, name, default_currency, default_locale, status, version, created_at, updated_at) values (?, ?, 'USD', 'en', 'ACTIVE', 0, ?, ?)",
+                tenantId, "Authorization Tenant " + tenantId, now, now
+        );
     }
 }

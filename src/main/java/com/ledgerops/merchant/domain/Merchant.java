@@ -12,12 +12,23 @@ public final class Merchant {
     private final TenantReference tenantReference;
     private final String name;
     private final MerchantStatus status;
+    private final long version;
 
     public Merchant(
             MerchantId id,
             TenantReference tenantReference,
             String name,
             MerchantStatus status
+    ) {
+        this(id, tenantReference, name, status, 0);
+    }
+
+    private Merchant(
+            MerchantId id,
+            TenantReference tenantReference,
+            String name,
+            MerchantStatus status,
+            long version
     ) {
         this.id = Objects.requireNonNull(id, "Merchant ID must not be null");
         this.tenantReference = Objects.requireNonNull(
@@ -26,6 +37,20 @@ public final class Merchant {
         );
         this.name = requireName(name);
         this.status = Objects.requireNonNull(status, "Merchant status must not be null");
+        if (version < 0) {
+            throw new IllegalArgumentException("Merchant version must not be negative");
+        }
+        this.version = version;
+    }
+
+    public static Merchant reconstitute(
+            MerchantId id,
+            TenantReference tenantReference,
+            String name,
+            MerchantStatus status,
+            long version
+    ) {
+        return new Merchant(id, tenantReference, name, status, version);
     }
 
     public MerchantId id() {
@@ -42,6 +67,10 @@ public final class Merchant {
 
     public MerchantStatus status() {
         return status;
+    }
+
+    public long version() {
+        return version;
     }
 
     public Merchant activate() {
@@ -75,7 +104,7 @@ public final class Merchant {
     }
 
     private Merchant withStatus(MerchantStatus newStatus) {
-        return new Merchant(id, tenantReference, name, newStatus);
+        return new Merchant(id, tenantReference, name, newStatus, version);
     }
 
     private IllegalStateException invalidTransition(MerchantStatus targetStatus) {

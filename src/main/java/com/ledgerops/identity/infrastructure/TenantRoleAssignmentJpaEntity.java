@@ -43,6 +43,22 @@ class TenantRoleAssignmentJpaEntity {
     protected TenantRoleAssignmentJpaEntity() {
     }
 
+    TenantRoleAssignmentJpaEntity(
+            UUID id,
+            TenantMembershipJpaEntity membership,
+            String role,
+            String scopeMode,
+            Set<UUID> merchantIds
+    ) {
+        this.id = id;
+        this.membership = membership;
+        this.role = role;
+        this.scopeMode = scopeMode;
+        this.merchantIds = new LinkedHashSet<>(merchantIds);
+    }
+
+    UUID id() { return id; }
+
     String role() { return role; }
     String scopeMode() { return scopeMode; }
     Set<UUID> merchantIds() { return merchantIds; }

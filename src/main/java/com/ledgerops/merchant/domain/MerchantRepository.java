@@ -13,5 +13,12 @@ public interface MerchantRepository {
             MerchantId merchantId
     );
 
+    Optional<Merchant> findByIdForUpdate(
+            TenantReference tenantReference,
+            MerchantId merchantId
+    );
+
+    boolean existsActiveByTenant(TenantReference tenantReference);
+
     boolean existsByName(TenantReference tenantReference, String name);
 }

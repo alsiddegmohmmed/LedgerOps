@@ -6,6 +6,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.ledgerops.identity.api.AuthenticatedPrincipal;
+import com.ledgerops.identity.api.AuthorizedRequestContextRequest;
 import com.ledgerops.support.PostgresTestConfiguration;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -18,11 +20,17 @@ import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
+import org.springframework.test.context.TestPropertySource;
 
 @SpringBootTest
 @AutoConfigureMockMvc
 @Import(PostgresTestConfiguration.class)
 @ExtendWith(OutputCaptureExtension.class)
+@TestPropertySource(properties = {
+        "ledgerops.identity.platform-admin.bootstrap-enabled=true",
+        "ledgerops.identity.platform-admin.issuer=https://issuer.example",
+        "ledgerops.identity.platform-admin.subject=platform-admin"
+})
 class OperationalLoggingIntegrationTests {
 
     @Autowired
@@ -37,9 +45,16 @@ class OperationalLoggingIntegrationTests {
                                 {
                                   "name": "%s",
                                   "defaultCurrency": "SAR",
-                                  "defaultLocale": "en-SA"
+                                  "defaultLocale": "en-SA",
+                                  "merchantName": "Operational Logging Merchant",
+                                  "initialAdminEmail": "operational-logging@example.com",
+                                  "invitationTokenHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
                                 }
-                                """.formatted(payloadMarker)))
+                                """.formatted(payloadMarker))
+                        .requestAttr(
+                                AuthorizedRequestContextRequest.principalAttribute(),
+                                new AuthenticatedPrincipal(
+                                        "HUMAN", "https://issuer.example", "platform-admin")))
                 .andExpect(status().isCreated())
                 .andReturn();
 
@@ -48,7 +63,7 @@ class OperationalLoggingIntegrationTests {
         );
         assertNotNull(correlationId);
         assertTrue(output.getOut().contains("correlationId=" + correlationId));
-        assertTrue(output.getOut().contains("Tenant created tenantId="));
+        assertTrue(output.getOut().contains("Tenant onboarded tenantId="));
         assertFalse(output.getOut().contains(payloadMarker));
     }
 }

@@ -31,6 +31,13 @@
 
 The exact resources are introduced only by their slice.
 
+During the Slice 2B HTTP migration, the existing
+`POST /api/v1/tenants/{tenantId}/activate` compatibility route is owned by the
+Administration module and requires an authenticated Platform Admin. The
+historical Release 0.1 OpenAPI file remains unchanged; the canonical
+`/api/v1/platform/tenants/...` routes will be published by the complete Release
+0.3 OpenAPI contract.
+
 ## Service Payment contract
 
 `POST /api/v1/payments`

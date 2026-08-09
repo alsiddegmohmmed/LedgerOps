@@ -1,5 +1,9 @@
 @org.springframework.modulith.ApplicationModule(
         displayName = "Tenancy",
-        allowedDependencies = "identity::api"
+        allowedDependencies = {
+                "audit::api",
+                "identity::api",
+                "messaging::api"
+        }
 )
 package com.ledgerops.tenancy;

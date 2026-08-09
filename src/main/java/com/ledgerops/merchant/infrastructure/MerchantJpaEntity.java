@@ -75,4 +75,8 @@ class MerchantJpaEntity {
     String status() {
         return status;
     }
+
+    long version() {
+        return version == null ? 0L : version;
+    }
 }

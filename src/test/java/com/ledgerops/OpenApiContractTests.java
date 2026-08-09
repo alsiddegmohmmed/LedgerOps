@@ -101,6 +101,7 @@ class OpenApiContractTests {
         handlerMapping.getHandlerMethods().forEach((mapping, method) -> {
             String packageName = method.getBeanType().getPackageName();
             if (!packageName.equals("com.ledgerops.tenancy.api")
+                    && !packageName.equals("com.ledgerops.administration.api")
                     && !packageName.equals("com.ledgerops.payment.api")) {
                 return;
             }

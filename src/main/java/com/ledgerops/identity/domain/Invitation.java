@@ -46,6 +46,20 @@ public final class Invitation {
                 createdAt, InvitationStatus.PENDING);
     }
 
+    public static Invitation reconstitute(
+            InvitationId id,
+            UUID tenantId,
+            String intendedEmail,
+            InvitationTokenHash tokenHash,
+            Set<TenantRoleAssignment> assignments,
+            Instant createdAt,
+            InvitationStatus status
+    ) {
+        return new Invitation(
+                id, tenantId, intendedEmail, tokenHash, assignments, createdAt, status
+        );
+    }
+
     public Invitation revoke() {
         if (status == InvitationStatus.REVOKED) {
             throw new InvitationRevokedException();

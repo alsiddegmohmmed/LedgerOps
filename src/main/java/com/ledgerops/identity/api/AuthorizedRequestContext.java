@@ -50,6 +50,14 @@ public record AuthorizedRequestContext(
         return hasPermission(Permission.TENANT_READ);
     }
 
+    public boolean canConfigureTenant() {
+        return hasPermission(Permission.TENANT_CONFIGURE);
+    }
+
+    public boolean isHuman() {
+        return principalType == PrincipalType.HUMAN;
+    }
+
     public boolean canCreatePayment() {
         return hasPermission(Permission.PAYMENT_CREATE);
     }

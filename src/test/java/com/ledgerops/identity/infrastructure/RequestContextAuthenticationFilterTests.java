@@ -78,6 +78,33 @@ class RequestContextAuthenticationFilterTests {
         assertThat(response.getContentAsString()).contains("AUTHENTICATION_REQUIRED");
     }
 
+    @Test
+    void attachesPrincipalButDoesNotCreateTenantContextForPlatformActivation() throws Exception {
+        UUID tenantId = UUID.randomUUID();
+        RequestContextAuthenticationFilter filter = filter(
+                ApplicationUser.create(ApplicationUserId.newId(),
+                        new KeycloakIdentity(ISSUER, "subject-1")),
+                tenantId
+        );
+        MockHttpServletRequest request = new MockHttpServletRequest(
+                "POST", "/api/v1/tenants/" + tenantId + "/activate");
+        request.addHeader(HttpHeaders.AUTHORIZATION, "Bearer valid");
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        AtomicBoolean continued = new AtomicBoolean();
+
+        filter.doFilter(request, response,
+                (ignoredRequest, ignoredResponse) -> continued.set(true));
+
+        assertThat(response.getStatus()).isEqualTo(HttpStatus.OK.value());
+        assertThat(continued).isTrue();
+        assertThat(request.getAttribute(
+                com.ledgerops.identity.api.AuthorizedRequestContextRequest.principalAttribute()))
+                .isEqualTo(new com.ledgerops.identity.api.AuthenticatedPrincipal(
+                        "HUMAN", ISSUER, "subject-1"));
+        assertThat(request.getAttribute(RequestContextAuthenticationFilter.CONTEXT_ATTRIBUTE))
+                .isNull();
+    }
+
     private void assertUnauthorized(String authorization, String code) throws Exception {
         UUID tenantId = UUID.randomUUID();
         RequestContextAuthenticationFilter filter = filter(null, tenantId);

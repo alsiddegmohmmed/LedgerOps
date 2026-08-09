@@ -173,6 +173,22 @@ class InvitationAndMembershipTests {
     }
 
     @Test
+    void preservesInitialMembershipIdentityWhenInvitationIsAccepted() {
+        UUID tenant = UUID.randomUUID();
+        TenantMembership invited = TenantMembership.invitedInitial(
+                TenantMembershipId.newId(), tenant, Set.of());
+
+        TenantMembership accepted = invited.accept(
+                ApplicationUserId.newId(), viewerAssignments(tenant));
+        TenantMembership suspended = accepted.suspend();
+
+        assertThat(invited.initial()).isTrue();
+        assertThat(accepted.initial()).isTrue();
+        assertThat(suspended.initial()).isTrue();
+        assertThat(accepted.revoke().initial()).isTrue();
+    }
+
+    @Test
     void rejectsCrossTenantAdminFactsInsteadOfCountingThem() {
         UUID tenant = UUID.randomUUID();
         TenantMembership target = activeAdmin(TenantMembershipId.newId(), tenant);
