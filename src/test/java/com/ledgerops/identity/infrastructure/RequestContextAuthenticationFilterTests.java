@@ -80,6 +80,43 @@ class RequestContextAuthenticationFilterTests {
     }
 
     @Test
+    void attachesRequestContextForCredentialMetadataAndActionRoutes() throws Exception {
+        UUID tenantId = UUID.randomUUID();
+        RequestContextAuthenticationFilter filter = filter(
+                ApplicationUser.create(ApplicationUserId.newId(),
+                        new KeycloakIdentity(ISSUER, "subject-1")),
+                tenantId
+        );
+
+        for (String methodAndPath : new String[] {
+                "GET /api/v1/tenants/" + tenantId + "/credentials",
+                "GET /api/v1/tenants/" + tenantId + "/credentials/"
+                        + UUID.randomUUID(),
+                "POST /api/v1/tenants/" + tenantId + "/credentials",
+                "POST /api/v1/tenants/" + tenantId + "/credentials/"
+                        + UUID.randomUUID() + "/rotate",
+                "POST /api/v1/tenants/" + tenantId + "/credentials/"
+                        + UUID.randomUUID() + "/revoke"
+        }) {
+            String[] parts = methodAndPath.split(" ", 2);
+            MockHttpServletRequest request = new MockHttpServletRequest(parts[0], parts[1]);
+            request.addHeader(HttpHeaders.AUTHORIZATION, "Bearer valid");
+            request.setAttribute(RequestCorrelationFilter.CORRELATION_ID,
+                    "credential-correlation");
+            MockHttpServletResponse response = new MockHttpServletResponse();
+            AtomicBoolean continued = new AtomicBoolean();
+
+            filter.doFilter(request, response,
+                    (ignoredRequest, ignoredResponse) -> continued.set(true));
+
+            assertThat(response.getStatus()).isEqualTo(HttpStatus.OK.value());
+            assertThat(continued).isTrue();
+            assertThat(request.getAttribute(RequestContextAuthenticationFilter.CONTEXT_ATTRIBUTE))
+                    .isInstanceOf(com.ledgerops.identity.api.AuthorizedRequestContext.class);
+        }
+    }
+
+    @Test
     void attachesPrincipalButDoesNotCreateTenantContextForPlatformActivation() throws Exception {
         UUID tenantId = UUID.randomUUID();
         RequestContextAuthenticationFilter filter = filter(

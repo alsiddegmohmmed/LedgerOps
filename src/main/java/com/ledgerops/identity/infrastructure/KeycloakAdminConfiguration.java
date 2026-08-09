@@ -8,6 +8,7 @@ import com.ledgerops.identity.application.ServiceCredentialProvisioningService;
 import com.ledgerops.identity.application.ServiceCredentialRevocationService;
 import com.ledgerops.identity.domain.CredentialProvisioningOperationRepository;
 import com.ledgerops.identity.domain.ServiceCredentialRepository;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
@@ -37,7 +38,7 @@ class KeycloakAdminConfiguration {
             havingValue = "true"
     )
     KeycloakCredentialProvisioner keycloakCredentialProvisioner(
-            KeycloakCredentialProvisioningAdapter adapter
+            @Qualifier("keycloakCredentialAdminAdapter") KeycloakCredentialProvisioningAdapter adapter
     ) {
         return adapter;
     }
@@ -48,7 +49,7 @@ class KeycloakAdminConfiguration {
             havingValue = "true"
     )
     KeycloakCredentialDisabler keycloakCredentialDisabler(
-            KeycloakCredentialProvisioningAdapter adapter
+            @Qualifier("keycloakCredentialAdminAdapter") KeycloakCredentialProvisioningAdapter adapter
     ) {
         return adapter;
     }
@@ -61,8 +62,8 @@ class KeycloakAdminConfiguration {
     ServiceCredentialProvisioningPort serviceCredentialProvisioningPort(
             ServiceCredentialRepository credentials,
             CredentialProvisioningOperationRepository operations,
-            KeycloakCredentialProvisioner keycloak,
-            KeycloakCredentialDisabler disabler,
+            @Qualifier("keycloakCredentialProvisioner") KeycloakCredentialProvisioner keycloak,
+            @Qualifier("keycloakCredentialDisabler") KeycloakCredentialDisabler disabler,
             TransactionTemplate transactions,
             Clock clock
     ) {
@@ -84,7 +85,7 @@ class KeycloakAdminConfiguration {
     ServiceCredentialRevocationPort serviceCredentialRevocationPort(
             ServiceCredentialRepository credentials,
             CredentialProvisioningOperationRepository operations,
-            KeycloakCredentialDisabler keycloak,
+            @Qualifier("keycloakCredentialDisabler") KeycloakCredentialDisabler keycloak,
             TransactionTemplate transactions,
             Clock clock
     ) {

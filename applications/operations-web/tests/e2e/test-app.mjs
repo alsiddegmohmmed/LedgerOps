@@ -129,6 +129,74 @@ async function configureKeycloakClient() {
     body: JSON.stringify({ ...client, redirectUris: [redirectUri], webOrigins: [`http://127.0.0.1:${ports.bff}`] }),
   });
   if (!update.ok) throw new Error(`Keycloak client update failed: ${await update.text()}`);
+
+  const coreAdminClientId = "ledgerops-core-admin";
+  const coreAdminClientSecret = "ledgerops-core-admin-secret";
+  const coreClientsResponse = await fetch(
+    `${keycloakBaseUrl}/admin/realms/ledgerops/clients?clientId=${encodeURIComponent(coreAdminClientId)}`,
+    { headers: { authorization: `Bearer ${adminToken}` } },
+  );
+  if (!coreClientsResponse.ok) throw new Error(`Core admin client lookup failed: ${await coreClientsResponse.text()}`);
+  let coreClients = await coreClientsResponse.json();
+  if (!Array.isArray(coreClients) || coreClients.length > 1) {
+    throw new Error("Expected zero or one Core Keycloak admin client");
+  }
+  if (coreClients.length === 0) {
+    const createCoreClient = await fetch(`${keycloakBaseUrl}/admin/realms/ledgerops/clients`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${adminToken}`, "content-type": "application/json" },
+      body: JSON.stringify({
+        clientId: coreAdminClientId,
+        enabled: true,
+        publicClient: false,
+        serviceAccountsEnabled: true,
+        clientAuthenticatorType: "client-secret",
+        secret: coreAdminClientSecret,
+        protocol: "openid-connect",
+        standardFlowEnabled: false,
+        directAccessGrantsEnabled: false,
+      }),
+    });
+    if (!createCoreClient.ok) throw new Error(`Core admin client creation failed: ${await createCoreClient.text()}`);
+    const refreshedCoreClients = await fetch(
+      `${keycloakBaseUrl}/admin/realms/ledgerops/clients?clientId=${encodeURIComponent(coreAdminClientId)}`,
+      { headers: { authorization: `Bearer ${adminToken}` } },
+    );
+    if (!refreshedCoreClients.ok) throw new Error(`Core admin client refresh failed: ${await refreshedCoreClients.text()}`);
+    coreClients = await refreshedCoreClients.json();
+  }
+  const coreClient = coreClients[0];
+  const realmManagementResponse = await fetch(
+    `${keycloakBaseUrl}/admin/realms/ledgerops/clients?clientId=realm-management`,
+    { headers: { authorization: `Bearer ${adminToken}` } },
+  );
+  if (!realmManagementResponse.ok) throw new Error(`Realm-management lookup failed: ${await realmManagementResponse.text()}`);
+  const realmManagementClients = await realmManagementResponse.json();
+  if (!Array.isArray(realmManagementClients) || realmManagementClients.length !== 1) {
+    throw new Error("Expected exactly one realm-management client");
+  }
+  const realmManagementId = realmManagementClients[0].id;
+  const serviceAccountResponse = await fetch(
+    `${keycloakBaseUrl}/admin/realms/ledgerops/clients/${coreClient.id}/service-account-user`,
+    { headers: { authorization: `Bearer ${adminToken}` } },
+  );
+  if (!serviceAccountResponse.ok) throw new Error(`Core service-account lookup failed: ${await serviceAccountResponse.text()}`);
+  const serviceAccount = await serviceAccountResponse.json();
+  const manageClientsResponse = await fetch(
+    `${keycloakBaseUrl}/admin/realms/ledgerops/clients/${realmManagementId}/roles/manage-clients`,
+    { headers: { authorization: `Bearer ${adminToken}` } },
+  );
+  if (!manageClientsResponse.ok) throw new Error(`manage-clients role lookup failed: ${await manageClientsResponse.text()}`);
+  const manageClientsRole = await manageClientsResponse.json();
+  const mappingResponse = await fetch(
+    `${keycloakBaseUrl}/admin/realms/ledgerops/users/${serviceAccount.id}/role-mappings/clients/${realmManagementId}`,
+    {
+      method: "POST",
+      headers: { authorization: `Bearer ${adminToken}`, "content-type": "application/json" },
+      body: JSON.stringify([manageClientsRole]),
+    },
+  );
+  if (!mappingResponse.ok) throw new Error(`Core service-account role mapping failed: ${await mappingResponse.text()}`);
 }
 
 async function verifyTopology() {
@@ -286,6 +354,11 @@ try {
       LEDGEROPS_IDENTITY_JWT_ISSUER: keycloakIssuer,
       LEDGEROPS_IDENTITY_JWT_AUDIENCE: "operations-web",
       LEDGEROPS_IDENTITY_JWT_JWK_SET_URI: `${keycloakIssuer}/protocol/openid-connect/certs`,
+      KEYCLOAK_ADMIN_ENABLED: "true",
+      KEYCLOAK_ADMIN_BASE_URL: keycloakBaseUrl,
+      KEYCLOAK_ADMIN_REALM: "ledgerops",
+      KEYCLOAK_ADMIN_CLIENT_ID: "ledgerops-core-admin",
+      KEYCLOAK_ADMIN_CLIENT_SECRET: "ledgerops-core-admin-secret",
     },
   });
   coreIdentity = captureProcessIdentity(core.pid, "bootRun --no-daemon");

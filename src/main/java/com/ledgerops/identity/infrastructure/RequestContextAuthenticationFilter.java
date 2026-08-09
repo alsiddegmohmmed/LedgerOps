@@ -35,6 +35,8 @@ final class RequestContextAuthenticationFilter extends OncePerRequestFilter {
             RequestContextAuthenticationFilter.class.getName() + ".required";
     private static final Pattern TENANT_PATH = Pattern.compile("^/api/v1/tenants/([0-9a-fA-F-]{36})(?:/.*)?$");
     private static final Pattern TENANT_READ_PATH = Pattern.compile("^/api/v1/tenants/[0-9a-fA-F-]{36}$");
+    private static final Pattern TENANT_CREDENTIALS_PATH = Pattern.compile(
+            "^/api/v1/tenants/[0-9a-fA-F-]{36}/credentials(?:/.*)?$");
     private static final Pattern TENANT_ACTIVATION_PATH = Pattern.compile(
             "^/api/v1/tenants/[0-9a-fA-F-]{36}/(?:activate|suspend|archive)$");
     private static final String TENANT_ONBOARDING_PATH = "/api/v1/tenants";
@@ -122,6 +124,7 @@ final class RequestContextAuthenticationFilter extends OncePerRequestFilter {
     private boolean isProtectedPath(HttpServletRequest request) {
         return ("GET".equals(request.getMethod())
                 && TENANT_READ_PATH.matcher(request.getRequestURI()).matches())
+                || TENANT_CREDENTIALS_PATH.matcher(request.getRequestURI()).matches()
                 || ("POST".equals(request.getMethod())
                 && isPlatformTenantOperationPath(request))
                 || ("POST".equals(request.getMethod()) && PAYMENT_PATH.equals(request.getRequestURI()));

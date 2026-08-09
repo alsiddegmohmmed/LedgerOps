@@ -24,17 +24,17 @@ import com.ledgerops.merchant.api.MerchantReference;
 import com.ledgerops.tenancy.api.TenantActivityQuery;
 import com.ledgerops.tenancy.api.TenantActivityStatus;
 import com.ledgerops.tenancy.api.TenantReference;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 
 import java.util.Objects;
 import java.util.UUID;
 
 @Service("administrationCredentialService")
-@ConditionalOnBean({
-        ServiceCredentialProvisioningPort.class,
-        ServiceCredentialRevocationPort.class
-})
+@ConditionalOnProperty(
+        name = "ledgerops.identity.keycloak.admin.enabled",
+        havingValue = "true"
+)
 class CredentialAdministrationService implements CredentialAdministrationPort {
 
     private final ServiceCredentialProvisioningPort provisioning;
