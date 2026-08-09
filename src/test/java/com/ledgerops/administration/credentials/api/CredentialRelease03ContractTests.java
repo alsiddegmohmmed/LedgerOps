@@ -23,7 +23,7 @@ class CredentialRelease03ContractTests {
             "docs/api/release-0.3-credential-actions.yaml");
 
     @Test
-    void publishesOnlyTheThreeImplementedCredentialActions() throws IOException {
+    void publishesTheImplementedCredentialReadAndActionOperations() throws IOException {
         Map<String, Object> paths = map(loadContract().get("paths"));
 
         assertEquals(
@@ -46,6 +46,29 @@ class CredentialRelease03ContractTests {
                         .get("operationId")
         );
         assertEquals(
+                "listServiceCredentialMetadata",
+                map(map(paths.get("/api/v1/tenants/{tenantId}/credentials")).get("get"))
+                        .get("operationId")
+        );
+        Map<String, Object> list = map(
+                map(paths.get("/api/v1/tenants/{tenantId}/credentials")).get("get"));
+        List<Map<String, Object>> parameters = listOfMaps(list.get("parameters"));
+        assertTrue(parameters.stream().anyMatch(parameter ->
+                "limit".equals(parameter.get("name"))
+                        && parameterNumber(parameter, "default") == 25
+                        && parameterNumber(parameter, "minimum") == 1
+                        && parameterNumber(parameter, "maximum") == 100));
+        assertTrue(parameters.stream().anyMatch(parameter ->
+                "cursor".equals(parameter.get("name"))));
+        Map<String, Object> responseContent = map(
+                map(map(list.get("responses")).get("200")).get("content"));
+        Map<String, Object> responseSchema = map(
+                map(responseContent.get("application/json")).get("schema"));
+        assertEquals(
+                "#/components/schemas/CredentialMetadataPageResponse",
+                responseSchema.get("$ref")
+        );
+        assertEquals(
                 "rotateServiceCredential",
                 operation(paths, "/api/v1/tenants/{tenantId}/credentials/{credentialId}/rotate")
                         .get("operationId")
@@ -64,6 +87,7 @@ class CredentialRelease03ContractTests {
         Map<String, Object> provisioning = map(schemas.get("CredentialProvisioningResponse"));
         Map<String, Object> rotation = map(schemas.get("CredentialRotationResponse"));
         Map<String, Object> revocation = map(schemas.get("CredentialRevocationResponse"));
+        Map<String, Object> page = map(schemas.get("CredentialMetadataPageResponse"));
 
         assertEquals(true, map(map(provisioning.get("properties")).get("clientSecret"))
                 .get("readOnly"));
@@ -71,6 +95,8 @@ class CredentialRelease03ContractTests {
                 .get("readOnly"));
         assertFalse(map(revocation.get("properties")).containsKey("clientSecret"));
         assertFalse(map(metadata.get("properties")).containsKey("clientSecret"));
+        Map<String, Object> pageItems = map(map(page.get("properties")).get("items"));
+        assertFalse(pageItems.containsKey("clientSecret"));
         assertTrue(list(map(schemas.get("CredentialActionRequest")).get("required"))
                 .containsAll(List.of("confirmation", "reason")));
     }
@@ -90,6 +116,15 @@ class CredentialRelease03ContractTests {
     @SuppressWarnings("unchecked")
     private Map<String, Object> map(Object value) {
         return (Map<String, Object>) value;
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<Map<String, Object>> listOfMaps(Object value) {
+        return (List<Map<String, Object>>) value;
+    }
+
+    private int parameterNumber(Map<String, Object> parameter, String name) {
+        return ((Number) map(parameter.get("schema")).get(name)).intValue();
     }
 
     @SuppressWarnings("unchecked")

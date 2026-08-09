@@ -10,6 +10,8 @@ import com.ledgerops.identity.api.AuthorizationPermissionDeniedException;
 import com.ledgerops.identity.api.AuthorizationResourceNotFoundException;
 import com.ledgerops.identity.api.AuthorizedRequestContext;
 import com.ledgerops.identity.api.ServiceCredentialMetadata;
+import com.ledgerops.identity.api.ServiceCredentialPage;
+import com.ledgerops.identity.api.ServiceCredentialPageQuery;
 import com.ledgerops.identity.api.ServiceCredentialProvisioningPort;
 import com.ledgerops.identity.api.ServiceCredentialProvisioningRequest;
 import com.ledgerops.identity.api.ServiceCredentialProvisioningResult;
@@ -341,6 +343,11 @@ class CredentialAdministrationServiceTests {
         @Override
         public Optional<ServiceCredentialMetadata> find(UUID credentialId) {
             return result;
+        }
+
+        @Override
+        public ServiceCredentialPage findPage(ServiceCredentialPageQuery query) {
+            return new ServiceCredentialPage(java.util.List.of(), false);
         }
     }
 

@@ -6,6 +6,8 @@ import com.ledgerops.identity.api.AuthenticatedPrincipal;
 import com.ledgerops.identity.api.AuthorizationResourceNotFoundException;
 import com.ledgerops.identity.api.AuthorizedRequestContext;
 import com.ledgerops.identity.api.ServiceCredentialMetadata;
+import com.ledgerops.identity.api.ServiceCredentialPage;
+import com.ledgerops.identity.api.ServiceCredentialPageQuery;
 import com.ledgerops.identity.api.ServiceCredentialQueryPort;
 import com.ledgerops.identity.domain.Permission;
 import com.ledgerops.identity.domain.PrincipalType;
@@ -14,6 +16,7 @@ import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
 import java.util.Optional;
+import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 
@@ -32,7 +35,7 @@ class CredentialMetadataQueryServiceTests {
     @Test
     void returnsOnlySafeMetadataForAQualifiedHuman() {
         CredentialMetadataQueryService service = new CredentialMetadataQueryService(
-                credentialId -> Optional.of(metadata()));
+                new RecordingQuery(Optional.of(metadata())));
 
         CredentialMetadataResult result = service.find(new CredentialMetadataQuery(
                 TENANT_ID,
@@ -49,7 +52,7 @@ class CredentialMetadataQueryServiceTests {
     @Test
     void hidesAResourceOutsideTheAuthorizedMerchantScope() {
         CredentialMetadataQueryService service = new CredentialMetadataQueryService(
-                credentialId -> Optional.of(metadata()));
+                new RecordingQuery(Optional.of(metadata())));
 
         assertThatThrownBy(() -> service.find(new CredentialMetadataQuery(
                 TENANT_ID,
@@ -89,5 +92,18 @@ class CredentialMetadataQueryServiceTests {
                 Set.of(Permission.CREDENTIAL_MANAGE),
                 "credential-read-correlation"
         );
+    }
+
+    private record RecordingQuery(Optional<ServiceCredentialMetadata> result)
+            implements ServiceCredentialQueryPort {
+        @Override
+        public Optional<ServiceCredentialMetadata> find(UUID credentialId) {
+            return result;
+        }
+
+        @Override
+        public ServiceCredentialPage findPage(ServiceCredentialPageQuery query) {
+            return new ServiceCredentialPage(List.of(), false);
+        }
     }
 }

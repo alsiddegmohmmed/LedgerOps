@@ -2,6 +2,7 @@ package com.ledgerops.administration.credentials.api;
 
 import com.ledgerops.ApiProblemFactory;
 import com.ledgerops.administration.application.CredentialAdministrationBlockedException;
+import com.ledgerops.administration.application.InvalidCredentialCursorException;
 import com.ledgerops.identity.api.ServiceCredentialProvisioningFailedException;
 import com.ledgerops.identity.api.ServiceCredentialRevocationFailedException;
 import com.ledgerops.identity.api.ServiceCredentialRotationFailedException;
@@ -20,7 +21,8 @@ import java.util.Map;
 
 @RestControllerAdvice(assignableTypes = {
         CredentialController.class,
-        CredentialMetadataController.class
+        CredentialMetadataController.class,
+        CredentialMetadataPageController.class
 })
 @Order(Ordered.HIGHEST_PRECEDENCE)
 class CredentialProblemHandler {
@@ -58,6 +60,19 @@ class CredentialProblemHandler {
                 error -> errors.putIfAbsent(error.getField(), error.getDefaultMessage())
         );
         return withErrors(problem, errors);
+    }
+
+    @ExceptionHandler(InvalidCredentialCursorException.class)
+    ProblemDetail handleInvalidCursor(InvalidCredentialCursorException exception) {
+        return problem(
+                HttpStatus.BAD_REQUEST,
+                "Invalid credential page cursor",
+                exception.getMessage(),
+                "invalid-credential-cursor",
+                "No credential state was changed.",
+                false,
+                "Restart the credential listing without the cursor."
+        );
     }
 
     @ExceptionHandler(CredentialAdministrationBlockedException.class)

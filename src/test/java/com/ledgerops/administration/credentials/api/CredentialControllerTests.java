@@ -3,6 +3,9 @@ package com.ledgerops.administration.credentials.api;
 import com.ledgerops.administration.api.CredentialAdministrationPort;
 import com.ledgerops.administration.api.CredentialMetadataQuery;
 import com.ledgerops.administration.api.CredentialMetadataQueryPort;
+import com.ledgerops.administration.api.CredentialMetadataPageQuery;
+import com.ledgerops.administration.api.CredentialMetadataPageQueryPort;
+import com.ledgerops.administration.api.CredentialMetadataPageResult;
 import com.ledgerops.administration.api.CredentialMetadataResult;
 import com.ledgerops.administration.api.CredentialProvisioningCommand;
 import com.ledgerops.administration.api.CredentialProvisioningResult;
@@ -43,15 +46,18 @@ class CredentialControllerTests {
 
     private RecordingAdministration administration;
     private RecordingMetadataQuery metadata;
+    private RecordingMetadataPageQuery metadataPage;
     private MockMvc mockMvc;
 
     @BeforeEach
     void setUp() {
         administration = new RecordingAdministration();
         metadata = new RecordingMetadataQuery();
+        metadataPage = new RecordingMetadataPageQuery();
         mockMvc = MockMvcBuilders.standaloneSetup(
                         new CredentialController(administration),
-                        new CredentialMetadataController(metadata))
+                        new CredentialMetadataController(metadata),
+                        new CredentialMetadataPageController(metadataPage))
                 .setControllerAdvice(new CredentialProblemHandler())
                 .build();
     }
@@ -69,6 +75,32 @@ class CredentialControllerTests {
 
         org.assertj.core.api.Assertions.assertThat(metadata.query.credentialId())
                 .isEqualTo(CREDENTIAL_ID);
+    }
+
+    @Test
+    void listReturnsSafePageAndPassesKeysetFilters() throws Exception {
+        mockMvc.perform(get("/api/v1/tenants/{tenantId}/credentials", TENANT_ID)
+                        .param("merchantId", MERCHANT_ID.toString())
+                        .param("status", "ACTIVE")
+                        .param("limit", "1")
+                        .param("cursor", "opaque-cursor")
+                        .requestAttr(AuthorizedRequestContext.class.getName(), authorization())
+                        .requestAttr(AuthorizedRequestContextRequest.principalAttribute(), actor()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items[0].credentialId").value(CREDENTIAL_ID.toString()))
+                .andExpect(jsonPath("$.items[0].clientSecret").doesNotExist())
+                .andExpect(jsonPath("$.nextCursor").value("next-cursor"));
+
+        org.assertj.core.api.Assertions.assertThat(metadataPage.query.tenantId())
+                .isEqualTo(TENANT_ID);
+        org.assertj.core.api.Assertions.assertThat(metadataPage.query.merchantId())
+                .isEqualTo(MERCHANT_ID);
+        org.assertj.core.api.Assertions.assertThat(metadataPage.query.status())
+                .isEqualTo("ACTIVE");
+        org.assertj.core.api.Assertions.assertThat(metadataPage.query.limit())
+                .isEqualTo(1);
+        org.assertj.core.api.Assertions.assertThat(metadataPage.query.cursor())
+                .isEqualTo("opaque-cursor");
     }
 
     @Test
@@ -240,6 +272,33 @@ class CredentialControllerTests {
                     "CONSUMED",
                     Instant.parse("2026-08-09T10:00:00Z"),
                     Instant.parse("2026-08-09T10:00:00Z")
+            );
+        }
+    }
+
+    private static final class RecordingMetadataPageQuery
+            implements CredentialMetadataPageQueryPort {
+
+        private CredentialMetadataPageQuery query;
+
+        @Override
+        public CredentialMetadataPageResult findPage(CredentialMetadataPageQuery query) {
+            this.query = query;
+            return new CredentialMetadataPageResult(
+                    java.util.List.of(new CredentialMetadataResult(
+                            CREDENTIAL_ID,
+                            TENANT_ID,
+                            MERCHANT_ID,
+                            "Checkout",
+                            "client-id",
+                            "ACTIVE",
+                            OPERATION_ID,
+                            null,
+                            "CONSUMED",
+                            Instant.parse("2026-08-09T10:00:00Z"),
+                            Instant.parse("2026-08-09T10:00:00Z")
+                    )),
+                    "next-cursor"
             );
         }
     }

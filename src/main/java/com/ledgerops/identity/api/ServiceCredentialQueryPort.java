@@ -10,4 +10,6 @@ import java.util.UUID;
 public interface ServiceCredentialQueryPort {
 
     Optional<ServiceCredentialMetadata> find(UUID credentialId);
+
+    ServiceCredentialPage findPage(ServiceCredentialPageQuery query);
 }

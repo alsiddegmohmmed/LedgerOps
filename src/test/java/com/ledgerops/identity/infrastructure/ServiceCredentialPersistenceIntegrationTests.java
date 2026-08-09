@@ -5,6 +5,7 @@ import com.ledgerops.identity.domain.CredentialProvisioningOperation;
 import com.ledgerops.identity.domain.CredentialProvisioningOperationId;
 import com.ledgerops.identity.domain.ServiceCredential;
 import com.ledgerops.identity.domain.ServiceCredentialId;
+import com.ledgerops.identity.domain.ServiceCredentialStatus;
 import com.ledgerops.support.PostgresTestConfiguration;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -16,6 +17,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.UUID;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -75,6 +77,90 @@ class ServiceCredentialPersistenceIntegrationTests {
                         + "AND column_name IN ('secret', 'client_secret', 'raw_secret')",
                 Integer.class
         )).isZero();
+    }
+
+    @Test
+    void readsCredentialsUsingDeterministicKeysetOrderAndFilters() {
+        UUID userId = UUID.randomUUID();
+        UUID tenantId = UUID.randomUUID();
+        UUID merchantA = UUID.randomUUID();
+        UUID merchantB = UUID.randomUUID();
+        insertApplicationUser(userId);
+
+        ServiceCredential newest = credential(
+                "00000000-0000-0000-0000-000000000001",
+                tenantId,
+                merchantA,
+                userId,
+                Instant.parse("2026-02-01T12:00:00Z"));
+        ServiceCredential sameTimestampHigherId = credential(
+                "00000000-0000-0000-0000-000000000003",
+                tenantId,
+                merchantA,
+                userId,
+                Instant.parse("2026-02-01T11:00:00Z"));
+        ServiceCredential sameTimestampLowerId = credential(
+                "00000000-0000-0000-0000-000000000002",
+                tenantId,
+                merchantB,
+                userId,
+                Instant.parse("2026-02-01T11:00:00Z"));
+        ServiceCredential oldest = credential(
+                "00000000-0000-0000-0000-000000000004",
+                tenantId,
+                merchantB,
+                userId,
+                Instant.parse("2026-02-01T10:00:00Z"));
+
+        transactions.executeWithoutResult(status -> {
+            for (ServiceCredential credential : List.of(
+                    newest, sameTimestampHigherId, sameTimestampLowerId, oldest)) {
+                credentials.save(credential);
+                operations.save(CredentialProvisioningOperation.pending(
+                        credential.provisioningOperationId(),
+                        credential.id(),
+                        credential.tenantId(),
+                        credential.createdAt()));
+            }
+        });
+
+        List<ServiceCredential> firstPage = credentials.findPage(
+                tenantId, null, null,
+                null, null, 2);
+        assertThat(firstPage).extracting(ServiceCredential::id)
+                .containsExactly(newest.id(), sameTimestampHigherId.id());
+
+        ServiceCredential position = firstPage.get(1);
+        List<ServiceCredential> secondPage = credentials.findPage(
+                tenantId, null, null,
+                position.createdAt(), position.id(), 2);
+        assertThat(secondPage).extracting(ServiceCredential::id)
+                .containsExactly(sameTimestampLowerId.id(), oldest.id());
+
+        List<ServiceCredential> merchantPage = credentials.findPage(
+                tenantId, merchantA, ServiceCredentialStatus.PROVISIONING,
+                null, null, 10);
+        assertThat(merchantPage).extracting(ServiceCredential::id)
+                .containsExactly(newest.id(), sameTimestampHigherId.id());
+    }
+
+    private ServiceCredential credential(
+            String credentialId,
+            UUID tenantId,
+            UUID merchantId,
+            UUID userId,
+            Instant createdAt
+    ) {
+        return ServiceCredential.provisioning(
+                ServiceCredentialId.from(UUID.fromString(credentialId)),
+                tenantId,
+                merchantId,
+                "credential-" + credentialId,
+                new ApplicationUserId(userId),
+                CredentialProvisioningOperationId.from(UUID.fromString(
+                        "10000000-0000-0000-0000-" + credentialId.substring(24))),
+                createdAt
+        );
     }
 
     private void insertApplicationUser(UUID userId) {

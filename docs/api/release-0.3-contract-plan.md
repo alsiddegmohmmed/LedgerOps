@@ -31,11 +31,12 @@
 
 The exact resources are introduced only by their slice.
 
-The first published credential action contract is
+The first published credential API contract is
 [`release-0.3-credential-actions.yaml`](release-0.3-credential-actions.yaml).
-It covers non-secret metadata reads plus create, rotate, and revoke;
-collection/list projections remain a separate contract introduced when their
-pagination and ordering read model is implemented.
+It covers non-secret metadata reads, keyset-paginated collection, and the
+create, rotate, and revoke actions. Further projections and search filters
+remain separate contracts introduced only when their read models are
+implemented.
 
 During the Slice 2B HTTP migration, the existing
 `POST /api/v1/tenants/{tenantId}/activate` compatibility route is owned by the
