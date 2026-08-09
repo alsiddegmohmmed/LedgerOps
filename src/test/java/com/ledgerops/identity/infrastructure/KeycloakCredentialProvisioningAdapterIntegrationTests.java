@@ -3,6 +3,7 @@ package com.ledgerops.identity.infrastructure;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.ledgerops.identity.application.KeycloakCredentialDisabler;
 import com.ledgerops.identity.application.KeycloakCredentialProvisioner;
 import com.ledgerops.identity.application.KeycloakCredentialProvisioningException;
 import org.junit.jupiter.api.BeforeAll;
@@ -156,6 +157,24 @@ class KeycloakCredentialProvisioningAdapterIntegrationTests {
         } finally {
             TransactionSynchronizationManager.setActualTransactionActive(false);
         }
+    }
+
+    @Test
+    void disablesAnExistingClientIdempotently() throws Exception {
+        KeycloakCredentialProvisioningAdapter adapter = adapter();
+        String clientId = "ledgerops-slice2c-revocation-" + UUID.randomUUID();
+        adapter.provision(request(clientId, "Revocation"));
+
+        KeycloakCredentialDisabler.DisableRequest disable =
+                new KeycloakCredentialDisabler.DisableRequest(UUID.randomUUID(), clientId);
+        adapter.disable(disable);
+
+        JsonNode disabled = firstClient(REALM, clientId, masterToken);
+        assertThat(disabled.get("enabled").asBoolean()).isFalse();
+
+        adapter.disable(disable);
+        JsonNode stillDisabled = firstClient(REALM, clientId, masterToken);
+        assertThat(stillDisabled.get("enabled").asBoolean()).isFalse();
     }
 
     private static KeycloakCredentialProvisioningAdapter adapter() {

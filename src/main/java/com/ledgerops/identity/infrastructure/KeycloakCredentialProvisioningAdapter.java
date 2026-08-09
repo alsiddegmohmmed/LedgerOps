@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.ledgerops.identity.application.KeycloakCredentialDisabler;
 import com.ledgerops.identity.application.KeycloakCredentialProvisioner;
 import com.ledgerops.identity.application.KeycloakCredentialProvisioningException;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
@@ -26,7 +27,8 @@ import java.util.Objects;
  * <p>The adapter owns only the external identity boundary. It does not know
  * Core credential status and never writes a client secret to Core.</p>
  */
-final class KeycloakCredentialProvisioningAdapter implements KeycloakCredentialProvisioner {
+final class KeycloakCredentialProvisioningAdapter
+        implements KeycloakCredentialProvisioner, KeycloakCredentialDisabler {
 
     private static final String JSON_CONTENT_TYPE = "application/json";
     private static final String FORM_CONTENT_TYPE = "application/x-www-form-urlencoded";
@@ -65,6 +67,43 @@ final class KeycloakCredentialProvisioningAdapter implements KeycloakCredentialP
                 throw failure("KEYCLOAK_CLIENT_NOT_FOUND", "Provisioned Keycloak client could not be located");
             }
             return new ProvisionedClient(readClientSecret(adminToken, requiredText(client, "id")));
+        } catch (KeycloakCredentialProvisioningException exception) {
+            throw exception;
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            throw failure("KEYCLOAK_INTERRUPTED", "Keycloak administration request was interrupted");
+        } catch (IOException exception) {
+            throw failure("KEYCLOAK_CONNECTION_FAILURE", "Keycloak administration request failed");
+        }
+    }
+
+    @Override
+    public void disable(DisableRequest request) {
+        Objects.requireNonNull(request, "Keycloak disable request must not be null");
+        if (TransactionSynchronizationManager.isActualTransactionActive()) {
+            throw new IllegalStateException("Keycloak Admin calls must execute outside a Core transaction");
+        }
+
+        try {
+            String adminToken = obtainAdminToken();
+            JsonNode client = findClient(adminToken, request.keycloakClientId());
+            if (client == null || !booleanValue(client, "enabled")) {
+                return;
+            }
+
+            ObjectNode desired = client.deepCopy();
+            desired.put("enabled", false);
+            HttpResponse<String> response = send(
+                    "PUT",
+                    adminClientUri(requiredText(client, "id")),
+                    adminToken,
+                    JSON_CONTENT_TYPE,
+                    desired.toString()
+            );
+            if (response.statusCode() == 204 || response.statusCode() == 404) {
+                return;
+            }
+            throw httpFailure("KEYCLOAK_CLIENT_DISABLE_FAILED", response.statusCode());
         } catch (KeycloakCredentialProvisioningException exception) {
             throw exception;
         } catch (InterruptedException exception) {
