@@ -223,6 +223,87 @@ class AuditRecordPersistenceAdapter implements AuditRecordRepository, AuditAppen
         ));
     }
 
+    @Override
+    public void appendCredentialProvisioned(
+            String actorIssuer,
+            String actorSubject,
+            UUID tenantId,
+            UUID merchantId,
+            UUID credentialId,
+            UUID operationId,
+            String reason,
+            String correlationId
+    ) {
+        append(AuditRecord.create(
+                AuditRecordId.newId(),
+                new AuditActorIdentity(actorIssuer, actorSubject),
+                AuditPrincipalType.HUMAN,
+                tenantId,
+                new AuditActionType("identity.credential.provisioned", true),
+                new AuditTargetType("service-credential"),
+                credentialId.toString(),
+                correlationId,
+                new AuditReason(reason),
+                new AuditDetails("{\"merchantId\":\"" + merchantId
+                        + "\",\"operationId\":\"" + operationId + "\"}"),
+                clock
+        ));
+    }
+
+    @Override
+    public void appendCredentialRotated(
+            String actorIssuer,
+            String actorSubject,
+            UUID tenantId,
+            UUID merchantId,
+            UUID previousCredentialId,
+            UUID replacementCredentialId,
+            String reason,
+            String correlationId
+    ) {
+        append(AuditRecord.create(
+                AuditRecordId.newId(),
+                new AuditActorIdentity(actorIssuer, actorSubject),
+                AuditPrincipalType.HUMAN,
+                tenantId,
+                new AuditActionType("identity.credential.rotated", true),
+                new AuditTargetType("service-credential"),
+                replacementCredentialId.toString(),
+                correlationId,
+                new AuditReason(reason),
+                new AuditDetails("{\"merchantId\":\"" + merchantId
+                        + "\",\"previousCredentialId\":\"" + previousCredentialId
+                        + "\",\"replacementCredentialId\":\""
+                        + replacementCredentialId + "\"}"),
+                clock
+        ));
+    }
+
+    @Override
+    public void appendCredentialRevoked(
+            String actorIssuer,
+            String actorSubject,
+            UUID tenantId,
+            UUID merchantId,
+            UUID credentialId,
+            String reason,
+            String correlationId
+    ) {
+        append(AuditRecord.create(
+                AuditRecordId.newId(),
+                new AuditActorIdentity(actorIssuer, actorSubject),
+                AuditPrincipalType.HUMAN,
+                tenantId,
+                new AuditActionType("identity.credential.revoked", true),
+                new AuditTargetType("service-credential"),
+                credentialId.toString(),
+                correlationId,
+                new AuditReason(reason),
+                new AuditDetails("{\"merchantId\":\"" + merchantId + "\"}"),
+                clock
+        ));
+    }
+
     private AuditRecord toDomain(AuditRecordJpaEntity entity) {
         return AuditRecord.create(
                 new AuditRecordId(entity.id()),

@@ -67,4 +67,36 @@ public interface AuditAppendPort {
             long version,
             String correlationId
     );
+
+    void appendCredentialProvisioned(
+            String actorIssuer,
+            String actorSubject,
+            UUID tenantId,
+            UUID merchantId,
+            UUID credentialId,
+            UUID operationId,
+            String reason,
+            String correlationId
+    );
+
+    void appendCredentialRotated(
+            String actorIssuer,
+            String actorSubject,
+            UUID tenantId,
+            UUID merchantId,
+            UUID previousCredentialId,
+            UUID replacementCredentialId,
+            String reason,
+            String correlationId
+    );
+
+    void appendCredentialRevoked(
+            String actorIssuer,
+            String actorSubject,
+            UUID tenantId,
+            UUID merchantId,
+            UUID credentialId,
+            String reason,
+            String correlationId
+    );
 }
