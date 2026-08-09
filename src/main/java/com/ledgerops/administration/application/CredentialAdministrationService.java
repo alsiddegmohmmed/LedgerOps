@@ -18,8 +18,6 @@ import com.ledgerops.identity.api.ServiceCredentialProvisioningResult;
 import com.ledgerops.identity.api.ServiceCredentialQueryPort;
 import com.ledgerops.identity.api.ServiceCredentialRevocationPort;
 import com.ledgerops.identity.api.ServiceCredentialRevocationResult;
-import com.ledgerops.identity.domain.Permission;
-import com.ledgerops.identity.domain.ScopeMode;
 import com.ledgerops.merchant.api.MerchantActivityQuery;
 import com.ledgerops.merchant.api.MerchantActivityStatus;
 import com.ledgerops.merchant.api.MerchantReference;
@@ -174,7 +172,7 @@ class CredentialAdministrationService implements CredentialAdministrationPort {
         }
         requireCredentialPermission(authorization);
         if (!authorization.tenantId().equals(target.tenantId())
-                || !includesMerchant(authorization, target.merchantId())) {
+                || !authorization.allowsMerchant(target.merchantId())) {
             throw new AuthorizationResourceNotFoundException();
         }
     }
@@ -186,7 +184,7 @@ class CredentialAdministrationService implements CredentialAdministrationPort {
     ) {
         requireCredentialPermission(authorization);
         if (!authorization.tenantId().equals(tenantId)
-                || !includesMerchant(authorization, merchantId)) {
+                || !authorization.allowsMerchant(merchantId)) {
             throw new AuthorizationResourceNotFoundException();
         }
         if (tenants.evaluate(TenantReference.from(tenantId)) != TenantActivityStatus.ALLOWED) {
@@ -204,17 +202,9 @@ class CredentialAdministrationService implements CredentialAdministrationPort {
         if (!authorization.isHuman()) {
             throw new AuthorizationPermissionDeniedException("credential:manage");
         }
-        if (!authorization.hasPermission(Permission.CREDENTIAL_MANAGE)) {
+        if (!authorization.canManageCredentials()) {
             throw new AuthorizationPermissionDeniedException("credential:manage");
         }
-    }
-
-    private boolean includesMerchant(
-            AuthorizedRequestContext authorization,
-            UUID merchantId
-    ) {
-        return authorization.scopeMode() == ScopeMode.TENANT_WIDE
-                || authorization.includesMerchant(merchantId);
     }
 
     private void requireConfirmed(boolean confirmation) {

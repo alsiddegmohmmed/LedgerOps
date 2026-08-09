@@ -62,6 +62,15 @@ public record AuthorizedRequestContext(
         return hasPermission(Permission.PAYMENT_CREATE);
     }
 
+    public boolean canManageCredentials() {
+        return hasPermission(Permission.CREDENTIAL_MANAGE);
+    }
+
+    public boolean allowsMerchant(UUID merchantId) {
+        Objects.requireNonNull(merchantId, "Merchant ID must not be null");
+        return scopeMode == ScopeMode.TENANT_WIDE || merchantIds.contains(merchantId);
+    }
+
     public boolean includesMerchant(UUID merchantId) {
         return merchantIds.contains(Objects.requireNonNull(merchantId, "Merchant ID must not be null"));
     }
