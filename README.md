@@ -137,7 +137,9 @@ Current implemented stack through Release 0.3 Slice 1:
 
 Local BFF development requires the approved Keycloak realm/client and Redis instance in addition to Core PostgreSQL. Tokens remain server-side; Redis is session storage only and PostgreSQL remains authorization truth.
 
-The approved technology baseline is documented in the [Technical Design and Architecture Specification](docs/architecture/LedgerOps_Technical_Design_and_Architecture_Specification_v1.6.docx). Technologies are introduced only by their implementation slice. Slice 1 is complete; later Release 0.3 slices have not started.
+Use the [Release 0.3 local Operations Web guide](docs/demo/release-0.3-slice-2-local.md) to start the approved PostgreSQL, Kafka, Redis, and Keycloak dependencies, then run Core and Operations Web with matching issuer and port configuration.
+
+The approved technology baseline is documented in the [Technical Design and Architecture Specification](docs/architecture/LedgerOps_Technical_Design_and_Architecture_Specification_v1.7.docx). Technologies are introduced only by their implementation slice. Release 0.3 Slice 2 is active; its current completion evidence is recorded in the approved Slice 2 plan.
 
 ## Key repository paths
 

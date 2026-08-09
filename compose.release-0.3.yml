@@ -1,0 +1,26 @@
+services:
+  redis:
+    image: redis:7.4-alpine
+    ports: ["${LEDGEROPS_REDIS_PORT:-6379}:6379"]
+    tmpfs:
+      - /data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.3.3
+    command: ["start-dev", "--http-port=8180", "--health-enabled=true", "--import-realm"]
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+    ports: ["${LEDGEROPS_KEYCLOAK_PORT:-8180}:8180"]
+    volumes:
+      - ./applications/operations-web/config/keycloak-local-realm.json:/opt/keycloak/data/import/ledgerops-realm.json:ro
+    healthcheck:
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/9000"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
