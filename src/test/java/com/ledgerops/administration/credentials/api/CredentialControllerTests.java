@@ -1,6 +1,9 @@
 package com.ledgerops.administration.credentials.api;
 
 import com.ledgerops.administration.api.CredentialAdministrationPort;
+import com.ledgerops.administration.api.CredentialMetadataQuery;
+import com.ledgerops.administration.api.CredentialMetadataQueryPort;
+import com.ledgerops.administration.api.CredentialMetadataResult;
 import com.ledgerops.administration.api.CredentialProvisioningCommand;
 import com.ledgerops.administration.api.CredentialProvisioningResult;
 import com.ledgerops.administration.api.CredentialRevocationCommand;
@@ -20,10 +23,12 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
+import java.time.Instant;
 import java.util.Set;
 import java.util.UUID;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -37,14 +42,33 @@ class CredentialControllerTests {
     private static final UUID USER_ID = UUID.randomUUID();
 
     private RecordingAdministration administration;
+    private RecordingMetadataQuery metadata;
     private MockMvc mockMvc;
 
     @BeforeEach
     void setUp() {
         administration = new RecordingAdministration();
-        mockMvc = MockMvcBuilders.standaloneSetup(new CredentialController(administration))
+        metadata = new RecordingMetadataQuery();
+        mockMvc = MockMvcBuilders.standaloneSetup(
+                        new CredentialController(administration),
+                        new CredentialMetadataController(metadata))
                 .setControllerAdvice(new CredentialProblemHandler())
                 .build();
+    }
+
+    @Test
+    void metadataReadReturnsSafeProjectionWithoutASecret() throws Exception {
+        mockMvc.perform(get("/api/v1/tenants/{tenantId}/credentials/{credentialId}",
+                                TENANT_ID, CREDENTIAL_ID)
+                        .requestAttr(AuthorizedRequestContext.class.getName(), authorization())
+                        .requestAttr(AuthorizedRequestContextRequest.principalAttribute(), actor()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.credentialId").value(CREDENTIAL_ID.toString()))
+                .andExpect(jsonPath("$.status").value("ACTIVE"))
+                .andExpect(jsonPath("$.clientSecret").doesNotExist());
+
+        org.assertj.core.api.Assertions.assertThat(metadata.query.credentialId())
+                .isEqualTo(CREDENTIAL_ID);
     }
 
     @Test
@@ -193,6 +217,29 @@ class CredentialControllerTests {
                     MERCHANT_ID,
                     "client-id",
                     "REVOKED"
+            );
+        }
+    }
+
+    private static final class RecordingMetadataQuery implements CredentialMetadataQueryPort {
+
+        private CredentialMetadataQuery query;
+
+        @Override
+        public CredentialMetadataResult find(CredentialMetadataQuery query) {
+            this.query = query;
+            return new CredentialMetadataResult(
+                    CREDENTIAL_ID,
+                    TENANT_ID,
+                    MERCHANT_ID,
+                    "Checkout",
+                    "client-id",
+                    "ACTIVE",
+                    OPERATION_ID,
+                    null,
+                    "CONSUMED",
+                    Instant.parse("2026-08-09T10:00:00Z"),
+                    Instant.parse("2026-08-09T10:00:00Z")
             );
         }
     }

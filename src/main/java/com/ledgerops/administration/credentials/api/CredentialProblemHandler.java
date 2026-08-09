@@ -18,7 +18,10 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 import java.util.LinkedHashMap;
 import java.util.Map;
 
-@RestControllerAdvice(assignableTypes = CredentialController.class)
+@RestControllerAdvice(assignableTypes = {
+        CredentialController.class,
+        CredentialMetadataController.class
+})
 @Order(Ordered.HIGHEST_PRECEDENCE)
 class CredentialProblemHandler {
 

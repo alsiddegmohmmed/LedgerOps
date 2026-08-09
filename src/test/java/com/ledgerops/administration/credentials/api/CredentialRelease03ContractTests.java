@@ -28,11 +28,17 @@ class CredentialRelease03ContractTests {
 
         assertEquals(
                 Set.of(
+                        "/api/v1/tenants/{tenantId}/credentials/{credentialId}",
                         "/api/v1/tenants/{tenantId}/credentials",
                         "/api/v1/tenants/{tenantId}/credentials/{credentialId}/rotate",
                         "/api/v1/tenants/{tenantId}/credentials/{credentialId}/revoke"
                 ),
                 paths.keySet()
+        );
+        assertEquals(
+                "getServiceCredentialMetadata",
+                map(map(paths.get("/api/v1/tenants/{tenantId}/credentials/{credentialId}")).get("get"))
+                        .get("operationId")
         );
         assertEquals(
                 "provisionServiceCredential",
@@ -54,6 +60,7 @@ class CredentialRelease03ContractTests {
     @Test
     void keepsSecretDisclosureLimitedToCreateAndRotateResponses() throws IOException {
         Map<String, Object> schemas = map(map(loadContract().get("components")).get("schemas"));
+        Map<String, Object> metadata = map(schemas.get("CredentialMetadataResponse"));
         Map<String, Object> provisioning = map(schemas.get("CredentialProvisioningResponse"));
         Map<String, Object> rotation = map(schemas.get("CredentialRotationResponse"));
         Map<String, Object> revocation = map(schemas.get("CredentialRevocationResponse"));
@@ -63,6 +70,7 @@ class CredentialRelease03ContractTests {
         assertEquals(true, map(map(rotation.get("properties")).get("clientSecret"))
                 .get("readOnly"));
         assertFalse(map(revocation.get("properties")).containsKey("clientSecret"));
+        assertFalse(map(metadata.get("properties")).containsKey("clientSecret"));
         assertTrue(list(map(schemas.get("CredentialActionRequest")).get("required"))
                 .containsAll(List.of("confirmation", "reason")));
     }
