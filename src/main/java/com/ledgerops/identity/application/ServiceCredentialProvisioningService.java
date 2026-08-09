@@ -3,6 +3,8 @@ package com.ledgerops.identity.application;
 import com.ledgerops.identity.api.ServiceCredentialProvisioningPort;
 import com.ledgerops.identity.api.ServiceCredentialProvisioningRequest;
 import com.ledgerops.identity.api.ServiceCredentialProvisioningResult;
+import com.ledgerops.identity.api.ServiceCredentialProvisioningFailedException;
+import com.ledgerops.identity.api.ServiceCredentialRotationFailedException;
 import com.ledgerops.identity.domain.ApplicationUserId;
 import com.ledgerops.identity.domain.CredentialProvisioningOperation;
 import com.ledgerops.identity.domain.CredentialProvisioningOperationId;
@@ -181,7 +183,7 @@ public final class ServiceCredentialProvisioningService implements ServiceCreden
         } catch (KeycloakCredentialProvisioningException exception) {
             markFailed(pending, exception);
             throw new ServiceCredentialProvisioningFailedException(
-                    pending.operation.id(),
+                    pending.operation.id().value(),
                     exception.code(),
                     exception.getMessage(),
                     exception
@@ -310,8 +312,8 @@ public final class ServiceCredentialProvisioningService implements ServiceCreden
             ));
         } catch (KeycloakCredentialProvisioningException exception) {
             throw new ServiceCredentialRotationFailedException(
-                    replacementCredentialId,
-                    target.oldCredential().id(),
+                    replacementCredentialId.value(),
+                    target.oldCredential().id().value(),
                     exception.code(),
                     exception.getMessage(),
                     exception

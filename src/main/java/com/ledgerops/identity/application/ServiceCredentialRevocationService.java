@@ -2,6 +2,7 @@ package com.ledgerops.identity.application;
 
 import com.ledgerops.identity.api.ServiceCredentialRevocationPort;
 import com.ledgerops.identity.api.ServiceCredentialRevocationResult;
+import com.ledgerops.identity.api.ServiceCredentialRevocationFailedException;
 import com.ledgerops.identity.domain.CredentialProvisioningOperation;
 import com.ledgerops.identity.domain.CredentialProvisioningOperationId;
 import com.ledgerops.identity.domain.CredentialProvisioningOperationRepository;
@@ -60,7 +61,7 @@ public final class ServiceCredentialRevocationService implements ServiceCredenti
             ));
         } catch (KeycloakCredentialProvisioningException exception) {
             throw new ServiceCredentialRevocationFailedException(
-                    target.credential.id(),
+                    target.credential.id().value(),
                     exception.code(),
                     exception.getMessage(),
                     exception

@@ -1,21 +1,21 @@
-package com.ledgerops.identity.application;
-
-import com.ledgerops.identity.domain.ServiceCredentialId;
+package com.ledgerops.identity.api;
 
 import java.util.Objects;
+import java.util.UUID;
 
 /**
- * Signals that replacement activation and local old-credential revocation
- * committed, but disabling the old external client still needs a retry.
+ * Signals that local rotation committed but disabling the old external
+ * credential still requires a retry.
  */
-final class ServiceCredentialRotationFailedException extends RuntimeException {
-    private final ServiceCredentialId replacementCredentialId;
-    private final ServiceCredentialId oldCredentialId;
+public final class ServiceCredentialRotationFailedException extends RuntimeException {
+
+    private final UUID replacementCredentialId;
+    private final UUID oldCredentialId;
     private final String failureCode;
 
-    ServiceCredentialRotationFailedException(
-            ServiceCredentialId replacementCredentialId,
-            ServiceCredentialId oldCredentialId,
+    public ServiceCredentialRotationFailedException(
+            UUID replacementCredentialId,
+            UUID oldCredentialId,
             String failureCode,
             String safeDetail,
             Throwable cause
@@ -30,15 +30,15 @@ final class ServiceCredentialRotationFailedException extends RuntimeException {
         this.failureCode = Objects.requireNonNull(failureCode, "Failure code must not be null");
     }
 
-    ServiceCredentialId replacementCredentialId() {
+    public UUID replacementCredentialId() {
         return replacementCredentialId;
     }
 
-    ServiceCredentialId oldCredentialId() {
+    public UUID oldCredentialId() {
         return oldCredentialId;
     }
 
-    String failureCode() {
+    public String failureCode() {
         return failureCode;
     }
 }

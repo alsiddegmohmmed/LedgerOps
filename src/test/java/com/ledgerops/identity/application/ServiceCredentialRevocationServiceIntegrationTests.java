@@ -1,5 +1,6 @@
 package com.ledgerops.identity.application;
 
+import com.ledgerops.identity.api.ServiceCredentialRevocationFailedException;
 import com.ledgerops.identity.api.ServiceCredentialRevocationResult;
 import com.ledgerops.identity.domain.ApplicationUserId;
 import com.ledgerops.identity.domain.CredentialProvisioningOperation;

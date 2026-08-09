@@ -1,5 +1,6 @@
 package com.ledgerops.identity.application;
 
+import com.ledgerops.identity.api.ServiceCredentialProvisioningFailedException;
 import com.ledgerops.identity.api.ServiceCredentialProvisioningRequest;
 import com.ledgerops.identity.api.ServiceCredentialProvisioningResult;
 import com.ledgerops.identity.domain.CredentialProvisioningOperationRepository;
@@ -94,7 +95,7 @@ class ServiceCredentialProvisioningServiceIntegrationTests {
                 });
 
         assertThat(keycloak.transactionWasActive).containsExactly(false);
-        UUID operationId = capturedFailure[0].operationId().value();
+        UUID operationId = capturedFailure[0].operationId();
         assertThat(operations.findById(
                 com.ledgerops.identity.domain.CredentialProvisioningOperationId.from(operationId)))
                 .hasValueSatisfying(operation -> {
@@ -119,7 +120,7 @@ class ServiceCredentialProvisioningServiceIntegrationTests {
                         (ServiceCredentialProvisioningFailedException) thrown);
 
         keycloak.failure = null;
-        ServiceCredentialProvisioningResult result = service.retry(capturedFailure[0].operationId().value());
+        ServiceCredentialProvisioningResult result = service.retry(capturedFailure[0].operationId());
 
         assertThat(keycloak.calls).hasSize(2);
         assertThat(keycloak.calls.get(0).operationId())

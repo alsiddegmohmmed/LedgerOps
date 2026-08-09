@@ -1,6 +1,8 @@
 package com.ledgerops.identity.application;
 
+import com.ledgerops.identity.api.ServiceCredentialProvisioningFailedException;
 import com.ledgerops.identity.api.ServiceCredentialProvisioningResult;
+import com.ledgerops.identity.api.ServiceCredentialRotationFailedException;
 import com.ledgerops.identity.domain.ApplicationUserId;
 import com.ledgerops.identity.domain.CredentialProvisioningOperation;
 import com.ledgerops.identity.domain.CredentialProvisioningOperationId;
@@ -89,7 +91,7 @@ class ServiceCredentialRotationIntegrationTests {
                 .isInstanceOf(ServiceCredentialProvisioningFailedException.class)
                 .satisfies(thrown -> captured[0] = (ServiceCredentialProvisioningFailedException) thrown);
 
-        UUID operationId = captured[0].operationId().value();
+        UUID operationId = captured[0].operationId();
         UUID replacementId = jdbc.queryForObject(
                 "SELECT id FROM identity.service_credentials WHERE provisioning_operation_id = ?",
                 UUID.class,
@@ -132,7 +134,7 @@ class ServiceCredentialRotationIntegrationTests {
                     assertThat(captured[0].failureCode()).isEqualTo("KEYCLOAK_UNAVAILABLE");
                 });
 
-        UUID replacementId = captured[0].replacementCredentialId().value();
+        UUID replacementId = captured[0].replacementCredentialId();
         assertThat(credentials.findById(ServiceCredentialId.from(replacementId)))
                 .hasValueSatisfying(credential -> {
                     assertThat(credential.status()).isEqualTo(ServiceCredentialStatus.ACTIVE);

@@ -31,6 +31,12 @@
 
 The exact resources are introduced only by their slice.
 
+The first published credential action contract is
+[`release-0.3-credential-actions.yaml`](release-0.3-credential-actions.yaml).
+It covers only create, rotate, and revoke; credential reads and administration
+list projections remain separate contracts introduced when their read model is
+implemented.
+
 During the Slice 2B HTTP migration, the existing
 `POST /api/v1/tenants/{tenantId}/activate` compatibility route is owned by the
 Administration module and requires an authenticated Platform Admin. The
