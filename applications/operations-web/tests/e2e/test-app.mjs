@@ -231,13 +231,19 @@ INSERT INTO identity.tenant_role_assignments
 VALUES ('30000000-0000-4000-8000-000000000001', '20000000-0000-4000-8000-000000000001', 'TENANT_ADMIN', 'TENANT_WIDE');
 INSERT INTO identity.tenant_memberships
   (id, application_user_id, tenant_id, status, is_initial, version, created_at, updated_at)
-VALUES ('20000000-0000-4000-8000-000000000002', NULL, '00000000-0000-4000-8000-000000000001', 'INVITED', false, 0, now(), now());
+VALUES
+  ('20000000-0000-4000-8000-000000000002', NULL, '00000000-0000-4000-8000-000000000001', 'INVITED', false, 0, now(), now()),
+  ('20000000-0000-4000-8000-000000000003', NULL, '00000000-0000-4000-8000-000000000001', 'INVITED', false, 0, now(), now());
 INSERT INTO identity.invitations
   (id, tenant_id, membership_id, intended_email, token_hash, status, version, created_at, expires_at, updated_at)
-VALUES ('40000000-0000-4000-8000-000000000001', '00000000-0000-4000-8000-000000000001', '20000000-0000-4000-8000-000000000002', 'invite@example.com', repeat('a', 64), 'PENDING', 0, now(), now() + interval '7 days', now());
+VALUES
+  ('40000000-0000-4000-8000-000000000001', '00000000-0000-4000-8000-000000000001', '20000000-0000-4000-8000-000000000002', 'invite@example.com', repeat('a', 64), 'PENDING', 0, now(), now() + interval '7 days', now()),
+  ('40000000-0000-4000-8000-000000000002', '00000000-0000-4000-8000-000000000001', '20000000-0000-4000-8000-000000000003', 'stale-invite@example.com', repeat('b', 64), 'PENDING', 0, now(), now() + interval '7 days', now());
 INSERT INTO identity.invitation_grants
   (invitation_id, assignment_id, tenant_id, role, scope_mode)
-VALUES ('40000000-0000-4000-8000-000000000001', '50000000-0000-4000-8000-000000000001', '00000000-0000-4000-8000-000000000001', 'VIEWER', 'TENANT_WIDE');
+VALUES
+  ('40000000-0000-4000-8000-000000000001', '50000000-0000-4000-8000-000000000001', '00000000-0000-4000-8000-000000000001', 'VIEWER', 'TENANT_WIDE'),
+  ('40000000-0000-4000-8000-000000000002', '50000000-0000-4000-8000-000000000002', '00000000-0000-4000-8000-000000000001', 'VIEWER', 'TENANT_WIDE');
 COMMIT;
 `;
   await new Promise((resolvePromise, reject) => {
