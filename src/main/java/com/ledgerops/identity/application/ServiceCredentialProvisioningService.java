@@ -22,10 +22,10 @@ import java.util.UUID;
  *
  * <p>Phase one commits durable Core state. The Keycloak call happens after
  * that transaction has ended. Phase two commits the local outcome and consumes
- * the one-time disclosure. This class deliberately has no Spring stereotype
- * until the concrete Keycloak adapter is installed.</p>
+ * the one-time disclosure. Infrastructure configuration registers this service
+ * only when the concrete Keycloak adapter is enabled.</p>
  */
-final class ServiceCredentialProvisioningService implements ServiceCredentialProvisioningPort {
+public final class ServiceCredentialProvisioningService implements ServiceCredentialProvisioningPort {
 
     private final ServiceCredentialRepository credentials;
     private final CredentialProvisioningOperationRepository operations;
@@ -33,7 +33,7 @@ final class ServiceCredentialProvisioningService implements ServiceCredentialPro
     private final TransactionTemplate transactions;
     private final Clock clock;
 
-    ServiceCredentialProvisioningService(
+    public ServiceCredentialProvisioningService(
             ServiceCredentialRepository credentials,
             CredentialProvisioningOperationRepository operations,
             KeycloakCredentialProvisioner keycloak,

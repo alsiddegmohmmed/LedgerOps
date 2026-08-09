@@ -14,7 +14,7 @@ public final class KeycloakCredentialProvisioningException extends RuntimeExcept
         this.code = requireText(code, "Keycloak provisioning failure code");
     }
 
-    String code() {
+    public String code() {
         return code;
     }
 
