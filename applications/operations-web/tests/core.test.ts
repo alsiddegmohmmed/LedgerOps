@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { getCredentialPage } from "../lib/core";
+import { getCredentialPage, provisionCredential } from "../lib/core";
 
 describe("Core credential metadata client", () => {
   afterEach(() => vi.unstubAllGlobals());
@@ -33,5 +33,38 @@ describe("Core credential metadata client", () => {
     await expect(getCredentialPage("tenant", "token")).resolves.toEqual({
       kind: "unauthenticated",
     });
+  });
+
+  it("posts credential actions with the bearer token only on the server-side request", async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({
+      credentialId: "00000000-0000-4000-8000-000000000001",
+      operationId: "00000000-0000-4000-8000-000000000002",
+      tenantId: "00000000-0000-4000-8000-000000000003",
+      merchantId: "00000000-0000-4000-8000-000000000004",
+      keycloakClientId: "client-id",
+      clientSecret: "one-time-secret",
+      status: "ACTIVE",
+    }), { status: 201, headers: { "content-type": "application/json" } }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(provisionCredential(
+      "00000000-0000-4000-8000-000000000003",
+      "server-only-token",
+      {
+        merchantId: "00000000-0000-4000-8000-000000000004",
+        label: "Checkout",
+        confirmation: true,
+        reason: "Initial integration",
+      },
+    )).resolves.toMatchObject({ kind: "ok" });
+
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toContain("/api/v1/tenants/00000000-0000-4000-8000-000000000003/credentials");
+    expect(init.method).toBe("POST");
+    expect(init.headers).toEqual({
+      authorization: "Bearer server-only-token",
+      "content-type": "application/json",
+    });
+    expect(JSON.parse(String(init.body))).toMatchObject({ label: "Checkout", confirmation: true });
   });
 });

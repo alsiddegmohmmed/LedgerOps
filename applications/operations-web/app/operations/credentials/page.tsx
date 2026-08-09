@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { getCredentialPage, getTenant, type CoreCredentialPage } from "../../../lib/core";
 import { redis } from "../../../lib/redis";
 import { isSessionExpired, readSession, SESSION_COOKIE } from "../../../lib/session";
+import { CredentialCreateForm, CredentialRowActions } from "./credential-actions";
 
 export const dynamic = "force-dynamic";
 
@@ -67,14 +68,17 @@ export default async function CredentialsPage({ searchParams }: CredentialsPageP
           <div className="panel status error">Core could not load credentials right now.</div>
         )}
         {credentialResult.kind === "ok" && (
-          <CredentialTable page={credentialResult.page} />
+          <>
+            <CredentialCreateForm csrfToken={session.csrfToken} />
+            <CredentialTable page={credentialResult.page} csrfToken={session.csrfToken} />
+          </>
         )}
       </section>
     </main>
   );
 }
 
-function CredentialTable({ page }: { page: CoreCredentialPage }) {
+function CredentialTable({ page, csrfToken }: { page: CoreCredentialPage; csrfToken: string }) {
   return (
     <div className="panel">
       {page.items.length === 0 ? (
@@ -88,6 +92,7 @@ function CredentialTable({ page }: { page: CoreCredentialPage }) {
                 <th scope="col">Status</th>
                 <th scope="col">Merchant</th>
                 <th scope="col">Created</th>
+                <th scope="col">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -100,6 +105,7 @@ function CredentialTable({ page }: { page: CoreCredentialPage }) {
                   <td><span className="status-badge">{credential.status}</span></td>
                   <td className="monospace">{credential.merchantId}</td>
                   <td>{new Date(credential.createdAt).toLocaleString()}</td>
+                  <td><CredentialRowActions credential={credential} csrfToken={csrfToken} /></td>
                 </tr>
               ))}
             </tbody>
