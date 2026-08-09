@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   getCredentialPage,
+  getMerchants,
   getOperationalContacts,
   getTenantConfiguration,
   updateOperationalContact,
@@ -40,6 +41,34 @@ describe("Core credential metadata client", () => {
     await expect(getCredentialPage("tenant", "token")).resolves.toEqual({
       kind: "unauthenticated",
     });
+  });
+
+  it("reads tenant-scoped Merchants with the bearer token on the server side", async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify([
+      {
+        tenantId: "tenant-id",
+        merchantId: "merchant-id",
+        name: "Primary Merchant",
+        status: "ACTIVE",
+        version: 0,
+      },
+    ]), { status: 200, headers: { "content-type": "application/json" } }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(getMerchants("tenant-id", "server-only-token")).resolves.toEqual({
+      kind: "ok",
+      merchants: [{
+        tenantId: "tenant-id",
+        merchantId: "merchant-id",
+        name: "Primary Merchant",
+        status: "ACTIVE",
+        version: 0,
+      }],
+    });
+
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toContain("/api/v1/tenants/tenant-id/merchants");
+    expect(init.headers).toEqual({ authorization: "Bearer server-only-token" });
   });
 
   it("posts credential actions with the bearer token only on the server-side request", async () => {

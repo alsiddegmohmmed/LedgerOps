@@ -7,6 +7,7 @@ import org.springframework.data.repository.query.Param;
 
 import jakarta.persistence.LockModeType;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -24,6 +25,8 @@ interface SpringDataMerchantRepository
             @Param("tenantId") UUID tenantId,
             @Param("id") UUID id
     );
+
+    List<MerchantJpaEntity> findAllByTenantIdOrderByNameAscIdAsc(UUID tenantId);
 
     boolean existsByTenantIdAndStatus(UUID tenantId, String status);
 

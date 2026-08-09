@@ -53,6 +53,20 @@ internals or bearer tokens.
 Operational contacts remain a separate contract and are not implied by this
 resource.
 
+The first Merchant administration read boundary is tenant-scoped:
+
+```text
+GET /api/v1/tenants/{tenantId}/merchants
+GET /api/v1/tenants/{tenantId}/merchants/{merchantId}
+```
+
+The collection is ordered by normalized Merchant name and Merchant ID and is
+filtered by the caller's effective Merchant scope. The response exposes only
+`tenantId`, `merchantId`, `name`, `status`, and persistence `version`. Reads
+require human `merchant:read` authority; an out-of-scope Merchant is reported
+as unavailable rather than disclosed. Merchant lifecycle mutation remains a
+separate action contract and is not implied by these reads.
+
 The operational-contact contract is Tenant-scoped and versioned:
 
 ```text

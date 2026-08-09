@@ -10,6 +10,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 
 @Repository
@@ -62,6 +63,15 @@ class MerchantPersistenceAdapter implements MerchantRepository {
         return repository.findByTenantIdAndIdForUpdate(
                         tenantReference.value(), merchantId.value())
                 .map(this::toDomain);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<Merchant> findAll(TenantReference tenantReference) {
+        return repository.findAllByTenantIdOrderByNameAscIdAsc(tenantReference.value())
+                .stream()
+                .map(this::toDomain)
+                .toList();
     }
 
     @Override
