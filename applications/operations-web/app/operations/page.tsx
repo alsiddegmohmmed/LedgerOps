@@ -44,6 +44,14 @@ export default async function OperationsPage() {
         {tenantResult?.kind === "error" && (
           <div className="panel status error">Core could not verify this Tenant right now.</div>
         )}
+        {tenantResult?.kind === "ok" && (
+          <div className="panel">
+            <div className="eyebrow">Administration</div>
+            <h2>Credentials</h2>
+            <p>Review non-secret metadata for this Tenant&apos;s sandbox credentials.</p>
+            <a className="button" href="/operations/credentials">Open credentials</a>
+          </div>
+        )}
         <form action="/api/auth/logout" method="post">
           <input type="hidden" name="csrfToken" value={session.csrfToken} />
           <button className="secondary" type="submit">Log out</button>

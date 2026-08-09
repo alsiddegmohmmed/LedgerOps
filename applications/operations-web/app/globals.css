@@ -29,3 +29,11 @@ button, .button { display: inline-block; border: 0; border-radius: .6rem; paddin
 .secondary { background: transparent; color: var(--text); border: 1px solid var(--border); margin-left: .5rem; }
 .status { border-left: 3px solid var(--accent); padding-left: 1rem; }
 .error { border-left-color: #f09a9a; }
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; min-width: 42rem; }
+th, td { text-align: left; padding: .9rem .75rem; border-bottom: 1px solid var(--border); vertical-align: top; }
+th { color: var(--muted); font-size: .78rem; letter-spacing: .08em; text-transform: uppercase; }
+td strong, .table-secondary { display: block; }
+.table-secondary { color: var(--muted); font-size: .82rem; margin-top: .25rem; }
+.status-badge { border: 1px solid var(--accent); border-radius: 999px; color: var(--accent); display: inline-block; font-size: .78rem; padding: .25rem .55rem; }
+.monospace { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .82rem; }
