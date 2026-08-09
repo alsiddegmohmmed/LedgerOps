@@ -67,6 +67,22 @@ require human `merchant:read` authority; an out-of-scope Merchant is reported
 as unavailable rather than disclosed. Merchant lifecycle mutation remains a
 separate action contract and is not implied by these reads.
 
+The first Membership administration read boundary is tenant-scoped:
+
+```text
+GET /api/v1/tenants/{tenantId}/memberships
+GET /api/v1/tenants/{tenantId}/memberships/{membershipId}
+```
+
+Reads require a human `tenant:membership-manage` authority. Tenant-wide callers
+may see all memberships in the selected Tenant. Merchant-scoped callers see
+only memberships with a Merchant-scoped role assignment intersecting their
+effective Merchant set; a Tenant-wide-only membership is not disclosed to
+them. The response includes membership status, identity-link state, role and
+scope assignments, and a safe invitation summary with intended email, status,
+and expiry. It never includes the invitation token hash or other secret
+material. Membership and invitation mutation remain separate action contracts.
+
 The operational-contact contract is Tenant-scoped and versioned:
 
 ```text

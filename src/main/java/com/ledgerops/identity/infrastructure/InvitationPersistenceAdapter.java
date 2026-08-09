@@ -106,6 +106,12 @@ class InvitationPersistenceAdapter implements InvitationRepository {
 
     @Override
     @Transactional(readOnly = true)
+    public Optional<Invitation> findByMembershipId(TenantMembershipId membershipId) {
+        return invitations.findByMembershipId(membershipId.value()).map(this::toDomain);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public Optional<TenantMembershipId> findMembershipId(InvitationId invitationId) {
         return invitations.findById(invitationId.value())
                 .map(entity -> new TenantMembershipId(entity.membershipId()));

@@ -11,6 +11,8 @@ import java.util.UUID;
 
 interface SpringDataInvitationRepository extends JpaRepository<InvitationJpaEntity, UUID> {
 
+    Optional<InvitationJpaEntity> findByMembershipId(UUID membershipId);
+
     @Query("""
             select invitation from InvitationJpaEntity invitation
             where invitation.tokenHash = :tokenHash

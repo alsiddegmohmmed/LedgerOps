@@ -59,6 +59,9 @@ export default async function OperationsPage() {
             <h2>Merchants</h2>
             <p>Review the Merchants available in the selected Tenant scope.</p>
             <a className="button secondary" href="/operations/merchants">Open Merchants</a>
+            <h2>Memberships</h2>
+            <p>Review Tenant membership, roles, scopes, and invitation status.</p>
+            <a className="button secondary" href="/operations/memberships">Open memberships</a>
           </div>
         )}
         <form action="/api/auth/logout" method="post">

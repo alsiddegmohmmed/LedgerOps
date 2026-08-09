@@ -104,6 +104,9 @@ class RequestContextAuthenticationFilterTests {
                         + UUID.randomUUID(),
                 "GET /api/v1/tenants/" + tenantId + "/merchants",
                 "GET /api/v1/tenants/" + tenantId + "/merchants/"
+                        + UUID.randomUUID(),
+                "GET /api/v1/tenants/" + tenantId + "/memberships",
+                "GET /api/v1/tenants/" + tenantId + "/memberships/"
                         + UUID.randomUUID()
         }) {
             String[] parts = methodAndPath.split(" ", 2);

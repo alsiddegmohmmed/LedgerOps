@@ -17,6 +17,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -51,6 +52,14 @@ class TenantMembershipPersistenceAdapter implements TenantMembershipRepository {
     @Transactional(readOnly = true)
     public Optional<TenantMembership> findById(TenantMembershipId membershipId) {
         return repository.findAggregateById(membershipId.value()).map(this::toDomain);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<TenantMembership> findAllByTenantId(UUID tenantId) {
+        return repository.findAggregatesByTenantId(tenantId).stream()
+                .map(this::toDomain)
+                .toList();
     }
 
     @Override

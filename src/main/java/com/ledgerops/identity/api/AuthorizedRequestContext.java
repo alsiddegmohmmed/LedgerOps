@@ -70,6 +70,10 @@ public record AuthorizedRequestContext(
         return hasPermission(Permission.MERCHANT_READ);
     }
 
+    public boolean canManageMemberships() {
+        return hasPermission(Permission.TENANT_MEMBERSHIP_MANAGE);
+    }
+
     public boolean isTenantWide() {
         return scopeMode == ScopeMode.TENANT_WIDE;
     }

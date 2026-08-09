@@ -3,6 +3,7 @@ package com.ledgerops.identity.infrastructure;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -15,6 +16,15 @@ interface SpringDataTenantMembershipRepository extends JpaRepository<TenantMembe
             where membership.id = :membershipId
             """)
     Optional<TenantMembershipJpaEntity> findAggregateById(UUID membershipId);
+
+    @Query("""
+            select distinct membership from TenantMembershipJpaEntity membership
+            left join fetch membership.roleAssignments assignment
+            left join fetch assignment.merchantIds
+            where membership.tenantId = :tenantId
+            order by membership.id
+            """)
+    List<TenantMembershipJpaEntity> findAggregatesByTenantId(UUID tenantId);
 
     @Query("""
             select distinct membership from TenantMembershipJpaEntity membership

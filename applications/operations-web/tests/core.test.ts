@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   getCredentialPage,
+  getMemberships,
   getMerchants,
   getOperationalContacts,
   getTenantConfiguration,
@@ -69,6 +70,59 @@ describe("Core credential metadata client", () => {
     const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
     expect(url).toContain("/api/v1/tenants/tenant-id/merchants");
     expect(init.headers).toEqual({ authorization: "Bearer server-only-token" });
+  });
+
+  it("reads tenant-scoped Memberships without exposing invitation secrets", async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify([{
+      tenantId: "tenant-id",
+      membershipId: "membership-id",
+      status: "INVITED",
+      version: 0,
+      initial: false,
+      identityLinked: false,
+      roleAssignments: [{
+        assignmentId: "assignment-id",
+        role: "VIEWER",
+        scopeMode: "TENANT_WIDE",
+        merchantIds: [],
+      }],
+      invitation: {
+        invitationId: "invitation-id",
+        intendedEmail: "invite@example.com",
+        status: "PENDING",
+        expiresAt: "2026-08-17T00:00:00Z",
+      },
+    }]), { status: 200, headers: { "content-type": "application/json" } }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(getMemberships("tenant-id", "server-only-token")).resolves.toEqual({
+      kind: "ok",
+      memberships: [{
+        tenantId: "tenant-id",
+        membershipId: "membership-id",
+        status: "INVITED",
+        version: 0,
+        initial: false,
+        identityLinked: false,
+        roleAssignments: [{
+          assignmentId: "assignment-id",
+          role: "VIEWER",
+          scopeMode: "TENANT_WIDE",
+          merchantIds: [],
+        }],
+        invitation: {
+          invitationId: "invitation-id",
+          intendedEmail: "invite@example.com",
+          status: "PENDING",
+          expiresAt: "2026-08-17T00:00:00Z",
+        },
+      }],
+    });
+
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toContain("/api/v1/tenants/tenant-id/memberships");
+    expect(init.headers).toEqual({ authorization: "Bearer server-only-token" });
+    expect(url).not.toContain("tokenHash");
   });
 
   it("posts credential actions with the bearer token only on the server-side request", async () => {
