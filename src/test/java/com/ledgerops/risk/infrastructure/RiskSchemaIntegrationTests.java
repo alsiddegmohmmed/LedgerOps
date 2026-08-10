@@ -42,7 +42,8 @@ class RiskSchemaIntegrationTests {
                         "evaluated_rule_results",
                         "payment_amount_threshold_rules",
                         "risk_evaluations",
-                        "risk_profiles"
+                        "risk_profiles",
+                        "risk_reviews"
                 ),
                 tables
         );

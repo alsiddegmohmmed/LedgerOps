@@ -48,6 +48,19 @@ class AuditRecordPersistenceAdapter implements AuditRecordRepository, AuditAppen
     }
 
     @Override
+    public void appendAction(String actorIssuer, String actorSubject, String principalType,
+                             UUID tenantId, String actionType, String targetType,
+                             String targetId, String reason, String details,
+                             String correlationId) {
+        append(AuditRecord.create(
+                AuditRecordId.newId(), new AuditActorIdentity(actorIssuer, actorSubject),
+                AuditPrincipalType.valueOf(principalType), tenantId,
+                new AuditActionType(actionType, tenantId != null),
+                new AuditTargetType(targetType), targetId, correlationId,
+                new AuditReason(reason), new AuditDetails(details == null ? "{}" : details), clock));
+    }
+
+    @Override
     public void appendPaymentCreated(
             String actorIssuer,
             String actorSubject,

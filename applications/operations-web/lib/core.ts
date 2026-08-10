@@ -82,6 +82,59 @@ export type CoreRiskSnapshot = {
   evaluatedAt: string;
 } | null;
 
+export type CoreRiskReview = {
+  reviewId: string;
+  tenantId: string;
+  paymentId: string;
+  merchantId: string | null;
+  evaluationId: string;
+  status: "UNASSIGNED" | "ASSIGNED" | "DECIDED" | "ESCALATED";
+  assignedAnalystId: string | null;
+  priority: number;
+  slaVersion: number;
+  createdAt: string;
+  dueAt: string;
+  decision: "APPROVE" | "REJECT" | "ESCALATE" | null;
+  decisionReason: string | null;
+  caseId: string | null;
+  decidedAt: string | null;
+  version: number;
+};
+
+export type CoreCaseHistoryEntry = {
+  sequence: number;
+  eventType: string;
+  fromStatus: string | null;
+  toStatus: string | null;
+  actorId: string;
+  reason: string;
+  occurredAt: string;
+};
+
+export type CoreCaseNote = {
+  noteId: string;
+  authorId: string;
+  text: string;
+  createdAt: string;
+};
+
+export type CoreCase = {
+  caseId: string;
+  tenantId: string;
+  sourceCategory: "RISK_REVIEW" | "RECONCILIATION_DISCREPANCY";
+  sourceId: string;
+  relatedPaymentId: string | null;
+  severity: "CRITICAL" | "HIGH" | "MEDIUM" | "LOW";
+  createdAt: string;
+  dueAt: string;
+  status: "OPEN" | "INVESTIGATING" | "AWAITING_INFORMATION" | "RESOLVED" | "CLOSED" | "REOPENED";
+  ownerId: string | null;
+  resolution: string | null;
+  resolutionNote: string | null;
+  history: CoreCaseHistoryEntry[];
+  notes: CoreCaseNote[];
+};
+
 export type CoreProviderEvidence = {
   evidenceId: string;
   tenantId: string;
@@ -304,6 +357,11 @@ export type CoreReadOptions = {
   supportSessionId?: string;
 };
 
+export type CoreActionResponse<T> =
+  | { kind: "unauthenticated" }
+  | { kind: "error"; status: number; code?: string }
+  | { kind: "ok"; result: T };
+
 function readHeaders(accessToken: string, options: CoreReadOptions = {}) {
   return {
     authorization: `Bearer ${accessToken}`,
@@ -449,6 +507,163 @@ export async function getPaymentPage(
   if (response.status === 403 || response.status === 404) return { kind: "unavailable" as const };
   if (!response.ok) return { kind: "error" as const };
   return { kind: "ok" as const, page: await response.json() as CorePaymentPage };
+}
+
+export async function getRiskReviewQueue(
+  tenantId: string,
+  accessToken: string,
+  readOptions: CoreReadOptions = {},
+): Promise<
+  | { kind: "unauthenticated" }
+  | { kind: "unavailable" }
+  | { kind: "error" }
+  | { kind: "ok"; reviews: CoreRiskReview[] }
+> {
+  const response = await fetch(
+    `${config.coreBaseUrl}/api/v1/tenants/${encodeURIComponent(tenantId)}/risk-reviews`,
+    { headers: readHeaders(accessToken, readOptions), cache: "no-store" },
+  );
+  if (response.status === 401) return { kind: "unauthenticated" };
+  if (response.status === 403 || response.status === 404) return { kind: "unavailable" };
+  if (!response.ok) return { kind: "error" };
+  return { kind: "ok", reviews: await response.json() as CoreRiskReview[] };
+}
+
+export async function getCaseQueue(
+  tenantId: string,
+  accessToken: string,
+  readOptions: CoreReadOptions = {},
+): Promise<
+  | { kind: "unauthenticated" }
+  | { kind: "unavailable" }
+  | { kind: "error" }
+  | { kind: "ok"; cases: CoreCase[] }
+> {
+  const response = await fetch(
+    `${config.coreBaseUrl}/api/v1/tenants/${encodeURIComponent(tenantId)}/cases`,
+    { headers: readHeaders(accessToken, readOptions), cache: "no-store" },
+  );
+  if (response.status === 401) return { kind: "unauthenticated" };
+  if (response.status === 403 || response.status === 404) return { kind: "unavailable" };
+  if (!response.ok) return { kind: "error" };
+  return { kind: "ok", cases: await response.json() as CoreCase[] };
+}
+
+async function postCoreAction<T>(
+  path: string,
+  accessToken: string,
+  body: Record<string, unknown>,
+): Promise<CoreActionResponse<T>> {
+  const response = await fetch(`${config.coreBaseUrl}${path}`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${accessToken}`, "content-type": "application/json" },
+    body: JSON.stringify(body),
+    cache: "no-store",
+  });
+  if (response.status === 401) return { kind: "unauthenticated" };
+  if (!response.ok) {
+    let code: string | undefined;
+    try {
+      const problem = await response.json() as { code?: unknown; type?: unknown };
+      if (typeof problem.code === "string") code = problem.code;
+      if (typeof problem.type === "string") code = problem.type;
+    } catch {
+      // Treat an unparseable Core response as a generic action failure.
+    }
+    return { kind: "error", status: response.status, code };
+  }
+  return { kind: "ok", result: await response.json() as T };
+}
+
+export function assignRiskReview(
+  tenantId: string,
+  reviewId: string,
+  accessToken: string,
+  body: { analystId: string; priority: number; reason: string },
+) {
+  return postCoreAction<CoreRiskReview>(
+    `/api/v1/tenants/${encodeURIComponent(tenantId)}/risk-reviews/${encodeURIComponent(reviewId)}/assignment`,
+    accessToken,
+    body,
+  );
+}
+
+export function decideRiskReview(
+  tenantId: string,
+  reviewId: string,
+  accessToken: string,
+  body: { decision: "APPROVE" | "REJECT" | "ESCALATE"; reason: string },
+) {
+  return postCoreAction<unknown>(
+    `/api/v1/tenants/${encodeURIComponent(tenantId)}/risk-reviews/${encodeURIComponent(reviewId)}/decisions`,
+    accessToken,
+    body,
+  );
+}
+
+export function assignCase(
+  tenantId: string,
+  caseId: string,
+  accessToken: string,
+  body: { ownerId: string; reason: string },
+) {
+  return postCoreAction<CoreCase>(
+    `/api/v1/tenants/${encodeURIComponent(tenantId)}/cases/${encodeURIComponent(caseId)}/assignment`,
+    accessToken,
+    body,
+  );
+}
+
+export function transitionCase(
+  tenantId: string,
+  caseId: string,
+  accessToken: string,
+  body: { target: CoreCase["status"]; reason: string },
+) {
+  return postCoreAction<CoreCase>(
+    `/api/v1/tenants/${encodeURIComponent(tenantId)}/cases/${encodeURIComponent(caseId)}/transitions`,
+    accessToken,
+    body,
+  );
+}
+
+export function addCaseNote(
+  tenantId: string,
+  caseId: string,
+  accessToken: string,
+  body: { note: string },
+) {
+  return postCoreAction<CoreCase>(
+    `/api/v1/tenants/${encodeURIComponent(tenantId)}/cases/${encodeURIComponent(caseId)}/notes`,
+    accessToken,
+    body,
+  );
+}
+
+export function resolveCase(
+  tenantId: string,
+  caseId: string,
+  accessToken: string,
+  body: { resolution: string; note: string },
+) {
+  return postCoreAction<CoreCase>(
+    `/api/v1/tenants/${encodeURIComponent(tenantId)}/cases/${encodeURIComponent(caseId)}/resolution`,
+    accessToken,
+    body,
+  );
+}
+
+export function closeCase(
+  tenantId: string,
+  caseId: string,
+  accessToken: string,
+  body: { reason: string },
+) {
+  return postCoreAction<CoreCase>(
+    `/api/v1/tenants/${encodeURIComponent(tenantId)}/cases/${encodeURIComponent(caseId)}/close`,
+    accessToken,
+    body,
+  );
 }
 
 export async function getPaymentDetail(

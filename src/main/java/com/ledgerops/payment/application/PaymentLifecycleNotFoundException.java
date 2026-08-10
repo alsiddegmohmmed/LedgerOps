@@ -5,7 +5,8 @@ import com.ledgerops.payment.domain.PaymentId;
 import java.util.Objects;
 import java.util.UUID;
 
-public final class PaymentLifecycleNotFoundException extends RuntimeException {
+public final class PaymentLifecycleNotFoundException
+        extends com.ledgerops.payment.api.PaymentOperationNotFoundException {
 
     private final UUID tenantId;
     private final PaymentId paymentId;

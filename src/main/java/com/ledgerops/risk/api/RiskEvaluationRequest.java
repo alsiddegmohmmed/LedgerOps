@@ -8,9 +8,19 @@ import java.util.UUID;
 public record RiskEvaluationRequest(
         UUID tenantId,
         UUID paymentId,
+        UUID merchantId,
         BigDecimal amount,
         Currency currency
 ) {
+
+    public RiskEvaluationRequest(
+            UUID tenantId,
+            UUID paymentId,
+            BigDecimal amount,
+            Currency currency
+    ) {
+        this(tenantId, paymentId, null, amount, currency);
+    }
 
     public RiskEvaluationRequest {
         Objects.requireNonNull(tenantId, "Tenant ID must not be null");

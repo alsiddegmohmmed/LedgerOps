@@ -1002,7 +1002,7 @@ class InvitationSchemaIntegrationTests {
 
         assertThat(definition)
                 .contains("payment", "provider", "tenancy", "merchant", "identity")
-                .doesNotContain("risk", "reconciliation", "casework");
+                .contains("risk", "reconciliation", "casework");
     }
 
     private boolean tableExists(String tableName) {

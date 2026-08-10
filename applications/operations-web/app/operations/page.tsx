@@ -53,6 +53,12 @@ export default async function OperationsPage() {
             <h2>Payments</h2>
             <p>Search scoped Payment records and inspect their composed operational evidence.</p>
             <a className="button" href="/operations/payments">Open Payments</a>
+            <h2>Risk reviews</h2>
+            <p>Review manual risk items, assign analysts, and record the final decision.</p>
+            <a className="button secondary" href="/operations/risk-reviews">Open risk reviews</a>
+            <h2>Casework</h2>
+            <p>Investigate escalated cases, record evidence, resolve, and close them.</p>
+            <a className="button secondary" href="/operations/cases">Open casework</a>
             <h2>Ledger</h2>
             <p>Review balances and half-open date-bounded statements for a Ledger account.</p>
             <a className="button secondary" href="/operations/ledger">Open Ledger</a>

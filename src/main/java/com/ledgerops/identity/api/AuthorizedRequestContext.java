@@ -126,6 +126,38 @@ public record AuthorizedRequestContext(
         return hasPermission(Permission.MERCHANT_SUSPEND);
     }
 
+    public boolean canReadRiskReviews() {
+        return hasPermission(Permission.RISK_READ);
+    }
+
+    public boolean canAssignRiskReviews() {
+        return hasPermission(Permission.RISK_REVIEW_ASSIGN);
+    }
+
+    public boolean canDecideRiskReviews() {
+        return hasPermission(Permission.RISK_REVIEW_DECIDE);
+    }
+
+    public boolean canReadCases() {
+        return hasPermission(Permission.CASE_READ);
+    }
+
+    public boolean canAssignCases() {
+        return hasPermission(Permission.CASE_ASSIGN);
+    }
+
+    public boolean canUpdateCases() {
+        return hasPermission(Permission.CASE_UPDATE);
+    }
+
+    public boolean canResolveCases() {
+        return hasPermission(Permission.CASE_RESOLVE);
+    }
+
+    public boolean canCloseCases() {
+        return hasPermission(Permission.CASE_CLOSE);
+    }
+
     public boolean isSupportSession() {
         return supportSessionId != null;
     }

@@ -5,7 +5,8 @@ import com.ledgerops.payment.domain.PaymentStatus;
 
 import java.util.Objects;
 
-public final class PaymentLifecycleStateException extends RuntimeException {
+public final class PaymentLifecycleStateException
+        extends com.ledgerops.payment.api.PaymentOperationConflictException {
 
     private final PaymentId paymentId;
     private final PaymentStatus requiredStatus;

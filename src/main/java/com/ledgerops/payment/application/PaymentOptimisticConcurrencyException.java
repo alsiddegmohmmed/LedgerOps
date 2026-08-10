@@ -4,7 +4,8 @@ import com.ledgerops.payment.domain.PaymentId;
 
 import java.util.Objects;
 
-public final class PaymentOptimisticConcurrencyException extends RuntimeException {
+public final class PaymentOptimisticConcurrencyException
+        extends com.ledgerops.payment.api.PaymentOperationConflictException {
 
     private final PaymentId paymentId;
     private final long expectedVersion;

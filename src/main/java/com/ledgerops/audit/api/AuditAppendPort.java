@@ -4,6 +4,21 @@ import java.util.UUID;
 
 public interface AuditAppendPort {
 
+    default void appendAction(
+            String actorIssuer,
+            String actorSubject,
+            String principalType,
+            UUID tenantId,
+            String actionType,
+            String targetType,
+            String targetId,
+            String reason,
+            String details,
+            String correlationId
+    ) {
+        // Optional for existing test doubles; production adapter records it.
+    }
+
     void appendPaymentCreated(
             String actorIssuer,
             String actorSubject,

@@ -1,5 +1,8 @@
 package com.ledgerops.messaging.application;
 
+import com.ledgerops.messaging.api.MessageEnvelopeDecodeException;
+import com.ledgerops.messaging.api.MessageEnvelopeDecoder;
+import com.ledgerops.messaging.api.MessageEnvelopeView;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
@@ -10,7 +13,7 @@ import java.util.Set;
 import java.util.UUID;
 
 @Component
-public class MessageEnvelopeCodec {
+public class MessageEnvelopeCodec implements MessageEnvelopeDecoder {
 
     private static final Set<String> FIELDS = Set.of(
             "messageId", "messageType", "schemaVersion", "aggregateId", "tenantId",
@@ -84,6 +87,19 @@ public class MessageEnvelopeCodec {
             throw exception;
         } catch (Exception exception) {
             throw new InvalidEnvelopeException("Envelope cannot be parsed", exception);
+        }
+    }
+
+    @Override
+    public MessageEnvelopeView decodeForConsumer(String rawEnvelope) {
+        try {
+            MessageEnvelope envelope = decode(rawEnvelope);
+            return new MessageEnvelopeView(
+                    envelope.messageId(), envelope.messageType(), envelope.schemaVersion(),
+                    envelope.aggregateId(), envelope.tenantId(), envelope.correlationId(),
+                    envelope.causationId(), envelope.occurredAt(), envelope.payload().toString());
+        } catch (InvalidEnvelopeException exception) {
+            throw new MessageEnvelopeDecodeException(exception.getMessage(), exception);
         }
     }
 

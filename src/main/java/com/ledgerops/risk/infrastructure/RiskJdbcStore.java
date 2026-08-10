@@ -2,6 +2,7 @@ package com.ledgerops.risk.infrastructure;
 
 import com.ledgerops.risk.application.RiskEvaluationStore;
 import com.ledgerops.risk.application.RiskProfileStore;
+import com.ledgerops.risk.application.RiskReviewStore;
 import com.ledgerops.risk.domain.EvaluatedRiskRule;
 import com.ledgerops.risk.domain.PaymentAmountThresholdRule;
 import com.ledgerops.risk.api.RiskConfigurationError;
@@ -13,6 +14,10 @@ import com.ledgerops.risk.domain.RiskEvaluation;
 import com.ledgerops.risk.domain.RiskEvaluationId;
 import com.ledgerops.risk.domain.RiskProfile;
 import com.ledgerops.risk.domain.RiskProfileId;
+import com.ledgerops.risk.domain.RiskReview;
+import com.ledgerops.risk.api.RiskReviewDecision;
+import com.ledgerops.risk.api.RiskReviewId;
+import com.ledgerops.risk.api.RiskReviewStatus;
 import com.ledgerops.risk.domain.RiskRuleId;
 import com.ledgerops.risk.domain.RiskRuleType;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -25,10 +30,11 @@ import java.sql.Timestamp;
 import java.util.Currency;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 @Repository
-class RiskJdbcStore implements RiskProfileStore, RiskEvaluationStore, RiskPaymentQuery {
+class RiskJdbcStore implements RiskProfileStore, RiskEvaluationStore, RiskPaymentQuery, RiskReviewStore {
 
     private static final String INSERT_PROFILE_SQL = """
             INSERT INTO risk.risk_profiles (
@@ -137,6 +143,44 @@ class RiskJdbcStore implements RiskProfileStore, RiskEvaluationStore, RiskPaymen
              WHERE tenant_id = ?
                AND evaluation_id = ?
              ORDER BY rule_id
+            """;
+
+    private static final String INSERT_REVIEW_SQL = """
+            INSERT INTO risk.risk_reviews
+                (id, tenant_id, payment_id, merchant_id, evaluation_id, status, assigned_analyst_id,
+                 priority, sla_version, created_at, due_at, decision, decision_reason, case_id,
+                 decided_at, version)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT (tenant_id, payment_id) DO NOTHING
+            """;
+    private static final String FIND_REVIEW_SQL = """
+            SELECT id, tenant_id, payment_id, merchant_id, evaluation_id, status, assigned_analyst_id,
+                   priority, sla_version, created_at, due_at, decision, decision_reason, case_id,
+                   decided_at, version
+              FROM risk.risk_reviews
+             WHERE tenant_id = ? AND id = ?
+            """;
+    private static final String FIND_REVIEW_FOR_UPDATE_SQL = FIND_REVIEW_SQL + " FOR UPDATE";
+    private static final String FIND_REVIEW_BY_PAYMENT_SQL = """
+            SELECT id, tenant_id, payment_id, merchant_id, evaluation_id, status, assigned_analyst_id,
+                   priority, sla_version, created_at, due_at, decision, decision_reason, case_id,
+                   decided_at, version
+              FROM risk.risk_reviews
+             WHERE tenant_id = ? AND payment_id = ?
+            """;
+    private static final String QUEUE_REVIEW_SQL = """
+            SELECT id, tenant_id, payment_id, merchant_id, evaluation_id, status, assigned_analyst_id,
+                   priority, sla_version, created_at, due_at, decision, decision_reason, case_id,
+                   decided_at, version
+              FROM risk.risk_reviews
+             WHERE tenant_id = ? AND status IN ('UNASSIGNED', 'ASSIGNED')
+             ORDER BY due_at ASC, priority DESC, id ASC
+            """;
+    private static final String UPDATE_REVIEW_SQL = """
+            UPDATE risk.risk_reviews
+               SET status = ?, assigned_analyst_id = ?, priority = ?, decision = ?,
+                   decision_reason = ?, case_id = ?, decided_at = ?, version = ?
+             WHERE tenant_id = ? AND id = ? AND version = ?
             """;
 
     private final JdbcTemplate jdbcTemplate;
@@ -280,6 +324,65 @@ class RiskJdbcStore implements RiskProfileStore, RiskEvaluationStore, RiskPaymen
     }
 
     @Override
+    public RiskReview insertIfAbsent(RiskReview review) {
+        int inserted = jdbcTemplate.update(INSERT_REVIEW_SQL,
+                review.reviewId().value(), review.tenantId(), review.paymentId(),
+                review.merchantId(), review.evaluationId(), review.status().name(), review.assignedAnalystId(),
+                review.priority(), review.slaVersion(), Timestamp.from(review.createdAt()), Timestamp.from(review.dueAt()),
+                review.decision() == null ? null : review.decision().name(), review.decisionReason(),
+                review.caseId(), review.decidedAt() == null ? null : Timestamp.from(review.decidedAt()),
+                review.version());
+        if (inserted == 0) {
+            return jdbcTemplate.query(FIND_REVIEW_BY_PAYMENT_SQL, this::mapReview,
+                    review.tenantId(), review.paymentId()).stream().findFirst()
+                    .orElseThrow(() -> new IllegalStateException("RiskReview conflict was not visible"));
+        }
+        return review;
+    }
+
+    @Override
+    public Optional<RiskReview> findByTenantAndId(UUID tenantId, UUID reviewId) {
+        return jdbcTemplate.query(FIND_REVIEW_SQL, this::mapReview, tenantId, reviewId)
+                .stream().findFirst();
+    }
+
+    @Override
+    public Optional<RiskReview> lockByTenantAndId(UUID tenantId, UUID reviewId) {
+        return jdbcTemplate.query(FIND_REVIEW_FOR_UPDATE_SQL, this::mapReview, tenantId, reviewId)
+                .stream().findFirst();
+    }
+
+    @Override
+    public List<RiskReview> queue(UUID tenantId) {
+        return jdbcTemplate.query(QUEUE_REVIEW_SQL, this::mapReview, tenantId);
+    }
+
+    @Override
+    public List<RiskReview> queue(UUID tenantId, Set<UUID> merchantIds) {
+        if (merchantIds.isEmpty()) return List.of();
+        String placeholders = String.join(", ", java.util.Collections.nCopies(merchantIds.size(), "?"));
+        String sql = QUEUE_REVIEW_SQL.replace(
+                " WHERE tenant_id = ? AND status IN ('UNASSIGNED', 'ASSIGNED')",
+                " WHERE tenant_id = ? AND merchant_id IN (" + placeholders
+                        + ") AND status IN ('UNASSIGNED', 'ASSIGNED')");
+        Object[] args = new Object[merchantIds.size() + 1];
+        args[0] = tenantId;
+        int index = 1;
+        for (UUID merchantId : merchantIds) args[index++] = merchantId;
+        return jdbcTemplate.query(sql, this::mapReview, args);
+    }
+
+    @Override
+    public boolean update(RiskReview review, long expectedVersion) {
+        return jdbcTemplate.update(UPDATE_REVIEW_SQL, review.status().name(),
+                review.assignedAnalystId(), review.priority(),
+                review.decision() == null ? null : review.decision().name(),
+                review.decisionReason(), review.caseId(),
+                review.decidedAt() == null ? null : Timestamp.from(review.decidedAt()),
+                review.version(), review.tenantId(), review.reviewId().value(), expectedVersion) == 1;
+    }
+
+    @Override
     public Optional<RiskPaymentSnapshot> findSnapshotByTenantAndPayment(
             UUID tenantId,
             UUID paymentId
@@ -362,6 +465,28 @@ class RiskJdbcStore implements RiskProfileStore, RiskEvaluationStore, RiskPaymen
                 resultSet.getBoolean("triggered"),
                 resultSet.getInt("applied_contribution")
         );
+    }
+
+    private RiskReview mapReview(ResultSet rs, int rowNumber) throws SQLException {
+        String decision = rs.getString("decision");
+        Timestamp decidedAt = rs.getTimestamp("decided_at");
+        return RiskReview.restore(
+                RiskReviewId.from(rs.getObject("id", UUID.class)),
+                rs.getObject("tenant_id", UUID.class),
+                rs.getObject("payment_id", UUID.class),
+                rs.getObject("merchant_id", UUID.class),
+                rs.getObject("evaluation_id", UUID.class),
+                RiskReviewStatus.valueOf(rs.getString("status")),
+                rs.getObject("assigned_analyst_id", UUID.class),
+                rs.getInt("priority"),
+                rs.getInt("sla_version"),
+                rs.getTimestamp("created_at").toInstant(),
+                rs.getTimestamp("due_at").toInstant(),
+                decision == null ? null : RiskReviewDecision.valueOf(decision),
+                rs.getString("decision_reason"),
+                rs.getObject("case_id", UUID.class),
+                decidedAt == null ? null : decidedAt.toInstant(),
+                rs.getLong("version"));
     }
 
     private record ProfileRow(

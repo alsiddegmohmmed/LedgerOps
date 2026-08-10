@@ -73,6 +73,7 @@ public class PaymentRiskDecisionService {
                 new RiskEvaluationRequest(
                         payment.tenantId(),
                         payment.id().value(),
+                        payment.merchantReference().value(),
                         payment.amount().amount(),
                         payment.amount().currency()
                 )

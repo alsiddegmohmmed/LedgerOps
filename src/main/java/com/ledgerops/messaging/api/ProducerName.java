@@ -5,7 +5,10 @@ public enum ProducerName {
     PROVIDER("provider"),
     TENANCY("tenancy"),
     MERCHANT("merchant"),
-    IDENTITY("identity");
+    IDENTITY("identity"),
+    RISK("risk"),
+    RECONCILIATION("reconciliation"),
+    CASEWORK("casework");
 
     private final String value;
 
