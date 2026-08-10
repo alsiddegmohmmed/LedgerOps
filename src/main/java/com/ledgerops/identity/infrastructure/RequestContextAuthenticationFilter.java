@@ -6,6 +6,7 @@ import com.ledgerops.RequestCorrelationFilter;
 import com.ledgerops.identity.api.AuthorizedRequestContext;
 import com.ledgerops.identity.api.AuthorizedRequestContextRequest;
 import com.ledgerops.identity.api.AuthenticatedPrincipal;
+import com.ledgerops.identity.api.SupportSessionPort;
 import com.ledgerops.identity.application.InactiveApplicationUserException;
 import com.ledgerops.identity.application.InvalidTenantSelectionException;
 import com.ledgerops.identity.application.RequestContextService;
@@ -24,6 +25,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
 import org.slf4j.MDC;
 
 import java.io.IOException;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -47,22 +49,36 @@ final class RequestContextAuthenticationFilter extends OncePerRequestFilter {
             "^/api/v1/tenants/[0-9a-fA-F-]{36}/memberships(?:/.*)?$");
     private static final Pattern TENANT_ACTIVATION_PATH = Pattern.compile(
             "^/api/v1/tenants/[0-9a-fA-F-]{36}/(?:activate|suspend|archive)$");
+    private static final Pattern SUPPORT_SESSION_PATH = Pattern.compile(
+            "^/api/v1/platform/support-sessions(?:/.*)?$");
     private static final String TENANT_ONBOARDING_PATH = "/api/v1/tenants";
     private static final String PAYMENT_PATH = "/api/v1/payments";
     static final String TENANT_SELECTION_HEADER = "X-Tenant-Id";
+    static final String SUPPORT_SESSION_HEADER = "X-Support-Session-Id";
 
     private final JwtPrincipalParser jwtPrincipalParser;
     private final RequestContextService requestContextService;
     private final ObjectMapper objectMapper;
+    private final SupportSessionPort supportSessions;
 
     RequestContextAuthenticationFilter(
             JwtPrincipalParser jwtPrincipalParser,
             RequestContextService requestContextService,
             ObjectMapper objectMapper
     ) {
+        this(jwtPrincipalParser, requestContextService, objectMapper, null);
+    }
+
+    RequestContextAuthenticationFilter(
+            JwtPrincipalParser jwtPrincipalParser,
+            RequestContextService requestContextService,
+            ObjectMapper objectMapper,
+            SupportSessionPort supportSessions
+    ) {
         this.jwtPrincipalParser = jwtPrincipalParser;
         this.requestContextService = requestContextService;
         this.objectMapper = objectMapper;
+        this.supportSessions = supportSessions;
     }
 
     @Override
@@ -90,9 +106,42 @@ final class RequestContextAuthenticationFilter extends OncePerRequestFilter {
                     new AuthenticatedPrincipal(
                             principal.principalType().name(),
                             principal.keycloakIdentity().issuer(),
-                            principal.keycloakIdentity().subject()
+                            principal.keycloakIdentity().subject(),
+                            principal.authenticationTime()
                     ));
-            if (isPlatformTenantOperationPath(request)) {
+            if (isPlatformTenantOperationPath(request)
+                    || SUPPORT_SESSION_PATH.matcher(request.getRequestURI()).matches()) {
+                filterChain.doFilter(request, response);
+                return;
+            }
+            String supportSessionHeader = request.getHeader(SUPPORT_SESSION_HEADER);
+            if (supportSessionHeader != null && !supportSessionHeader.isBlank()) {
+                if (!"GET".equals(request.getMethod()) || supportSessions == null) {
+                    writeProblem(response, HttpStatus.FORBIDDEN, "Support access denied",
+                            "Support sessions are read-only", "support_read_only");
+                    return;
+                }
+                UUID supportSessionId = parseUuid(supportSessionHeader);
+                UUID selectedTenantId = tenantId(request);
+                if (supportSessionId == null || selectedTenantId == null) {
+                    writeProblem(response, HttpStatus.NOT_FOUND, "Resource not found",
+                            "The support session is unavailable", "support_session_not_found");
+                    return;
+                }
+                Optional<AuthorizedRequestContext> supportContext = supportSessions.authorize(
+                        supportSessionId,
+                        (AuthenticatedPrincipal) request.getAttribute(
+                                AuthorizedRequestContextRequest.principalAttribute()),
+                        selectedTenantId,
+                        correlationId(request),
+                        request.getRequestURI()
+                );
+                if (supportContext.isEmpty()) {
+                    writeProblem(response, HttpStatus.NOT_FOUND, "Resource not found",
+                            "The support session is unavailable", "support_session_not_found");
+                    return;
+                }
+                request.setAttribute(CONTEXT_ATTRIBUTE, supportContext.get());
                 filterChain.doFilter(request, response);
                 return;
             }
@@ -139,6 +188,8 @@ final class RequestContextAuthenticationFilter extends OncePerRequestFilter {
                 && TENANT_MERCHANTS_PATH.matcher(request.getRequestURI()).matches())
                 || (("GET".equals(request.getMethod()) || "POST".equals(request.getMethod()))
                 && TENANT_MEMBERSHIPS_PATH.matcher(request.getRequestURI()).matches())
+                || ("POST".equals(request.getMethod())
+                && SUPPORT_SESSION_PATH.matcher(request.getRequestURI()).matches())
                 || ("POST".equals(request.getMethod())
                 && isPlatformTenantOperationPath(request))
                 || ("POST".equals(request.getMethod()) && PAYMENT_PATH.equals(request.getRequestURI()));

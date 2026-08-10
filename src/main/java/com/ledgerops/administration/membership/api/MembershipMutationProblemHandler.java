@@ -4,6 +4,7 @@ import com.ledgerops.ApiProblemFactory;
 import com.ledgerops.identity.application.InvitationNotFoundException;
 import com.ledgerops.identity.application.InvitationRevocationConflictException;
 import com.ledgerops.identity.domain.InvalidInvitationException;
+import com.ledgerops.identity.domain.InvalidMembershipTransitionException;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpStatus;
@@ -17,7 +18,10 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 import java.util.LinkedHashMap;
 import java.util.Map;
 
-@RestControllerAdvice(assignableTypes = InvitationRevocationController.class)
+@RestControllerAdvice(assignableTypes = {
+        InvitationRevocationController.class,
+        InvitationAdministrationController.class
+})
 @Order(Ordered.HIGHEST_PRECEDENCE)
 class MembershipMutationProblemHandler {
 
@@ -57,6 +61,19 @@ class MembershipMutationProblemHandler {
                 "No membership or invitation state was changed.",
                 false,
                 "Refresh the membership state before retrying."
+        );
+    }
+
+    @ExceptionHandler(InvalidMembershipTransitionException.class)
+    ProblemDetail handleMembershipTransition(InvalidMembershipTransitionException exception) {
+        return problem(
+                HttpStatus.CONFLICT,
+                "Membership role change is not allowed",
+                exception.getMessage(),
+                "membership-state-conflict",
+                "No membership or invitation state was changed.",
+                false,
+                "Refresh the membership state and submit a permitted role set."
         );
     }
 

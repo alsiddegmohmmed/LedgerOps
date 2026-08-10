@@ -81,6 +81,14 @@ export type CoreMembership = {
   invitation: CoreMembershipInvitation | null;
 };
 
+export type CoreSupportSession = {
+  supportSessionId: string;
+  tenantId: string;
+  startedAt: string;
+  expiresAt: string;
+  permission: "support:tenant-read";
+};
+
 export type CoreCredentialActionResult = {
   previousCredentialId?: string;
   credentialId: string;
@@ -111,9 +119,31 @@ export type CoreOperationalContactUpdateResponse =
   | { kind: "error"; status: number; code?: string }
   | { kind: "ok"; result: CoreOperationalContact };
 
-export async function getTenant(tenantId: string, accessToken: string) {
+export type CoreSupportSessionStartResponse =
+  | { kind: "unauthenticated" }
+  | { kind: "error"; status: number; code?: string }
+  | { kind: "ok"; result: CoreSupportSession };
+
+export type CoreReadOptions = {
+  supportSessionId?: string;
+};
+
+function readHeaders(accessToken: string, options: CoreReadOptions = {}) {
+  return {
+    authorization: `Bearer ${accessToken}`,
+    ...(options.supportSessionId
+      ? { "x-support-session-id": options.supportSessionId }
+      : {}),
+  };
+}
+
+export async function getTenant(
+  tenantId: string,
+  accessToken: string,
+  options: CoreReadOptions = {},
+) {
   const response = await fetch(`${config.coreBaseUrl}/api/v1/tenants/${encodeURIComponent(tenantId)}`, {
-    headers: { authorization: `Bearer ${accessToken}` },
+    headers: readHeaders(accessToken, options),
     cache: "no-store",
   });
   if (response.status === 401) return { kind: "unauthenticated" as const };
@@ -122,11 +152,15 @@ export async function getTenant(tenantId: string, accessToken: string) {
   return { kind: "ok" as const, tenant: (await response.json()) as CoreTenant };
 }
 
-export async function getMerchants(tenantId: string, accessToken: string) {
+export async function getMerchants(
+  tenantId: string,
+  accessToken: string,
+  options: CoreReadOptions = {},
+) {
   const response = await fetch(
     `${config.coreBaseUrl}/api/v1/tenants/${encodeURIComponent(tenantId)}/merchants`,
     {
-      headers: { authorization: `Bearer ${accessToken}` },
+      headers: readHeaders(accessToken, options),
       cache: "no-store",
     },
   );
@@ -136,11 +170,15 @@ export async function getMerchants(tenantId: string, accessToken: string) {
   return { kind: "ok" as const, merchants: await response.json() as CoreMerchant[] };
 }
 
-export async function getMemberships(tenantId: string, accessToken: string) {
+export async function getMemberships(
+  tenantId: string,
+  accessToken: string,
+  options: CoreReadOptions = {},
+) {
   const response = await fetch(
     `${config.coreBaseUrl}/api/v1/tenants/${encodeURIComponent(tenantId)}/memberships`,
     {
-      headers: { authorization: `Bearer ${accessToken}` },
+      headers: readHeaders(accessToken, options),
       cache: "no-store",
     },
   );
@@ -148,6 +186,34 @@ export async function getMemberships(tenantId: string, accessToken: string) {
   if (response.status === 403 || response.status === 404) return { kind: "unavailable" as const };
   if (!response.ok) return { kind: "error" as const };
   return { kind: "ok" as const, memberships: await response.json() as CoreMembership[] };
+}
+
+export async function startSupportSession(
+  accessToken: string,
+  body: { tenantId: string; confirmation: true; reason: string },
+): Promise<CoreSupportSessionStartResponse> {
+  const response = await fetch(`${config.coreBaseUrl}/api/v1/platform/support-sessions`, {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${accessToken}`,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify(body),
+    cache: "no-store",
+  });
+  if (response.status === 401) return { kind: "unauthenticated" };
+  if (!response.ok) {
+    let code: string | undefined;
+    try {
+      const problem = await response.json() as { type?: unknown; code?: unknown };
+      if (typeof problem.type === "string") code = problem.type;
+      if (typeof problem.code === "string") code = problem.code;
+    } catch {
+      // The BFF maps an unparseable Core response to a generic action error.
+    }
+    return { kind: "error", status: response.status, code };
+  }
+  return { kind: "ok", result: await response.json() as CoreSupportSession };
 }
 
 export async function getCredentialPage(

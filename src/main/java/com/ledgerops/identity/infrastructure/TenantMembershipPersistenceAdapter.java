@@ -151,8 +151,12 @@ class TenantMembershipPersistenceAdapter implements TenantMembershipRepository {
                             : Set.of();
                     return !row.merchantIds().equals(merchantIds);
                 })) {
-            throw new IllegalArgumentException(
-                    "Role assignment changes require explicit assignment replacement");
+            if (membership.status() != TenantMembershipStatus.ACTIVE
+                    && membership.status() != TenantMembershipStatus.SUSPENDED) {
+                throw new IllegalArgumentException(
+                        "Role assignment changes require an active or suspended membership");
+            }
+            replaceRoleAssignments(entity, membership);
         }
     }
 
@@ -160,6 +164,7 @@ class TenantMembershipPersistenceAdapter implements TenantMembershipRepository {
             TenantMembershipJpaEntity entity,
             TenantMembership membership
     ) {
+        entity.roleAssignments().clear();
         if (membership.status() == TenantMembershipStatus.INVITED) {
             if (!membership.roleAssignments().isEmpty()) {
                 throw new IllegalArgumentException(

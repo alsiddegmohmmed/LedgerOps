@@ -3,6 +3,7 @@ package com.ledgerops.identity.infrastructure;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ledgerops.identity.application.AuthorizedTenantContextPort;
 import com.ledgerops.identity.application.RequestContextService;
+import com.ledgerops.identity.api.SupportSessionPort;
 import com.ledgerops.identity.domain.ApplicationUserRepository;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
@@ -47,9 +48,11 @@ class IdentitySecurityConfiguration {
     RequestContextAuthenticationFilter requestContextAuthenticationFilter(
             JwtPrincipalParser parser,
             RequestContextService requestContextService,
-            ObjectMapper objectMapper
+            ObjectMapper objectMapper,
+            SupportSessionPort supportSessions
     ) {
-        return new RequestContextAuthenticationFilter(parser, requestContextService, objectMapper);
+        return new RequestContextAuthenticationFilter(
+                parser, requestContextService, objectMapper, supportSessions);
     }
 
     @Bean

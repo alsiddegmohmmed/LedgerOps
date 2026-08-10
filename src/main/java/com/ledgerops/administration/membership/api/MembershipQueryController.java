@@ -63,7 +63,7 @@ class MembershipQueryController {
         if (!context.tenantId().equals(tenantId)) {
             throw new AuthorizationResourceNotFoundException();
         }
-        if (!context.isHuman() || !context.canManageMemberships()) {
+        if (!context.isHuman() || !context.canReadMemberships()) {
             throw new AuthorizationPermissionDeniedException("tenant:membership-manage");
         }
         return new MembershipReadAuthorization(

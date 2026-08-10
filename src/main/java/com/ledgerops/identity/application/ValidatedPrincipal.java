@@ -3,13 +3,23 @@ package com.ledgerops.identity.application;
 import com.ledgerops.identity.domain.KeycloakIdentity;
 import com.ledgerops.identity.domain.PrincipalType;
 
+import java.time.Instant;
 import java.util.Objects;
 
 public record ValidatedPrincipal(
         PrincipalType principalType,
         KeycloakIdentity keycloakIdentity,
-        String serviceClientId
+        String serviceClientId,
+        Instant authenticationTime
 ) {
+
+    public ValidatedPrincipal(
+            PrincipalType principalType,
+            KeycloakIdentity keycloakIdentity,
+            String serviceClientId
+    ) {
+        this(principalType, keycloakIdentity, serviceClientId, null);
+    }
 
     public ValidatedPrincipal {
         Objects.requireNonNull(principalType, "Principal type must not be null");

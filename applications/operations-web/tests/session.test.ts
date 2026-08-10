@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createSession, deleteSession, readSession, sessionCookie, updateSession, type BffSession, type SessionStore } from "../lib/session";
+import { createSession, deleteSession, isSupportSessionActive, readSession, sessionCookie, updateSession, type BffSession, type SessionStore } from "../lib/session";
 
 function store(): SessionStore {
   const values = new Map<string, string>();
@@ -30,5 +30,20 @@ describe("opaque BFF sessions", () => {
     expect(await readSession(sessions, id)).toEqual(selected);
     await deleteSession(sessions, id);
     expect(await readSession(sessions, id)).toBeNull();
+  });
+
+  it("recognizes an active support session without exposing its bearer token", () => {
+    expect(isSupportSessionActive({
+      ...session,
+      supportSessionId: "support-session",
+      supportTenantId: "tenant",
+      supportExpiresAt: Date.now() + 30_000,
+    })).toBe(true);
+    expect(isSupportSessionActive({
+      ...session,
+      supportSessionId: "support-session",
+      supportTenantId: "tenant",
+      supportExpiresAt: Date.now() - 1,
+    })).toBe(false);
   });
 });

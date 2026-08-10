@@ -43,7 +43,12 @@ class TenantMembershipJpaEntity {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
-    @OneToMany(mappedBy = "membership", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    @OneToMany(
+            mappedBy = "membership",
+            cascade = CascadeType.ALL,
+            orphanRemoval = true,
+            fetch = FetchType.LAZY
+    )
     private Set<TenantRoleAssignmentJpaEntity> roleAssignments = new LinkedHashSet<>();
 
     protected TenantMembershipJpaEntity() {

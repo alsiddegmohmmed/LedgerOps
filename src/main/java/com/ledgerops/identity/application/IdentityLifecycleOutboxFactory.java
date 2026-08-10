@@ -120,4 +120,74 @@ final class IdentityLifecycleOutboxFactory {
             throw new IllegalStateException("Identity lifecycle payload cannot be encoded", exception);
         }
     }
+
+    static OutboxMessageDraft roleAssignmentsChanged(
+            UUID tenantId,
+            UUID membershipId,
+            long membershipVersion,
+            UUID correlationId,
+            UUID operationId,
+            Instant occurredAt
+    ) {
+        LinkedHashMap<String, Object> payload = new LinkedHashMap<>();
+        payload.put("aggregateType", "TenantMembership");
+        payload.put("aggregateId", membershipId.toString());
+        payload.put("event", "ROLE_ASSIGNMENTS_CHANGED");
+        payload.put("version", membershipVersion);
+
+        try {
+            return new OutboxMessageDraft(
+                    ProducerName.IDENTITY,
+                    "identity-event:TenantMembership:" + membershipId + ":" + membershipVersion,
+                    "IdentityLifecycleChanged",
+                    1,
+                    membershipId,
+                    tenantId,
+                    "ledgerops.identity.lifecycle.v1",
+                    tenantId.toString(),
+                    JSON.writeValueAsString(payload),
+                    correlationId,
+                    operationId,
+                    occurredAt
+            );
+        } catch (Exception exception) {
+            throw new IllegalStateException("Identity lifecycle payload cannot be encoded", exception);
+        }
+    }
+
+    static OutboxMessageDraft supportSessionStarted(
+            UUID tenantId,
+            UUID supportSessionId,
+            Instant startedAt,
+            Instant expiresAt,
+            UUID correlationId,
+            UUID operationId
+    ) {
+        LinkedHashMap<String, Object> payload = new LinkedHashMap<>();
+        payload.put("aggregateType", "SupportSession");
+        payload.put("aggregateId", supportSessionId.toString());
+        payload.put("event", "STARTED");
+        payload.put("version", 0);
+        payload.put("startedAt", startedAt.toString());
+        payload.put("expiresAt", expiresAt.toString());
+
+        try {
+            return new OutboxMessageDraft(
+                    ProducerName.IDENTITY,
+                    "identity-event:SupportSession:" + supportSessionId + ":0",
+                    "SupportSessionLifecycleChanged",
+                    1,
+                    supportSessionId,
+                    tenantId,
+                    "ledgerops.identity.support-session.v1",
+                    tenantId.toString(),
+                    JSON.writeValueAsString(payload),
+                    correlationId,
+                    operationId,
+                    startedAt
+            );
+        } catch (Exception exception) {
+            throw new IllegalStateException("Support session payload cannot be encoded", exception);
+        }
+    }
 }

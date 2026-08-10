@@ -10,6 +10,9 @@ export type BffSession = {
   expiresAt: number;
   csrfToken: string;
   selectedTenantId?: string;
+  supportSessionId?: string;
+  supportTenantId?: string;
+  supportExpiresAt?: number;
 };
 
 export type SessionStore = {
@@ -20,6 +23,15 @@ export type SessionStore = {
 
 export function isSessionExpired(session: BffSession) {
   return session.expiresAt <= Date.now();
+}
+
+export function isSupportSessionActive(session: BffSession) {
+  return Boolean(
+    session.supportSessionId
+      && session.supportTenantId
+      && session.supportExpiresAt
+      && session.supportExpiresAt > Date.now(),
+  );
 }
 
 function key(sessionId: string) {

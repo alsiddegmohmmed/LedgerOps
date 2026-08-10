@@ -57,7 +57,8 @@ public final class JwtPrincipalParser {
             return new ValidatedPrincipal(
                     service ? PrincipalType.SERVICE : PrincipalType.HUMAN,
                     identity,
-                    clientId
+                    clientId,
+                    jwt.getClaimAsInstant("auth_time")
             );
         } catch (RuntimeException exception) {
             if (exception instanceof InvalidJwtPrincipalException invalid) {

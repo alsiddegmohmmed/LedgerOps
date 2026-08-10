@@ -2,7 +2,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { getMerchants, getTenant } from "../../../lib/core";
 import { redis } from "../../../lib/redis";
-import { isSessionExpired, readSession, SESSION_COOKIE } from "../../../lib/session";
+import { isSessionExpired, isSupportSessionActive, readSession, SESSION_COOKIE } from "../../../lib/session";
 
 export const dynamic = "force-dynamic";
 
@@ -25,7 +25,11 @@ export default async function MerchantsPage() {
     );
   }
 
-  const tenantResult = await getTenant(session.selectedTenantId, session.accessToken);
+  const supportActive = isSupportSessionActive(session);
+  const supportOptions = supportActive
+    ? { supportSessionId: session.supportSessionId }
+    : {};
+  const tenantResult = await getTenant(session.selectedTenantId, session.accessToken, supportOptions);
   if (tenantResult.kind === "unauthenticated") redirect("/api/auth/login?reason=session");
   if (tenantResult.kind !== "ok") {
     return (
@@ -40,7 +44,7 @@ export default async function MerchantsPage() {
     );
   }
 
-  const merchantsResult = await getMerchants(session.selectedTenantId, session.accessToken);
+  const merchantsResult = await getMerchants(session.selectedTenantId, session.accessToken, supportOptions);
   if (merchantsResult.kind === "unauthenticated") redirect("/api/auth/login?reason=session");
   if (merchantsResult.kind !== "ok") {
     return (

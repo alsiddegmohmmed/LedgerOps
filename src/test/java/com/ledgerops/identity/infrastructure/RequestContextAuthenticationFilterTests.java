@@ -4,6 +4,11 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ledgerops.RequestCorrelationFilter;
 import com.ledgerops.identity.application.AuthorizedTenantContext;
 import com.ledgerops.identity.application.RequestContextService;
+import com.ledgerops.identity.api.AuthorizedRequestContext;
+import com.ledgerops.identity.api.AuthenticatedPrincipal;
+import com.ledgerops.identity.api.SupportSessionPort;
+import com.ledgerops.identity.api.SupportSessionResult;
+import com.ledgerops.identity.api.SupportSessionStartCommand;
 import com.ledgerops.identity.domain.ApplicationUser;
 import com.ledgerops.identity.domain.ApplicationUserId;
 import com.ledgerops.identity.domain.ApplicationUserRepository;
@@ -157,6 +162,67 @@ class RequestContextAuthenticationFilterTests {
     }
 
     @Test
+    void createsReadOnlyContextForValidSupportSessionAndRejectsWrites() throws Exception {
+        UUID tenantId = UUID.randomUUID();
+        UUID supportSessionId = UUID.randomUUID();
+        SupportSessionPort supportSessions = new SupportSessionPort() {
+            @Override
+            public SupportSessionResult start(SupportSessionStartCommand command) {
+                throw new UnsupportedOperationException();
+            }
+
+            @Override
+            public Optional<AuthorizedRequestContext> authorize(
+                    UUID requestedSessionId,
+                    AuthenticatedPrincipal actor,
+                    UUID requestedTenantId,
+                    String correlationId,
+                    String resourcePath
+            ) {
+                return supportSessionId.equals(requestedSessionId)
+                        && tenantId.equals(requestedTenantId)
+                        ? Optional.of(AuthorizedRequestContext.support(
+                        requestedTenantId, requestedSessionId, correlationId))
+                        : Optional.empty();
+            }
+        };
+        RequestContextAuthenticationFilter filter = filter(null, tenantId, supportSessions);
+
+        MockHttpServletRequest read = new MockHttpServletRequest(
+                "GET", "/api/v1/tenants/" + tenantId + "/merchants");
+        read.addHeader(HttpHeaders.AUTHORIZATION, "Bearer valid");
+        read.addHeader(RequestContextAuthenticationFilter.SUPPORT_SESSION_HEADER,
+                supportSessionId.toString());
+        read.setAttribute(RequestCorrelationFilter.CORRELATION_ID, "support-correlation");
+        MockHttpServletResponse readResponse = new MockHttpServletResponse();
+        AtomicBoolean readContinued = new AtomicBoolean();
+
+        filter.doFilter(read, readResponse,
+                (ignoredRequest, ignoredResponse) -> readContinued.set(true));
+
+        assertThat(readResponse.getStatus()).isEqualTo(HttpStatus.OK.value());
+        assertThat(readContinued).isTrue();
+        assertThat(read.getAttribute(RequestContextAuthenticationFilter.CONTEXT_ATTRIBUTE))
+                .isEqualTo(AuthorizedRequestContext.support(
+                        tenantId, supportSessionId, "support-correlation"));
+
+        MockHttpServletRequest write = new MockHttpServletRequest(
+                "POST", "/api/v1/tenants/" + tenantId + "/memberships/"
+                        + UUID.randomUUID() + "/invitation/revoke");
+        write.addHeader(HttpHeaders.AUTHORIZATION, "Bearer valid");
+        write.addHeader(RequestContextAuthenticationFilter.SUPPORT_SESSION_HEADER,
+                supportSessionId.toString());
+        MockHttpServletResponse writeResponse = new MockHttpServletResponse();
+        AtomicBoolean writeContinued = new AtomicBoolean();
+
+        filter.doFilter(write, writeResponse,
+                (ignoredRequest, ignoredResponse) -> writeContinued.set(true));
+
+        assertThat(writeResponse.getStatus()).isEqualTo(HttpStatus.FORBIDDEN.value());
+        assertThat(writeContinued).isFalse();
+    }
+
+    @Test
     void servicePaymentDoesNotRequireOrTrustTheTenantSelectionHeader() throws Exception {
         UUID credentialTenantId = UUID.randomUUID();
         UUID credentialMerchantId = UUID.randomUUID();
@@ -233,6 +299,14 @@ class RequestContextAuthenticationFilterTests {
     }
 
     private RequestContextAuthenticationFilter filter(ApplicationUser user, UUID tenantId) {
+        return filter(user, tenantId, null);
+    }
+
+    private RequestContextAuthenticationFilter filter(
+            ApplicationUser user,
+            UUID tenantId,
+            SupportSessionPort supportSessions
+    ) {
         JwtPrincipalParser parser = new JwtPrincipalParser(token -> {
             if ("invalid".equals(token)) {
                 throw new JwtException("invalid");
@@ -254,7 +328,8 @@ class RequestContextAuthenticationFilterTests {
                         ? Optional.of(new AuthorizedTenantContext(tenantId, ScopeMode.TENANT_WIDE,
                         Set.of(), Set.of(Permission.PAYMENT_READ), null))
                         : Optional.empty());
-        return new RequestContextAuthenticationFilter(parser, service, new ObjectMapper());
+        return new RequestContextAuthenticationFilter(
+                parser, service, new ObjectMapper(), supportSessions);
     }
 
     private ApplicationUserRepository emptyUsers() {

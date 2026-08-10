@@ -32,6 +32,9 @@ button:disabled { cursor: wait; opacity: .6; }
 .danger { background: #f09a9a; color: #2a1111; }
 .status { border-left: 3px solid var(--accent); padding-left: 1rem; }
 .error { border-left-color: #f09a9a; }
+.support-banner { align-items: center; background: #3a241d; border: 2px solid #f09a9a; border-radius: 1.25rem; display: flex; gap: 1.5rem; justify-content: space-between; margin-top: 2rem; padding: 1.25rem 1.5rem; }
+.support-banner strong { color: #ffd4a8; display: block; font-size: 1.35rem; letter-spacing: .08em; margin-top: .35rem; }
+.support-banner p { margin: .35rem 0 0; }
 .form-grid { display: grid; gap: 1rem; }
 .checkbox-label { align-items: center; display: flex; gap: .6rem; }
 .checkbox-label input { width: auto; }

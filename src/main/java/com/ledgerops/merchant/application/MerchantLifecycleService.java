@@ -3,6 +3,7 @@ package com.ledgerops.merchant.application;
 import com.ledgerops.audit.api.AuditAppendPort;
 import com.ledgerops.merchant.api.MerchantLifecyclePort;
 import com.ledgerops.merchant.api.MerchantLifecycleRequest;
+import com.ledgerops.merchant.api.MerchantNotFoundException;
 import com.ledgerops.merchant.api.MerchantReference;
 import com.ledgerops.merchant.domain.Merchant;
 import com.ledgerops.merchant.domain.MerchantId;
@@ -57,8 +58,7 @@ class MerchantLifecycleService implements MerchantLifecyclePort {
         TenantReference tenant = TenantReference.from(request.merchant().tenantId());
         MerchantId merchantId = MerchantId.from(request.merchant().value());
         Merchant current = merchants.findByIdForUpdate(tenant, merchantId)
-                .orElseThrow(() -> new IllegalArgumentException(
-                        "Merchant not found: " + request.merchant()));
+                .orElseThrow(MerchantNotFoundException::new);
         MerchantStatus previousStatus = current.status();
         Merchant changed;
         try {
@@ -90,6 +90,7 @@ class MerchantLifecycleService implements MerchantLifecyclePort {
                 saved.id().value(),
                 previousStatus.name(),
                 saved.status().name(),
+                request.reason(),
                 request.correlationId().toString()
         );
         return MerchantReference.from(tenant.value(), saved.id().value());

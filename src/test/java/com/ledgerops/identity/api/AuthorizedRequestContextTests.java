@@ -68,4 +68,39 @@ class AuthorizedRequestContextTests {
                 "correlation-1"
         ));
     }
+
+    @Test
+    void supportContextIsTenantWideReadOnlyAndHasNoMutationAuthority() {
+        UUID tenantId = UUID.randomUUID();
+        UUID supportSessionId = UUID.randomUUID();
+
+        AuthorizedRequestContext context = AuthorizedRequestContext.support(
+                tenantId, supportSessionId, "correlation-1");
+
+        assertThat(context.isSupportSession()).isTrue();
+        assertThat(context.tenantId()).isEqualTo(tenantId);
+        assertThat(context.supportSessionId()).isEqualTo(supportSessionId);
+        assertThat(context.canReadTenant()).isTrue();
+        assertThat(context.canReadMerchants()).isTrue();
+        assertThat(context.canReadMemberships()).isTrue();
+        assertThat(context.canManageMemberships()).isFalse();
+        assertThat(context.canManageCredentials()).isFalse();
+        assertThat(context.canCreatePayment()).isFalse();
+        assertThat(context.canSuspendMerchant()).isFalse();
+    }
+
+    @Test
+    void rejectsSupportContextWithAnyAdditionalPermissionOrScope() {
+        assertThatIllegalArgumentException().isThrownBy(() -> new AuthorizedRequestContext(
+                PrincipalType.HUMAN,
+                null,
+                null,
+                UUID.randomUUID(),
+                ScopeMode.TENANT_WIDE,
+                Set.of(),
+                Set.of(Permission.SUPPORT_TENANT_READ, Permission.TENANT_READ),
+                "correlation-1",
+                UUID.randomUUID()
+        ));
+    }
 }

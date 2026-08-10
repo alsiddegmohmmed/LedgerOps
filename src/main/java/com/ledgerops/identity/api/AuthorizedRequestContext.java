@@ -16,8 +16,23 @@ public record AuthorizedRequestContext(
         ScopeMode scopeMode,
         Set<UUID> merchantIds,
         Set<Permission> permissions,
-        String correlationId
+        String correlationId,
+        UUID supportSessionId
 ) {
+
+    public AuthorizedRequestContext(
+            PrincipalType principalType,
+            UUID applicationUserId,
+            UUID serviceCredentialId,
+            UUID tenantId,
+            ScopeMode scopeMode,
+            Set<UUID> merchantIds,
+            Set<Permission> permissions,
+            String correlationId
+    ) {
+        this(principalType, applicationUserId, serviceCredentialId, tenantId,
+                scopeMode, merchantIds, permissions, correlationId, null);
+    }
 
     public AuthorizedRequestContext {
         Objects.requireNonNull(principalType, "Principal type must not be null");
@@ -26,7 +41,8 @@ public record AuthorizedRequestContext(
         if (correlationId.isBlank()) {
             throw new IllegalArgumentException("Correlation ID must not be blank");
         }
-        if (principalType == PrincipalType.HUMAN && applicationUserId == null) {
+        boolean supportContext = supportSessionId != null;
+        if (principalType == PrincipalType.HUMAN && applicationUserId == null && !supportContext) {
             throw new IllegalArgumentException("Human context requires an application user");
         }
         if (principalType == PrincipalType.SERVICE && serviceCredentialId == null) {
@@ -40,6 +56,14 @@ public record AuthorizedRequestContext(
         if (scopeMode == ScopeMode.MERCHANT_SET && merchantIds.isEmpty()) {
             throw new IllegalArgumentException("Merchant scope must not be empty");
         }
+        if (supportContext && (principalType != PrincipalType.HUMAN
+                || applicationUserId != null
+                || serviceCredentialId != null
+                || scopeMode != ScopeMode.TENANT_WIDE
+                || !permissions.equals(Set.of(Permission.SUPPORT_TENANT_READ)))) {
+            throw new IllegalArgumentException(
+                    "Support context must be read-only Tenant-wide human access");
+        }
     }
 
     public boolean hasPermission(Permission permission) {
@@ -47,7 +71,7 @@ public record AuthorizedRequestContext(
     }
 
     public boolean canReadTenant() {
-        return hasPermission(Permission.TENANT_READ);
+        return isSupportSession() || hasPermission(Permission.TENANT_READ);
     }
 
     public boolean canConfigureTenant() {
@@ -67,11 +91,45 @@ public record AuthorizedRequestContext(
     }
 
     public boolean canReadMerchants() {
-        return hasPermission(Permission.MERCHANT_READ);
+        return isSupportSession() || hasPermission(Permission.MERCHANT_READ);
     }
 
     public boolean canManageMemberships() {
         return hasPermission(Permission.TENANT_MEMBERSHIP_MANAGE);
+    }
+
+    public boolean canReadMemberships() {
+        return isSupportSession() || canManageMemberships();
+    }
+
+    public boolean canManageRoles() {
+        return hasPermission(Permission.TENANT_ROLE_MANAGE);
+    }
+
+    public boolean canSuspendMerchant() {
+        return hasPermission(Permission.MERCHANT_SUSPEND);
+    }
+
+    public boolean isSupportSession() {
+        return supportSessionId != null;
+    }
+
+    public static AuthorizedRequestContext support(
+            UUID tenantId,
+            UUID supportSessionId,
+            String correlationId
+    ) {
+        return new AuthorizedRequestContext(
+                PrincipalType.HUMAN,
+                null,
+                null,
+                tenantId,
+                ScopeMode.TENANT_WIDE,
+                Set.of(),
+                Set.of(Permission.SUPPORT_TENANT_READ),
+                correlationId,
+                supportSessionId
+        );
     }
 
     public boolean isTenantWide() {

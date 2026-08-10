@@ -2,7 +2,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { getMemberships, getTenant } from "../../../lib/core";
 import { redis } from "../../../lib/redis";
-import { isSessionExpired, readSession, SESSION_COOKIE } from "../../../lib/session";
+import { isSessionExpired, isSupportSessionActive, readSession, SESSION_COOKIE } from "../../../lib/session";
 import { InvitationRevokeAction } from "./invitation-revoke-action";
 
 export const dynamic = "force-dynamic";
@@ -26,7 +26,11 @@ export default async function MembershipsPage() {
     );
   }
 
-  const tenantResult = await getTenant(session.selectedTenantId, session.accessToken);
+  const supportActive = isSupportSessionActive(session);
+  const supportOptions = supportActive
+    ? { supportSessionId: session.supportSessionId }
+    : {};
+  const tenantResult = await getTenant(session.selectedTenantId, session.accessToken, supportOptions);
   if (tenantResult.kind === "unauthenticated") redirect("/api/auth/login?reason=session");
   if (tenantResult.kind !== "ok") {
     return (
@@ -41,7 +45,7 @@ export default async function MembershipsPage() {
     );
   }
 
-  const membershipsResult = await getMemberships(session.selectedTenantId, session.accessToken);
+  const membershipsResult = await getMemberships(session.selectedTenantId, session.accessToken, supportOptions);
   if (membershipsResult.kind === "unauthenticated") redirect("/api/auth/login?reason=session");
   if (membershipsResult.kind !== "ok") {
     return (
@@ -113,10 +117,14 @@ export default async function MembershipsPage() {
                     </td>
                     <td className="monospace">{membership.membershipId}</td>
                     <td>
-                      <InvitationRevokeAction
-                        membership={membership}
-                        csrfToken={session.csrfToken}
-                      />
+                      {supportActive ? (
+                        <span className="table-secondary">Unavailable in read-only support mode</span>
+                      ) : (
+                        <InvitationRevokeAction
+                          membership={membership}
+                          csrfToken={session.csrfToken}
+                        />
+                      )}
                     </td>
                   </tr>
                 ))}

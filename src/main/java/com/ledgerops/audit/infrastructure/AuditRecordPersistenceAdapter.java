@@ -121,6 +121,134 @@ class AuditRecordPersistenceAdapter implements AuditRecordRepository, AuditAppen
     }
 
     @Override
+    public void appendIdentityInvitationCreated(
+            String actorIssuer,
+            String actorSubject,
+            UUID tenantId,
+            UUID membershipId,
+            UUID invitationId,
+            String reason,
+            String correlationId
+    ) {
+        append(AuditRecord.create(
+                AuditRecordId.newId(),
+                new AuditActorIdentity(actorIssuer, actorSubject),
+                AuditPrincipalType.HUMAN,
+                tenantId,
+                new AuditActionType("identity.membership.invitation-created", true),
+                new AuditTargetType("tenant-membership"),
+                membershipId.toString(),
+                correlationId,
+                new AuditReason(reason),
+                new AuditDetails("{\"invitationId\":\"" + invitationId + "\"}"),
+                clock
+        ));
+    }
+
+    @Override
+    public void appendIdentityInvitationReinvited(
+            String actorIssuer,
+            String actorSubject,
+            UUID tenantId,
+            UUID previousMembershipId,
+            UUID membershipId,
+            UUID invitationId,
+            String reason,
+            String correlationId
+    ) {
+        append(AuditRecord.create(
+                AuditRecordId.newId(),
+                new AuditActorIdentity(actorIssuer, actorSubject),
+                AuditPrincipalType.HUMAN,
+                tenantId,
+                new AuditActionType("identity.membership.reinvited", true),
+                new AuditTargetType("tenant-membership"),
+                membershipId.toString(),
+                correlationId,
+                new AuditReason(reason),
+                new AuditDetails("{\"previousMembershipId\":\"" + previousMembershipId
+                        + "\",\"invitationId\":\"" + invitationId + "\"}"),
+                clock
+        ));
+    }
+
+    @Override
+    public void appendIdentityMembershipRolesChanged(
+            String actorIssuer,
+            String actorSubject,
+            UUID tenantId,
+            UUID membershipId,
+            String reason,
+            String correlationId
+    ) {
+        append(AuditRecord.create(
+                AuditRecordId.newId(),
+                new AuditActorIdentity(actorIssuer, actorSubject),
+                AuditPrincipalType.HUMAN,
+                tenantId,
+                new AuditActionType("identity.membership.roles-changed", true),
+                new AuditTargetType("tenant-membership"),
+                membershipId.toString(),
+                correlationId,
+                new AuditReason(reason),
+                AuditDetails.empty(),
+                clock
+        ));
+    }
+
+    @Override
+    public void appendSupportSessionStarted(
+            String actorIssuer,
+            String actorSubject,
+            UUID tenantId,
+            UUID supportSessionId,
+            String reason,
+            java.time.Instant startedAt,
+            java.time.Instant expiresAt,
+            String correlationId
+    ) {
+        append(AuditRecord.create(
+                AuditRecordId.newId(),
+                new AuditActorIdentity(actorIssuer, actorSubject),
+                AuditPrincipalType.HUMAN,
+                tenantId,
+                new AuditActionType("identity.support.session-started", true),
+                new AuditTargetType("support-session"),
+                supportSessionId.toString(),
+                correlationId,
+                new AuditReason(reason),
+                new AuditDetails("{\"startedAt\":\"" + startedAt
+                        + "\",\"expiresAt\":\"" + expiresAt + "\"}"),
+                clock
+        ));
+    }
+
+    @Override
+    public void appendSupportSessionRead(
+            String actorIssuer,
+            String actorSubject,
+            UUID tenantId,
+            UUID supportSessionId,
+            String resourcePath,
+            String correlationId
+    ) {
+        append(AuditRecord.create(
+                AuditRecordId.newId(),
+                new AuditActorIdentity(actorIssuer, actorSubject),
+                AuditPrincipalType.HUMAN,
+                tenantId,
+                new AuditActionType("identity.support.session-read", true),
+                new AuditTargetType("support-session"),
+                supportSessionId.toString(),
+                correlationId,
+                new AuditReason("Support session read"),
+                new AuditDetails("{\"resourcePath\":\""
+                        + escapeJson(resourcePath) + "\"}"),
+                clock
+        ));
+    }
+
+    @Override
     public void appendTenantOnboarded(
             String actorIssuer,
             String actorSubject,
@@ -157,6 +285,22 @@ class AuditRecordPersistenceAdapter implements AuditRecordRepository, AuditAppen
             String status,
             String correlationId
     ) {
+        appendMerchantLifecycleChanged(
+                actorIssuer, actorSubject, tenantId, merchantId,
+                previousStatus, status, "Merchant lifecycle change", correlationId);
+    }
+
+    @Override
+    public void appendMerchantLifecycleChanged(
+            String actorIssuer,
+            String actorSubject,
+            UUID tenantId,
+            UUID merchantId,
+            String previousStatus,
+            String status,
+            String reason,
+            String correlationId
+    ) {
         append(AuditRecord.create(
                 AuditRecordId.newId(),
                 new AuditActorIdentity(actorIssuer, actorSubject),
@@ -167,7 +311,7 @@ class AuditRecordPersistenceAdapter implements AuditRecordRepository, AuditAppen
                 new AuditTargetType("merchant"),
                 merchantId.toString(),
                 correlationId,
-                new AuditReason("Merchant lifecycle change"),
+                new AuditReason(reason),
                 new AuditDetails("{\"previousStatus\":\"" + previousStatus
                         + "\",\"status\":\"" + status + "\"}"),
                 clock
@@ -345,5 +489,9 @@ class AuditRecordPersistenceAdapter implements AuditRecordRepository, AuditAppen
                 new AuditDetails(entity.details()),
                 Clock.fixed(entity.occurredAt(), java.time.ZoneOffset.UTC)
         );
+    }
+
+    private String escapeJson(String value) {
+        return value == null ? "" : value.replace("\\", "\\\\").replace("\"", "\\\"");
     }
 }

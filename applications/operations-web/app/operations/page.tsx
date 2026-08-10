@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { getTenant } from "../../lib/core";
 import { redis } from "../../lib/redis";
-import { isSessionExpired, readSession, SESSION_COOKIE } from "../../lib/session";
+import { isSessionExpired, isSupportSessionActive, readSession, SESSION_COOKIE } from "../../lib/session";
 import { cookies } from "next/headers";
 import { TenantSelector } from "./tenant-selector";
 
@@ -13,8 +13,11 @@ export default async function OperationsPage() {
   const session = await readSession(redis(), sessionId);
   if (!session || isSessionExpired(session)) redirect("/api/auth/login");
 
-  const tenantResult = session.selectedTenantId
-    ? await getTenant(session.selectedTenantId, session.accessToken)
+  const supportActive = isSupportSessionActive(session);
+  const tenantId = supportActive ? session.supportTenantId : session.selectedTenantId;
+  const tenantResult = tenantId
+    ? await getTenant(tenantId, session.accessToken,
+      supportActive ? { supportSessionId: session.supportSessionId } : {})
     : null;
 
   if (tenantResult?.kind === "unauthenticated") {
@@ -31,7 +34,13 @@ export default async function OperationsPage() {
           csrfToken={session.csrfToken}
           selectedTenantId={session.selectedTenantId}
         />
-        {tenantResult?.kind === "ok" && (
+        {supportActive && (
+          <div className="panel status">
+            Support mode is active. Use the dedicated support console for audited read-only access.
+            <br /><a className="button secondary" href="/operations/support">Open support console</a>
+          </div>
+        )}
+        {!supportActive && tenantResult?.kind === "ok" && (
           <div className="panel status">
             <div className="eyebrow">Core-verified Tenant</div>
             <h2>{tenantResult.tenant.name}</h2>
@@ -44,7 +53,7 @@ export default async function OperationsPage() {
         {tenantResult?.kind === "error" && (
           <div className="panel status error">Core could not verify this Tenant right now.</div>
         )}
-        {tenantResult?.kind === "ok" && (
+        {!supportActive && tenantResult?.kind === "ok" && (
           <div className="panel">
             <div className="eyebrow">Administration</div>
             <h2>Credentials</h2>
@@ -62,6 +71,9 @@ export default async function OperationsPage() {
             <h2>Memberships</h2>
             <p>Review Tenant membership, roles, scopes, and invitation status.</p>
             <a className="button secondary" href="/operations/memberships">Open memberships</a>
+            <h2>Platform support</h2>
+            <p>Enter an explicit, expiring, read-only support session for a Tenant.</p>
+            <a className="button secondary" href="/operations/support">Open support mode</a>
           </div>
         )}
         <form action="/api/auth/logout" method="post">

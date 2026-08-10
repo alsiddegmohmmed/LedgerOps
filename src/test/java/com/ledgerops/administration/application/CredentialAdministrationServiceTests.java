@@ -398,6 +398,33 @@ class CredentialAdministrationServiceTests {
         }
 
         @Override
+        public void appendIdentityInvitationCreated(String actorIssuer, String actorSubject,
+                                                     UUID tenantId, UUID membershipId,
+                                                     UUID invitationId, String reason,
+                                                     String correlationId) {
+        }
+
+        @Override
+        public void appendIdentityInvitationReinvited(String actorIssuer, String actorSubject,
+                                                       UUID tenantId, UUID previousMembershipId,
+                                                       UUID membershipId, UUID invitationId,
+                                                       String reason, String correlationId) {
+        }
+
+        @Override
+        public void appendIdentityMembershipRolesChanged(String actorIssuer, String actorSubject,
+                                                          UUID tenantId, UUID membershipId,
+                                                          String reason, String correlationId) {
+        }
+
+        @Override
+        public void appendSupportSessionStarted(String actorIssuer, String actorSubject,
+                                                UUID tenantId, UUID supportSessionId,
+                                                String reason, Instant startedAt,
+                                                Instant expiresAt, String correlationId) {
+        }
+
+        @Override
         public void appendTenantOnboarded(String actorIssuer, String actorSubject,
                                           UUID tenantId, UUID merchantId,
                                           UUID membershipId, UUID invitationId,

@@ -220,6 +220,37 @@ public final class TenantMembership {
         return invited(newId, tenantId, proposedAssignments);
     }
 
+    public TenantMembership replaceRoleAssignments(
+            Set<TenantRoleAssignment> replacement,
+            Set<TenantMembership> currentMemberships,
+            TenantAdminRemovalContext context
+    ) {
+        Objects.requireNonNull(replacement, "Replacement role assignments must not be null");
+        if (status != TenantMembershipStatus.ACTIVE
+                && status != TenantMembershipStatus.SUSPENDED) {
+            throw new InvalidMembershipTransitionException(
+                    "Only active or suspended memberships can change role assignments");
+        }
+        if (replacement.isEmpty()) {
+            throw new InvalidMembershipTransitionException(
+                    "Membership must retain at least one role assignment");
+        }
+        for (TenantRoleAssignment assignment : replacement) {
+            if (!tenantId.equals(assignment.tenantId())) {
+                throw new InvalidMembershipTransitionException(
+                        "Role assignment belongs to another Tenant");
+            }
+        }
+        boolean wasTenantAdmin = hasRole(TenantRole.TENANT_ADMIN);
+        boolean remainsTenantAdmin = replacement.stream()
+                .anyMatch(assignment -> assignment.role() == TenantRole.TENANT_ADMIN);
+        if (wasTenantAdmin && !remainsTenantAdmin && status == TenantMembershipStatus.ACTIVE) {
+            validateAdminRemoval(this, currentMemberships, TenantMembershipStatus.SUSPENDED, context);
+        }
+        return new TenantMembership(
+                id, tenantId, applicationUserId, status, replacement, version, initial);
+    }
+
     public static void validateAdminRemoval(TenantMembership target,
                                             Set<TenantMembership> currentMemberships,
                                             TenantMembershipStatus requestedStatus,

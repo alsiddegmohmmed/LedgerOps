@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   getCredentialPage,
+  getTenant,
   getMemberships,
   revokeInvitation,
   getMerchants,
@@ -9,6 +10,7 @@ import {
   updateOperationalContact,
   provisionCredential,
   updateTenantConfiguration,
+  startSupportSession,
 } from "../lib/core";
 
 describe("Core credential metadata client", () => {
@@ -71,6 +73,55 @@ describe("Core credential metadata client", () => {
     const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
     expect(url).toContain("/api/v1/tenants/tenant-id/merchants");
     expect(init.headers).toEqual({ authorization: "Bearer server-only-token" });
+  });
+
+  it("adds the support-session header only for support reads", async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({
+      id: "tenant-id",
+      name: "Support Tenant",
+      defaultCurrency: "SAR",
+      defaultLocale: "en-SA",
+      status: "ACTIVE",
+    }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(getTenant("tenant-id", "server-only-token", {
+      supportSessionId: "support-session-id",
+    })).resolves.toMatchObject({ kind: "ok" });
+
+    const [, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(init.headers).toEqual({
+      authorization: "Bearer server-only-token",
+      "x-support-session-id": "support-session-id",
+    });
+  });
+
+  it("starts support mode through the authenticated Core endpoint", async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({
+      supportSessionId: "support-session-id",
+      tenantId: "tenant-id",
+      startedAt: "2026-08-10T10:00:00Z",
+      expiresAt: "2026-08-10T10:30:00Z",
+      permission: "support:tenant-read",
+    }), { status: 201 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(startSupportSession("server-only-token", {
+      tenantId: "tenant-id",
+      confirmation: true,
+      reason: "Investigate tenant incident",
+    })).resolves.toMatchObject({
+      kind: "ok",
+      result: { permission: "support:tenant-read" },
+    });
+
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toContain("/api/v1/platform/support-sessions");
+    expect(init.method).toBe("POST");
+    expect(init.headers).toEqual({
+      authorization: "Bearer server-only-token",
+      "content-type": "application/json",
+    });
   });
 
   it("reads tenant-scoped Memberships without exposing invitation secrets", async () => {
