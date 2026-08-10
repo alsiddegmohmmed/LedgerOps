@@ -10,6 +10,7 @@ import com.ledgerops.payment.application.PaymentRetryApplication;
 import com.ledgerops.payment.application.PaymentRetryStore;
 import com.ledgerops.payment.application.VersionedPayment;
 import com.ledgerops.payment.domain.CustomerId;
+import com.ledgerops.payment.domain.AttemptSubjectType;
 import com.ledgerops.payment.domain.IdempotencyKey;
 import com.ledgerops.payment.domain.Money;
 import com.ledgerops.payment.domain.Payment;
@@ -79,15 +80,30 @@ class PaymentJdbcLifecycleStore implements PaymentLifecycleStore, PaymentComplet
                FOR UPDATE
             """;
     private static final String FIND_ATTEMPT_SQL = """
-            SELECT id, tenant_id, payment_id, sequence, provider_id,
+            SELECT id, tenant_id, payment_id, attempt_subject_type, attempt_subject_id,
+                   sequence, provider_id,
                    provider_idempotency_key, initiated_at, merchant_id,
                    customer_id, amount, currency, payment_method_category,
                    request_intent_hash
               FROM payment.payment_attempts
              WHERE tenant_id = ? AND payment_id = ? AND sequence = ?
             """;
+    private static final String FIND_ATTEMPT_BY_SUBJECT_SQL = """
+            SELECT id, tenant_id, payment_id, attempt_subject_type, attempt_subject_id,
+                   sequence, provider_id,
+                   provider_idempotency_key, initiated_at, merchant_id,
+                   customer_id, amount, currency, payment_method_category,
+                   request_intent_hash
+              FROM payment.payment_attempts
+             WHERE tenant_id = ?
+               AND payment_id = ?
+               AND attempt_subject_type = ?
+               AND attempt_subject_id = ?
+               AND sequence = ?
+            """;
     private static final String FIND_ATTEMPT_BY_ID_SQL = """
-            SELECT id, tenant_id, payment_id, sequence, provider_id,
+            SELECT id, tenant_id, payment_id, attempt_subject_type, attempt_subject_id,
+                   sequence, provider_id,
                    provider_idempotency_key, initiated_at, merchant_id,
                    customer_id, amount, currency, payment_method_category,
                    request_intent_hash
@@ -108,14 +124,16 @@ class PaymentJdbcLifecycleStore implements PaymentLifecycleStore, PaymentComplet
             """;
     private static final String INSERT_ATTEMPT_SQL = """
             INSERT INTO payment.payment_attempts (
-                id, tenant_id, payment_id, sequence, provider_id,
+                id, tenant_id, payment_id, attempt_subject_type, attempt_subject_id,
+                sequence, provider_id,
                 provider_idempotency_key, initiated_at, merchant_id,
                 customer_id, amount, currency, payment_method_category,
                 request_intent_hash
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """;
     private static final String FIND_LATEST_ATTEMPT_SQL = """
-            SELECT id, tenant_id, payment_id, sequence, provider_id,
+            SELECT id, tenant_id, payment_id, attempt_subject_type, attempt_subject_id,
+                   sequence, provider_id,
                    provider_idempotency_key, initiated_at, merchant_id,
                    customer_id, amount, currency, payment_method_category,
                    request_intent_hash
@@ -204,6 +222,25 @@ class PaymentJdbcLifecycleStore implements PaymentLifecycleStore, PaymentComplet
                 tenantId,
                 paymentId.value(),
                 sequence
+                ).stream().findFirst();
+    }
+
+    @Override
+    public Optional<PaymentAttempt> findAttempt(
+            UUID tenantId,
+            PaymentId paymentId,
+            AttemptSubjectType subjectType,
+            UUID subjectId,
+            int sequence
+    ) {
+        return jdbcTemplate.query(
+                FIND_ATTEMPT_BY_SUBJECT_SQL,
+                this::mapAttempt,
+                tenantId,
+                paymentId.value(),
+                subjectType.name(),
+                subjectId,
+                sequence
         ).stream().findFirst();
     }
 
@@ -214,6 +251,8 @@ class PaymentJdbcLifecycleStore implements PaymentLifecycleStore, PaymentComplet
                 attempt.attemptId().value(),
                 attempt.tenantId(),
                 attempt.paymentId().value(),
+                attempt.subjectType().name(),
+                attempt.subjectId(),
                 attempt.sequence(),
                 attempt.providerId().name(),
                 attempt.providerIdempotencyKey(),
@@ -330,6 +369,8 @@ class PaymentJdbcLifecycleStore implements PaymentLifecycleStore, PaymentComplet
                 PaymentAttemptId.from(rs.getObject("id", UUID.class)),
                 rs.getObject("tenant_id", UUID.class),
                 PaymentId.from(rs.getObject("payment_id", UUID.class)),
+                AttemptSubjectType.valueOf(rs.getString("attempt_subject_type")),
+                rs.getObject("attempt_subject_id", UUID.class),
                 rs.getInt("sequence"),
                 ProviderId.valueOf(rs.getString("provider_id")),
                 rs.getString("provider_idempotency_key"),

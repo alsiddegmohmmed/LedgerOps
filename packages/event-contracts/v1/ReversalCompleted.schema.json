@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ledgerops.dev/contracts/v1/ReversalCompleted.schema.json",
+  "title": "ReversalCompleted v1",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["reversalId", "tenantId", "paymentId", "merchantId", "status", "amount", "currency", "aggregateVersion", "completedAt", "attemptId", "providerEvidenceId", "ledgerTransactionId"],
+  "properties": {
+    "reversalId": { "type": "string", "format": "uuid" },
+    "tenantId": { "type": "string", "format": "uuid" },
+    "paymentId": { "type": "string", "format": "uuid" },
+    "merchantId": { "type": "string", "format": "uuid" },
+    "status": { "const": "COMPLETED" },
+    "amount": { "type": "string", "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]+)?$" },
+    "currency": { "type": "string", "pattern": "^[A-Z]{3}$" },
+    "aggregateVersion": { "type": "integer", "minimum": 1 },
+    "completedAt": { "type": "string", "format": "date-time" },
+    "attemptId": { "type": "string", "format": "uuid" },
+    "providerEvidenceId": { "type": "string", "format": "uuid" },
+    "ledgerTransactionId": { "type": "string", "format": "uuid" }
+  }
+}

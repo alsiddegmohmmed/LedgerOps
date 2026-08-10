@@ -5,6 +5,7 @@ import com.ledgerops.messaging.api.ConsumerMessageStore;
 import com.ledgerops.messaging.api.IncomingMessage;
 import com.ledgerops.provider.application.ProviderSubmissionCommand;
 import com.ledgerops.provider.application.AcceptProviderSubmissionCommand;
+import com.ledgerops.provider.api.ProviderOperationType;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.tracing.Span;
 import io.micrometer.tracing.Tracer;
@@ -127,7 +128,7 @@ class ProviderCommandConsumer {
                     true, acknowledgment);
             return;
         }
-        if (!"SubmitPaymentToProvider".equals(envelope.messageType())) {
+        if (!isSupportedCommand(envelope.messageType())) {
             recordFailure(record, raw, envelope, incoming, "UNSUPPORTED_MESSAGE_TYPE",
                     true, acknowledgment);
             return;
@@ -181,6 +182,8 @@ class ProviderCommandConsumer {
         JsonNode payload = envelope.payload();
         UUID attemptId = uuid(payload, "attemptId");
         UUID paymentId = uuid(payload, "paymentId");
+        boolean reversal = "SubmitReversalToProvider".equals(envelope.messageType());
+        UUID operationId = reversal ? uuid(payload, "reversalId") : paymentId;
         JsonNode sequence = payload.get("attemptSequence");
         if (sequence == null || !sequence.isIntegralNumber() || sequence.intValue() < 1) {
             throw new PermanentlyInvalidMessageException("Attempt sequence is invalid");
@@ -193,7 +196,9 @@ class ProviderCommandConsumer {
             throw new PermanentlyInvalidMessageException("Release 0.2 provider must be SIMULATOR");
         }
         String key = text(payload, "providerIdempotencyKey");
-        if (!key.equals("payment:" + paymentId.toString().toLowerCase())) {
+        String expectedKey = (reversal ? "reversal:" + operationId : "payment:" + operationId)
+                .toLowerCase(java.util.Locale.ROOT);
+        if (!key.equals(expectedKey)) {
             throw new PermanentlyInvalidMessageException("Provider idempotency key is invalid");
         }
         String hash = text(payload, "requestIntentHash");
@@ -208,6 +213,10 @@ class ProviderCommandConsumer {
             throw new PermanentlyInvalidMessageException("Currency is invalid");
         }
         text(payload, "paymentMethodCategory");
+        if (reversal) {
+            text(payload, "merchantId");
+            text(payload, "originalProviderReference");
+        }
         String traceparent = header(record, "traceparent");
         String tracestate = header(record, "tracestate");
         if (traceparent != null && !traceparent.matches(
@@ -223,10 +232,17 @@ class ProviderCommandConsumer {
         traceparent = currentTraceparent(traceparent);
         return new ProviderSubmissionCommand(
                 envelope.tenantId(), envelope.messageId(), attemptId, paymentId,
+                reversal ? ProviderOperationType.REVERSAL : ProviderOperationType.PAYMENT,
+                operationId,
                 sequence.intValue(),
                 providerId, key, hash, envelope.canonicalPayload(),
                 envelope.correlationId(), envelope.causationId(), traceparent, tracestate
         );
+    }
+
+    private boolean isSupportedCommand(String messageType) {
+        return "SubmitPaymentToProvider".equals(messageType)
+                || "SubmitReversalToProvider".equals(messageType);
     }
 
     private String header(ConsumerRecord<String, String> record, String name) {

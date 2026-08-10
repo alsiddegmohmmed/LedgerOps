@@ -22,7 +22,7 @@ Stop only for a real conflict/change to an approved Product requirement, module/
 
 **Active milestone: Release 0.3 - Identity and Financial Operations.**
 
-Slices 0 through 4 are complete for their approved scope. **Slice 5 is next.** Do not implement later-slice behavior early.
+Slices 0 through 5 are complete for their approved scope. Slice 6 is implemented with authenticated request/persistence browser coverage; asynchronous Provider completion/retry browser coverage remains outstanding. **Slice 7 is next.** Do not implement later-slice behavior early.
 
 Release 0.3 includes Keycloak/Core authorization, Tenant/Merchant administration, credentials, audited support, Operations Web, Payment/Ledger operations, manual Risk/Provider controls, full Reversal, merchant webhook testing, settlement ingestion, Reconciliation, Cases, narrow corrections, dashboard/live activity/notifications/reports, developer workflows, and Arabic/English parity.
 

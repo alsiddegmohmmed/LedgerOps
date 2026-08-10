@@ -2,6 +2,7 @@ package com.ledgerops.provider.infrastructure;
 
 import com.ledgerops.messaging.api.MessageOutbox;
 import com.ledgerops.provider.api.ProviderResultCategory;
+import com.ledgerops.provider.api.ProviderOperationType;
 import com.ledgerops.provider.api.RetryDisposition;
 import com.ledgerops.provider.application.ProviderWebhookAuthenticationResult;
 import com.ledgerops.provider.application.ProviderWebhookClaim;
@@ -221,13 +222,15 @@ class JdbcProviderWebhookStore implements ProviderWebhookStore, ProviderWebhookE
         jdbc.update("""
                 INSERT INTO provider.interactions
                     (interaction_id, tenant_id, work_id, webhook_event_id, attempt_id,
-                     payment_id, provider_id, work_type, request_id, request_body_hash,
+                     payment_id, operation_type, operation_id, provider_id, work_type,
+                     request_id, request_body_hash,
                      response_body_hash, http_status, communication_outcome, latency_millis,
                      safe_error_code, started_at, completed_at)
-                VALUES (?, ?, NULL, ?, ?, ?, ?, 'WEBHOOK', ?, ?, NULL, 202,
+                VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?, 'WEBHOOK', ?, ?, NULL, 202,
                         'RESPONSE', 0, NULL, ?, ?)
                 """, interactionId, claim.tenantId(), claim.eventId(), claim.attemptId(),
-                claim.paymentId(), claim.providerId(), claim.providerEventId(),
+                claim.paymentId(), ProviderOperationType.PAYMENT.name(), claim.paymentId(),
+                claim.providerId(), claim.providerEventId(),
                 claim.payloadHash(), Timestamp.from(claim.receivedAt()), Timestamp.from(now));
 
         RetryDisposition disposition = disposition(claim.category());
@@ -247,15 +250,17 @@ class JdbcProviderWebhookStore implements ProviderWebhookStore, ProviderWebhookE
             int inserted = jdbc.update("""
                     INSERT INTO provider.results
                         (evidence_id, tenant_id, interaction_id, work_id, webhook_event_id,
-                         attempt_id, payment_id, provider_id, provider_idempotency_key,
+                         attempt_id, payment_id, operation_type, operation_id, provider_id,
+                         provider_idempotency_key,
                          provider_result_id, provider_reference, result_category,
                          retry_disposition, provider_transaction_found,
                          no_acceptance_proven, evidence_origin, observed_at)
-                    VALUES (?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, TRUE, FALSE,
+                    VALUES (?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, TRUE, FALSE,
                             'WEBHOOK', ?)
                     ON CONFLICT (tenant_id, provider_id, provider_result_id) DO NOTHING
                     """, evidenceId, claim.tenantId(), interactionId, claim.eventId(),
-                    claim.attemptId(), claim.paymentId(), claim.providerId(),
+                    claim.attemptId(), claim.paymentId(), ProviderOperationType.PAYMENT.name(),
+                    claim.paymentId(), claim.providerId(),
                     claim.providerIdempotencyKey(), claim.providerResultId(),
                     claim.providerReference(), claim.category().name(), disposition.name(),
                     Timestamp.from(claim.providerOccurredAt()));

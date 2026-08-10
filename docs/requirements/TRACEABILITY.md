@@ -11,28 +11,28 @@ Authority: Product Definition v1.7, Technical Specification v1.7, ADR-022 throug
 | IAM-01 | Slice 1 | ApplicationUser lifecycle, Keycloak JWT/OIDC validation, opaque Redis session, Secure HttpOnly cookie, CSRF, login/logout, and invalid-session tests in `src/test/java/com/ledgerops/identity` and `applications/operations-web/tests`. | Implemented for Slice 1; administration bootstrap remains outside this slice |
 | IAM-02 | Slices 1-2 | Closed Tenant roles/permissions, PostgreSQL membership and Merchant scope resolution, and protected-path permission tests in `src/test/java/com/ledgerops/identity` and `src/test/java/com/ledgerops/protectedpaths`. | Implemented for Slice 1 foundation; administration coverage remains in Slice 2 |
 | IAM-03 | Slice 1 | Explicit Tenant selection, PostgreSQL-owned `AuthorizedRequestContext`, stale/revoked/scope denial, and protected Tenant/Payment path tests. | Implemented |
-| IAM-04 | Slices 2, 4, 5, 6, 8, 9, 10 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Planned |
+| IAM-04 | Slices 2, 4, 5, 6, 8, 9, 10 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Slice 6 reversal authorization and denial evidence implemented; remaining slice evidence required |
 | PAY-01 | Slice 2 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Planned |
 | PAY-02 | Preserved R0.1 | Existing executable evidence remains required. | Implemented |
-| PAY-03 | Preserved R0.1/R0.2 + Slices 4/6 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Planned |
+| PAY-03 | Preserved R0.1/R0.2 + Slices 4/6 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Slice 6 reversal state transition and Payment REVERSED evidence verified; release-wide regression remains |
 | PAY-04 | Slices 3, 6, 8 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Planned |
 | PAY-05 | Slice 3 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Planned |
-| PAY-06 | Slice 6 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Planned |
+| PAY-06 | Slice 6 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Implemented; backend/frontend verification and authenticated request/persistence browser coverage passed; asynchronous Provider completion/retry browser coverage remains |
 | PAY-07 | Slice 3 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Planned |
-| PAY-08 | Slice 6 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Planned |
+| PAY-08 | Slice 6 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Implemented; backend/frontend verification and authenticated request/persistence browser coverage passed; asynchronous Provider completion/retry browser coverage remains |
 | RSK-01 | Preserved R0.1 | Existing executable evidence remains required. | Implemented |
 | RSK-02 | Preserved R0.1 + Slice 4 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Planned |
 | RSK-03 | Slice 4 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Planned |
 | RSK-04 | Slice 4 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Planned |
 | RSK-05 | Slice 5 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Verified in Slice 5; regression remains required |
 | PRV-01 | Slice 5/7 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Scenario control/pinning verified in Slice 5; Slice 7 regression remains required |
-| PRV-02 | Slices 3/6 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Planned |
-| PRV-03 | Slices 3/5/6 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Planned |
-| PRV-04 | Slices 5/6 (ADR-026/ADR-023) | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Payment retry-now verified in Slice 5; Reversal retry remains Slice 6 |
+| PRV-02 | Slices 3/6 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Slice 6 typed operation identity and Reversal Provider flow verified; Slice 3/release regression remains |
+| PRV-03 | Slices 3/5/6 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Slice 6 ambiguity-safe Reversal result/recovery evidence verified; cross-slice regression remains |
+| PRV-04 | Slices 5/6 (ADR-026/ADR-023) | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Payment retry-now verified in Slice 5; Reversal safe retry implemented and verified in Slice 6 |
 | PRV-05 | Slice 5/10 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Provider health verified in Slice 5; Slice 10 projection regression remains required |
-| LED-01 | Preserved + Slices 6/8/9 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Planned |
+| LED-01 | Preserved + Slices 6/8/9 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Slice 6 exact inverse compensation verified; later settlement/correction evidence remains |
 | LED-02 | Preserved + ADR-023/024 clarification | Existing executable evidence remains required. | Implemented |
-| LED-03 | Slices 3/6/8/9 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Planned |
+| LED-03 | Slices 3/6/8/9 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Slice 6 compensation source/link and atomic completion verified; later correction/reconciliation evidence remains |
 | LED-04 | Slice 9 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Planned |
 | LED-05 | Slice 3 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Planned |
 | REC-01 | Slice 7 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Planned |
@@ -70,18 +70,18 @@ Authority: Product Definition v1.7, Technical Specification v1.7, ADR-022 throug
 |---|---|---|
 | BR-01 | Tenant ownership and platform-wide exceptions across Slices 1-11. | Implemented for Slice 1 protected paths; regression required |
 | BR-02 | Existing Money evidence plus Reversal/settlement/correction precision in Slices 6-9. | Planned regression |
-| BR-03 | Existing immutability plus exact Reversal/correction compensation in Slices 6/9. | Planned regression |
+| BR-03 | Existing immutability plus exact Reversal/correction compensation in Slices 6/9. | Slice 6 exact Reversal compensation verified; Slice 9 correction regression remains |
 | BR-04 | Existing tenant-wide Payment idempotency plus authenticated context in Slice 2. | Implemented; regression required |
-| BR-05 | Existing Provider/result duplicate safety plus Reversal result tests in Slice 6. | Implemented; regression required |
-| BR-06 | Existing retry safety plus manual Payment/Reversal controls in Slices 5/6. | Planned regression |
+| BR-05 | Existing Provider/result duplicate safety plus Reversal result tests in Slice 6. | Slice 6 duplicate/conflict evidence and root check verified; release-wide regression remains |
+| BR-06 | Existing retry safety plus manual Payment/Reversal controls in Slices 5/6. | Payment and Reversal retry controls verified in Slices 5/6; release-wide regression remains |
 | BR-07 | Current actor and atomic audit across Slices 1-10. | Implemented for Slice 1 sensitive write; regression required |
 | BR-08 | Exact role/permission/scope negative matrices across Slices 1-11. | Implemented for Slice 1 representative paths; regression required |
 | BR-09 | Source-specific controlled Case resolution/closure in Slices 4/9. | Planned |
 | BR-10 | Tenant/Merchant suspension versus committed recovery across Slices 2-11. | Planned |
 | BR-11 | ACTIVE/DEACTIVATED application user and immutable authorship in Slices 1-3. | Implemented for Slice 1; regression required |
 | BR-12 | Injected Clock, UTC persistence, locale/timezone display across Slices 1-11. | Implemented for Slice 1 time-dependent evidence; regression required |
-| BR-13 | Separate Payment/Reversal/Reconciliation/Provider histories in Slices 3/6/8. | Planned |
-| BR-14 | Full-only atomic Reversal completion in Slice 6. | Planned |
+| BR-13 | Separate Payment/Reversal/Reconciliation/Provider histories in Slices 3/6/8. | Slice 6 Payment/Reversal/Provider histories verified; Reconciliation Slice 8 evidence remains |
+| BR-14 | Full-only atomic Reversal completion in Slice 6. | Implemented and verified in Slice 6 |
 | BR-15 | Immutable reruns and one locked current pointer in Slice 8. | Planned |
 | BR-16 | Platform/support authority boundary in Slices 1/2. | Implemented for Slice 1 authorization boundary; administration/support coverage remains in Slice 2 |
 | BR-17 | Stable settlement instruction/application and exact templates in Slice 8. | Planned |

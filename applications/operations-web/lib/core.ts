@@ -156,6 +156,8 @@ export type CoreProviderWorkOperation = {
   workId: string;
   tenantId: string;
   paymentId: string;
+  operationType: "PAYMENT" | "REVERSAL";
+  operationId: string;
   attemptId: string;
   attemptSequence: number;
   workType: string;
@@ -178,6 +180,8 @@ export type CoreProviderInteractionOperation = {
   workId: string | null;
   webhookEventId: string | null;
   paymentId: string;
+  operationType: "PAYMENT" | "REVERSAL";
+  operationId: string;
   attemptId: string;
   providerId: string;
   workType: string;
@@ -194,6 +198,8 @@ export type CoreProviderRecoveryOperation = {
   evidenceId: string;
   workId: string | null;
   attemptId: string;
+  operationType: "PAYMENT" | "REVERSAL";
+  operationId: string;
   retryRequestId: string | null;
   workStatus: string | null;
   resultCategory: string;
@@ -381,6 +387,25 @@ export type CorePaymentDetail = {
   notes: CorePaymentNote[];
   attempts: CorePaymentAttempt[];
   providerOperations: CoreProviderOperations;
+  reversal: CoreReversalDetails | null;
+};
+
+export type CoreReversalDetails = {
+  reversalId: string;
+  tenantId: string;
+  paymentId: string;
+  merchantId: string;
+  amount: number | string;
+  currency: string;
+  status: "REQUESTED" | "PROCESSING" | "FAILED" | "COMPLETED";
+  requestedBy: string;
+  requestReason: string;
+  requestedAt: string;
+  processingAt: string | null;
+  failedAt: string | null;
+  completedAt: string | null;
+  failureCategory: string | null;
+  version: number;
 };
 
 export type CoreLedgerBalance = {
@@ -1340,6 +1365,15 @@ export type CorePaymentRetryNowResult = {
   status: "ACCELERATED";
 };
 
+export type CoreReversalRetryResult = {
+  reversalId: string;
+  paymentId: string;
+  attemptId: string;
+  attemptSequence: number;
+  status: "PROCESSING";
+  replay: boolean;
+};
+
 export function retryPaymentNow(
   tenantId: string,
   paymentId: string,
@@ -1349,6 +1383,42 @@ export function retryPaymentNow(
   return requestCoreAction(
     "POST",
     `/api/v1/tenants/${encodeURIComponent(tenantId)}/payments/${encodeURIComponent(paymentId)}/retry`,
+    accessToken,
+    body,
+    200,
+  );
+}
+
+export function requestReversal(
+  tenantId: string,
+  paymentId: string,
+  accessToken: string,
+  body: { confirmation: true; reason: string },
+): Promise<CoreActionResponse<CoreReversalDetails>> {
+  return requestCoreAction(
+    "POST",
+    `/api/v1/tenants/${encodeURIComponent(tenantId)}/reversals`,
+    accessToken,
+    { paymentId, ...body },
+    201,
+  );
+}
+
+export function retryReversal(
+  tenantId: string,
+  reversalId: string,
+  accessToken: string,
+  body: {
+    paymentId: string;
+    previousAttemptId: string;
+    providerEvidenceId: string;
+    confirmation: true;
+    reason: string;
+  },
+): Promise<CoreActionResponse<CoreReversalRetryResult>> {
+  return requestCoreAction(
+    "POST",
+    `/api/v1/tenants/${encodeURIComponent(tenantId)}/reversals/${encodeURIComponent(reversalId)}/retry`,
     accessToken,
     body,
     200,

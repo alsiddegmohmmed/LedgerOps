@@ -2,8 +2,11 @@ package com.ledgerops.provider.infrastructure;
 
 import com.ledgerops.messaging.api.ConsumerFailureResult;
 import com.ledgerops.messaging.api.ConsumerMessageStore;
+import com.ledgerops.messaging.api.InboxResult;
 import com.ledgerops.messaging.api.IncomingMessage;
 import com.ledgerops.provider.application.AcceptProviderSubmissionCommand;
+import com.ledgerops.provider.application.ProviderSubmissionCommand;
+import com.ledgerops.provider.api.ProviderOperationType;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.junit.jupiter.api.Test;
@@ -21,8 +24,63 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import org.mockito.ArgumentCaptor;
 
 class ProviderCommandConsumerTests {
+
+    @Test
+    void reversalCommandIsAcceptedWithTypedOperationIdentity() {
+        ConsumerMessageStore messages = mock(ConsumerMessageStore.class);
+        AcceptProviderSubmissionCommand acceptance = mock(AcceptProviderSubmissionCommand.class);
+        Acknowledgment acknowledgment = mock(Acknowledgment.class);
+        UUID messageId = UUID.randomUUID();
+        UUID tenantId = UUID.randomUUID();
+        UUID paymentId = UUID.randomUUID();
+        UUID reversalId = UUID.randomUUID();
+        UUID attemptId = UUID.randomUUID();
+        String key = "reversal:" + reversalId;
+        String raw = "{" +
+                "\"messageId\":\"" + messageId + "\"," +
+                "\"messageType\":\"SubmitReversalToProvider\"," +
+                "\"schemaVersion\":1," +
+                "\"aggregateId\":\"" + paymentId + "\"," +
+                "\"tenantId\":\"" + tenantId + "\"," +
+                "\"correlationId\":\"" + UUID.randomUUID() + "\"," +
+                "\"causationId\":\"" + UUID.randomUUID() + "\"," +
+                "\"occurredAt\":\"2026-08-10T12:00:00Z\"," +
+                "\"payload\":{" +
+                "\"attemptId\":\"" + attemptId + "\"," +
+                "\"paymentId\":\"" + paymentId + "\"," +
+                "\"reversalId\":\"" + reversalId + "\"," +
+                "\"attemptSequence\":1," +
+                "\"providerId\":\"SIMULATOR\"," +
+                "\"providerIdempotencyKey\":\"" + key + "\"," +
+                "\"amount\":\"12.30\"," +
+                "\"currency\":\"SAR\"," +
+                "\"paymentMethodCategory\":\"CARD\"," +
+                "\"merchantId\":\"" + UUID.randomUUID() + "\"," +
+                "\"originalProviderReference\":\"provider-reference-1\"," +
+                "\"requestIntentHash\":\"" + "a".repeat(64) + "\"}}";
+        when(acceptance.accept(any(IncomingMessage.class), any(ProviderSubmissionCommand.class)))
+                .thenReturn(InboxResult.PROCESSED);
+        ProviderCommandConsumer consumer = new ProviderCommandConsumer(
+                messages, acceptance, new SimpleMeterRegistry()
+        );
+
+        consumer.receive(new ConsumerRecord<>(
+                "ledgerops.provider.commands.v1", 0, 1, paymentId.toString(), raw),
+                acknowledgment);
+
+        ArgumentCaptor<ProviderSubmissionCommand> captor =
+                ArgumentCaptor.forClass(ProviderSubmissionCommand.class);
+        verify(acceptance).accept(any(IncomingMessage.class), captor.capture());
+        ProviderSubmissionCommand command = captor.getValue();
+        org.junit.jupiter.api.Assertions.assertEquals(
+                ProviderOperationType.REVERSAL, command.operationType());
+        org.junit.jupiter.api.Assertions.assertEquals(reversalId, command.operationId());
+        org.junit.jupiter.api.Assertions.assertEquals(paymentId, command.paymentId());
+        verify(acknowledgment).acknowledge();
+    }
 
     @Test
     void malformedEnvelopeWithTrustworthyMessageIdUsesNormalConsumerDeadLetterIdentity() {

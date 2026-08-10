@@ -13,6 +13,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -96,6 +97,37 @@ class ProviderWorkPersistenceIntegrationTests {
                 SELECT count(*) FROM messaging.inbox
                  WHERE consumer_name = ? AND message_id = ?
                 """, Integer.class, incoming.consumerName(), incoming.messageId()));
+    }
+
+    @Test
+    void reversalWorkUsesReversalOperationIdentityAndIdempotencyKey() {
+        UUID tenantId = UUID.randomUUID();
+        UUID paymentId = UUID.randomUUID();
+        UUID reversalId = UUID.randomUUID();
+        UUID attemptId = UUID.randomUUID();
+        Instant now = java.time.Instant.now();
+
+        jdbc.update("""
+                INSERT INTO provider.work
+                    (id, tenant_id, attempt_id, payment_id, operation_type, operation_id,
+                     attempt_sequence, work_type, status, provider_id,
+                     provider_idempotency_key, request_intent_hash, command_payload,
+                     due_at, correlation_id, causation_id, created_at, updated_at)
+                VALUES (?, ?, ?, ?, 'REVERSAL', ?, 1, 'SUBMISSION', 'PENDING', 'SIMULATOR',
+                        ?, ?, ?, ?, ?, ?, ?, ?)
+                """, UUID.randomUUID(), tenantId, attemptId, paymentId, reversalId,
+                "reversal:" + reversalId.toString().toLowerCase(), "a".repeat(64),
+                "{}", java.sql.Timestamp.from(now), UUID.randomUUID(), UUID.randomUUID(),
+                java.sql.Timestamp.from(now), java.sql.Timestamp.from(now));
+
+        assertEquals("REVERSAL", jdbc.queryForObject("""
+                SELECT operation_type FROM provider.work
+                 WHERE tenant_id = ? AND operation_id = ?
+                """, String.class, tenantId, reversalId));
+        assertEquals("reversal:" + reversalId.toString().toLowerCase(), jdbc.queryForObject("""
+                SELECT provider_idempotency_key FROM provider.work
+                 WHERE tenant_id = ? AND operation_id = ?
+                """, String.class, tenantId, reversalId));
     }
 
     private ProviderSubmissionCommand command() {

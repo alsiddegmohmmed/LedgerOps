@@ -4,11 +4,15 @@ import com.ledgerops.messaging.api.ConsumerFailureResult;
 import com.ledgerops.messaging.api.ConsumerMessageStore;
 import com.ledgerops.messaging.api.IncomingMessage;
 import com.ledgerops.payment.application.ApplyProviderResult;
+import com.ledgerops.payment.application.ApplyProviderReversalResult;
+import com.ledgerops.payment.application.ReversalProviderResultConsistencyException;
 import com.ledgerops.payment.application.PaymentProviderResultCommand;
 import com.ledgerops.payment.application.PaymentProviderResultConsistencyException;
 import com.ledgerops.provider.api.ProviderResultCategory;
+import com.ledgerops.provider.api.ProviderOperationType;
 import com.ledgerops.provider.api.RetryDisposition;
 import io.micrometer.core.instrument.MeterRegistry;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.kafka.annotation.KafkaListener;
@@ -36,16 +40,28 @@ class ProviderResultConsumer {
     private final ProviderResultEnvelopeParser parser = new ProviderResultEnvelopeParser();
     private final ConsumerMessageStore messages;
     private final ApplyProviderResult application;
+    private final ApplyProviderReversalResult reversalApplication;
     private final MeterRegistry meters;
+
+    @Autowired
+    ProviderResultConsumer(
+            ConsumerMessageStore messages,
+            ApplyProviderResult application,
+            ApplyProviderReversalResult reversalApplication,
+            MeterRegistry meters
+    ) {
+        this.messages = messages;
+        this.application = application;
+        this.reversalApplication = reversalApplication;
+        this.meters = meters;
+    }
 
     ProviderResultConsumer(
             ConsumerMessageStore messages,
             ApplyProviderResult application,
             MeterRegistry meters
     ) {
-        this.messages = messages;
-        this.application = application;
-        this.meters = meters;
+        this(messages, application, null, meters);
     }
 
     @KafkaListener(
@@ -111,7 +127,8 @@ class ProviderResultConsumer {
             );
             return;
         }
-        if (!"ProviderResultObserved".equals(envelope.messageType())) {
+        if (!"ProviderResultObserved".equals(envelope.messageType())
+                && !"ProviderReversalResultObserved".equals(envelope.messageType())) {
             deadOrRetry(
                     record, raw, incoming, sha256(envelope.canonicalPayload()),
                     "UNSUPPORTED_MESSAGE_TYPE", true, envelope.correlationId(),
@@ -129,7 +146,17 @@ class ProviderResultConsumer {
         }
 
         try {
-            application.apply(incoming, command(envelope));
+            PaymentProviderResultCommand command = command(envelope);
+            if (command.operationType() == ProviderOperationType.REVERSAL) {
+                if (reversalApplication == null) {
+                    throw new PaymentProviderResultConsistencyException(
+                            command.paymentId(),
+                            "Reversal result application is not configured");
+                }
+                reversalApplication.apply(incoming, command);
+            } else {
+                application.apply(incoming, command);
+            }
             acknowledgment.acknowledge();
         } catch (InvalidProviderResultMessageException exception) {
             deadOrRetry(
@@ -138,6 +165,12 @@ class ProviderResultConsumer {
                     acknowledgment
             );
         } catch (PaymentProviderResultConsistencyException exception) {
+            deadOrRetry(
+                    record, raw, incoming, sha256(envelope.canonicalPayload()),
+                    "RESULT_CONSISTENCY_FAILURE", true, envelope.correlationId(),
+                    acknowledgment
+            );
+        } catch (ReversalProviderResultConsistencyException exception) {
             deadOrRetry(
                     record, raw, incoming, sha256(envelope.canonicalPayload()),
                     "RESULT_CONSISTENCY_FAILURE", true, envelope.correlationId(),
@@ -170,7 +203,21 @@ class ProviderResultConsumer {
                 payload,
                 "providerIdempotencyKey"
         );
-        if (!providerIdempotencyKey.equals("payment:" + paymentId)) {
+        boolean reversal = "ProviderReversalResultObserved".equals(envelope.messageType());
+        ProviderOperationType operationType = reversal
+                ? enumValue(ProviderOperationType.class,
+                parser.text(payload, "operationType"), "Provider operation type")
+                : ProviderOperationType.PAYMENT;
+        UUID operationId = reversal
+                ? parser.canonicalUuid(payload, "reversalId") : paymentId;
+        if (reversal && operationType != ProviderOperationType.REVERSAL) {
+            throw new InvalidProviderResultMessageException(
+                    "Reversal result must have REVERSAL operation type");
+        }
+        String expectedKey = (operationType == ProviderOperationType.REVERSAL
+                ? "reversal:" + operationId : "payment:" + operationId)
+                .toLowerCase(Locale.ROOT);
+        if (!providerIdempotencyKey.equals(expectedKey)) {
             throw new InvalidProviderResultMessageException(
                     "Provider idempotency key is invalid"
             );
@@ -195,6 +242,8 @@ class ProviderResultConsumer {
                 envelope.messageId(),
                 envelope.tenantId(),
                 paymentId,
+                operationType,
+                operationId,
                 parser.canonicalUuid(payload, "attemptId"),
                 parser.canonicalUuid(payload, "providerEvidenceId"),
                 parser.canonicalUuid(payload, "providerResultId"),

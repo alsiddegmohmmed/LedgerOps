@@ -14,6 +14,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "playwright": "playwright test",
+    "playwright:slice6": "playwright test --config=playwright.slice6.config.ts",
     "verify:e2e-process-shutdown": "node tests/e2e/verify-process-shutdown.mjs",
     "verify:e2e-startup-cleanup": "node tests/e2e/verify-startup-cleanup.mjs",
     "verify:e2e-test-failure-cleanup": "node tests/e2e/verify-test-failure-cleanup.mjs",

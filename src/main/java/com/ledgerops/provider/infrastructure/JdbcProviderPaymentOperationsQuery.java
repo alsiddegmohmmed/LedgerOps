@@ -31,6 +31,7 @@ class JdbcProviderPaymentOperationsQuery implements ProviderPaymentOperationsQue
     ) {
         List<ProviderWorkOperation> work = jdbc.query("""
                 SELECT id, tenant_id, payment_id, attempt_id, attempt_sequence, work_type,
+                       operation_type, operation_id,
                        status, provider_id, provider_idempotency_key, due_at, execution_count,
                        transport_retry_count, last_error_code, scenario_profile_id,
                        scenario_profile_version, created_at, updated_at
@@ -40,6 +41,7 @@ class JdbcProviderPaymentOperationsQuery implements ProviderPaymentOperationsQue
                 """, this::mapWork, tenantId, paymentId);
         List<ProviderInteractionOperation> interactions = jdbc.query("""
                 SELECT interaction_id, tenant_id, work_id, webhook_event_id, payment_id,
+                       operation_type, operation_id,
                        attempt_id, provider_id, work_type, request_id, http_status,
                        communication_outcome, latency_millis, safe_error_code,
                        started_at, completed_at
@@ -48,7 +50,8 @@ class JdbcProviderPaymentOperationsQuery implements ProviderPaymentOperationsQue
                  ORDER BY completed_at, interaction_id
                 """, this::mapInteraction, tenantId, paymentId);
         List<ProviderRecoveryOperation> recovery = jdbc.query("""
-                SELECT r.evidence_id, r.work_id, r.attempt_id, rr.retry_request_id,
+                SELECT r.evidence_id, r.work_id, r.attempt_id, r.operation_type, r.operation_id,
+                       rr.retry_request_id,
                        w.status AS work_status, r.result_category, r.retry_disposition,
                        r.provider_transaction_found, r.no_acceptance_proven,
                        w.due_at, rr.requested_at, r.observed_at
@@ -83,7 +86,11 @@ class JdbcProviderPaymentOperationsQuery implements ProviderPaymentOperationsQue
     private ProviderWorkOperation mapWork(ResultSet rs, int row) throws SQLException {
         return new ProviderWorkOperation(
                 rs.getObject("id", UUID.class), rs.getObject("tenant_id", UUID.class),
-                rs.getObject("payment_id", UUID.class), rs.getObject("attempt_id", UUID.class),
+                rs.getObject("payment_id", UUID.class),
+                com.ledgerops.provider.api.ProviderOperationType.valueOf(
+                        rs.getString("operation_type")),
+                rs.getObject("operation_id", UUID.class),
+                rs.getObject("attempt_id", UUID.class),
                 rs.getInt("attempt_sequence"), rs.getString("work_type"), rs.getString("status"),
                 rs.getString("provider_id"), rs.getString("provider_idempotency_key"),
                 rs.getTimestamp("due_at").toInstant(), rs.getInt("execution_count"),
@@ -97,7 +104,11 @@ class JdbcProviderPaymentOperationsQuery implements ProviderPaymentOperationsQue
         return new ProviderInteractionOperation(
                 rs.getObject("interaction_id", UUID.class), rs.getObject("tenant_id", UUID.class),
                 rs.getObject("work_id", UUID.class), rs.getObject("webhook_event_id", UUID.class),
-                rs.getObject("payment_id", UUID.class), rs.getObject("attempt_id", UUID.class),
+                rs.getObject("payment_id", UUID.class),
+                com.ledgerops.provider.api.ProviderOperationType.valueOf(
+                        rs.getString("operation_type")),
+                rs.getObject("operation_id", UUID.class),
+                rs.getObject("attempt_id", UUID.class),
                 rs.getString("provider_id"), rs.getString("work_type"),
                 rs.getObject("request_id", UUID.class), nullableInteger(rs, "http_status"),
                 rs.getString("communication_outcome"), rs.getLong("latency_millis"),
@@ -108,7 +119,11 @@ class JdbcProviderPaymentOperationsQuery implements ProviderPaymentOperationsQue
     private ProviderRecoveryOperation mapRecovery(ResultSet rs, int row) throws SQLException {
         return new ProviderRecoveryOperation(
                 rs.getObject("evidence_id", UUID.class), rs.getObject("work_id", UUID.class),
-                rs.getObject("attempt_id", UUID.class), rs.getObject("retry_request_id", UUID.class),
+                rs.getObject("attempt_id", UUID.class),
+                com.ledgerops.provider.api.ProviderOperationType.valueOf(
+                        rs.getString("operation_type")),
+                rs.getObject("operation_id", UUID.class),
+                rs.getObject("retry_request_id", UUID.class),
                 rs.getString("work_status"), rs.getString("result_category"),
                 rs.getString("retry_disposition"), rs.getBoolean("provider_transaction_found"),
                 rs.getBoolean("no_acceptance_proven"), nullableInstant(rs, "due_at"),

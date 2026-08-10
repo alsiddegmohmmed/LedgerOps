@@ -3,6 +3,7 @@ package com.ledgerops.provider.application;
 import com.ledgerops.messaging.api.ConsumerMessageStore;
 import com.ledgerops.messaging.api.InboxResult;
 import com.ledgerops.messaging.api.IncomingMessage;
+import com.ledgerops.provider.api.ProviderOperationType;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -28,7 +29,7 @@ public class AcceptProviderSubmissionCommand {
         if (incoming.tenantId() == null
                 || !incoming.tenantId().equals(command.tenantId())
                 || !incoming.messageId().equals(command.messageId())
-                || !"SubmitPaymentToProvider".equals(incoming.messageType())) {
+                || !expectedMessageType(command.operationType()).equals(incoming.messageType())) {
             throw new IllegalArgumentException(
                     "Inbox identity must match the tenant-owned Provider command"
             );
@@ -38,5 +39,11 @@ public class AcceptProviderSubmissionCommand {
             work.createOrVerifySubmission(command);
         }
         return result;
+    }
+
+    private String expectedMessageType(ProviderOperationType operationType) {
+        return operationType == ProviderOperationType.REVERSAL
+                ? "SubmitReversalToProvider"
+                : "SubmitPaymentToProvider";
     }
 }

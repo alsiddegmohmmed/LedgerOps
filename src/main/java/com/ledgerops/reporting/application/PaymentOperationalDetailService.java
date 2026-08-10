@@ -6,6 +6,7 @@ import com.ledgerops.identity.api.AuthorizedRequestContext;
 import com.ledgerops.ledger.api.PaymentSuccessLedger;
 import com.ledgerops.payment.api.PaymentDetailsQuery;
 import com.ledgerops.payment.api.PaymentDetailsSnapshot;
+import com.ledgerops.payment.api.ReversalDetailsQuery;
 import com.ledgerops.provider.api.ProviderPaymentEvidenceQuery;
 import com.ledgerops.provider.api.ProviderPaymentOperationsQuery;
 import com.ledgerops.reporting.api.PaymentOperationalDetail;
@@ -23,6 +24,7 @@ import java.util.UUID;
 public class PaymentOperationalDetailService {
 
     private final PaymentDetailsQuery payments;
+    private final ReversalDetailsQuery reversals;
     private final RiskPaymentQuery risk;
     private final ProviderPaymentEvidenceQuery provider;
     private final ProviderPaymentOperationsQuery providerOperations;
@@ -32,6 +34,7 @@ public class PaymentOperationalDetailService {
 
     public PaymentOperationalDetailService(
             PaymentDetailsQuery payments,
+            ReversalDetailsQuery reversals,
             RiskPaymentQuery risk,
             ProviderPaymentEvidenceQuery provider,
             ProviderPaymentOperationsQuery providerOperations,
@@ -40,6 +43,7 @@ public class PaymentOperationalDetailService {
             PaymentTimelineProjector projector
     ) {
         this.payments = payments;
+        this.reversals = reversals;
         this.risk = risk;
         this.provider = provider;
         this.providerOperations = providerOperations;
@@ -72,7 +76,8 @@ public class PaymentOperationalDetailService {
                 paymentTimeline,
                 payment.notes(),
                 payment.attempts(),
-                providerOperations.findByTenantAndPayment(tenantId, paymentId).orElse(null));
+                providerOperations.findByTenantAndPayment(tenantId, paymentId).orElse(null),
+                reversals.findByTenantAndPayment(tenantId, paymentId).orElse(null));
     }
 
     private void requireAccess(UUID tenantId, AuthorizedRequestContext authorization) {

@@ -1,0 +1,15 @@
+{
+  "attemptId": "10000000-0000-4000-8000-000000000001",
+  "paymentId": "10000000-0000-4000-8000-000000000002",
+  "reversalId": "10000000-0000-4000-8000-000000000003",
+  "operationType": "REVERSAL",
+  "attemptSequence": 1,
+  "providerId": "SIMULATOR",
+  "providerIdempotencyKey": "reversal:10000000-0000-4000-8000-000000000003",
+  "amount": "25.00",
+  "currency": "SAR",
+  "paymentMethodCategory": "CARD",
+  "merchantId": "10000000-0000-4000-8000-000000000004",
+  "originalProviderReference": "sim-payment-1002",
+  "requestIntentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+}

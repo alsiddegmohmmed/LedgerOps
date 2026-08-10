@@ -86,6 +86,10 @@ public record AuthorizedRequestContext(
         return hasPermission(Permission.PAYMENT_CREATE);
     }
 
+    public boolean canRequestReversal() {
+        return hasPermission(Permission.REVERSAL_REQUEST);
+    }
+
     public boolean canReadPayments() {
         return isSupportSession() || hasPermission(Permission.PAYMENT_READ);
     }
@@ -140,6 +144,10 @@ public record AuthorizedRequestContext(
 
     public boolean canRetryPayments() {
         return hasPermission(Permission.PAYMENT_RETRY);
+    }
+
+    public boolean canRetryReversals() {
+        return hasPermission(Permission.REVERSAL_RETRY);
     }
 
     public boolean canReadProviderHealth() {

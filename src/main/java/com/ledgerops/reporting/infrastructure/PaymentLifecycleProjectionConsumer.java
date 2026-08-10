@@ -40,13 +40,20 @@ class PaymentLifecycleProjectionConsumer {
             String messageType = text(root, "messageType");
             UUID messageId = UUID.fromString(text(root, "messageId"));
             UUID tenantId = UUID.fromString(text(root, "tenantId"));
-            UUID paymentId = UUID.fromString(text(root, "aggregateId"));
             JsonNode payload = root.get("payload");
             if (payload == null || !payload.isObject()) {
                 throw new IllegalArgumentException("Payment lifecycle payload must be an object");
             }
-            String outcome = optional(payload, "toStatus", messageType);
-            String displayText = displayText(messageType, outcome);
+            boolean reversal = messageType.startsWith("Reversal");
+            UUID paymentId = reversal
+                    ? UUID.fromString(text(payload, "paymentId"))
+                    : UUID.fromString(text(root, "aggregateId"));
+            UUID sourceId = reversal
+                    ? UUID.fromString(text(payload, "reversalId"))
+                    : paymentId;
+            String outcome = optional(payload, "toStatus",
+                    optional(payload, "status", messageType));
+            String displayText = displayText(messageType, outcome, reversal);
             projector.project(new PaymentTimelineEntry(
                     messageId,
                     tenantId,
@@ -54,7 +61,7 @@ class PaymentLifecycleProjectionConsumer {
                     optionalUuid(payload, "merchantId"),
                     "PAYMENT",
                     messageType,
-                    paymentId,
+                    sourceId,
                     Instant.parse(text(root, "occurredAt")),
                     optional(payload, "actorSource", "AUTOMATED"),
                     outcome,
@@ -93,7 +100,16 @@ class PaymentLifecycleProjectionConsumer {
         return value == null ? null : UUID.fromString(value);
     }
 
-    private static String displayText(String messageType, String outcome) {
+    private static String displayText(String messageType, String outcome, boolean reversal) {
+        if (reversal) {
+            return switch (messageType) {
+                case "ReversalRequested" -> "Reversal requested";
+                case "ReversalProcessingStarted" -> "Reversal processing started";
+                case "ReversalFailed" -> "Reversal failed";
+                case "ReversalCompleted" -> "Reversal completed";
+                default -> "Reversal lifecycle event: " + messageType;
+            };
+        }
         return switch (outcome) {
             case "COMPLETED" -> "Payment completed";
             case "FAILED" -> "Payment failed";

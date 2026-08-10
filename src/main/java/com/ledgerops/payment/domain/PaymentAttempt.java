@@ -9,6 +9,8 @@ public record PaymentAttempt(
         PaymentAttemptId attemptId,
         UUID tenantId,
         PaymentId paymentId,
+        AttemptSubjectType subjectType,
+        UUID subjectId,
         int sequence,
         ProviderId providerId,
         String providerIdempotencyKey,
@@ -25,6 +27,13 @@ public record PaymentAttempt(
         Objects.requireNonNull(attemptId, "Attempt ID must not be null");
         Objects.requireNonNull(tenantId, "Tenant ID must not be null");
         Objects.requireNonNull(paymentId, "Payment ID must not be null");
+        Objects.requireNonNull(subjectType, "Attempt subject type must not be null");
+        Objects.requireNonNull(subjectId, "Attempt subject ID must not be null");
+        if (subjectType == AttemptSubjectType.PAYMENT && !subjectId.equals(paymentId.value())) {
+            throw new IllegalArgumentException(
+                    "PAYMENT attempt subject ID must equal the Payment ID"
+            );
+        }
         if (sequence < 1) {
             throw new IllegalArgumentException("Payment Attempt sequence must be positive");
         }
@@ -35,10 +44,13 @@ public record PaymentAttempt(
         if (providerIdempotencyKey == null || providerIdempotencyKey.isBlank()) {
             throw new IllegalArgumentException("Provider idempotency key must not be blank");
         }
-        String expectedProviderKey = "payment:" + paymentId.value().toString().toLowerCase();
+        String subjectPrefix = subjectType == AttemptSubjectType.PAYMENT
+                ? "payment:"
+                : "reversal:";
+        String expectedProviderKey = subjectPrefix + subjectId.toString().toLowerCase();
         if (!providerIdempotencyKey.equals(expectedProviderKey)) {
             throw new IllegalArgumentException(
-                    "Provider idempotency key must be derived from Payment ID"
+                    "Provider idempotency key must be derived from the attempt subject ID"
             );
         }
         Objects.requireNonNull(initiatedAt, "Initiation time must not be null");
@@ -52,5 +64,37 @@ public record PaymentAttempt(
         if (requestIntentHash == null || !HASH.matcher(requestIntentHash).matches()) {
             throw new IllegalArgumentException("Request-intent hash must be lowercase SHA-256");
         }
+    }
+
+    public PaymentAttempt(
+            PaymentAttemptId attemptId,
+            UUID tenantId,
+            PaymentId paymentId,
+            int sequence,
+            ProviderId providerId,
+            String providerIdempotencyKey,
+            Instant initiatedAt,
+            UUID merchantId,
+            CustomerId customerId,
+            Money amount,
+            PaymentMethodCategory paymentMethodCategory,
+            String requestIntentHash
+    ) {
+        this(
+                attemptId,
+                tenantId,
+                paymentId,
+                AttemptSubjectType.PAYMENT,
+                paymentId.value(),
+                sequence,
+                providerId,
+                providerIdempotencyKey,
+                initiatedAt,
+                merchantId,
+                customerId,
+                amount,
+                paymentMethodCategory,
+                requestIntentHash
+        );
     }
 }

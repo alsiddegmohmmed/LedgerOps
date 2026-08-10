@@ -208,6 +208,45 @@ async function verifyTopology() {
 }
 
 async function seedWithPsql() {
+  const slice6Enabled = process.env.E2E_SLICE6 === "true";
+  const seededRole = slice6Enabled ? "MERCHANT_ADMIN" : "TENANT_ADMIN";
+  const seededScopeMode = slice6Enabled ? "MERCHANT_SET" : "TENANT_WIDE";
+  const slice6Seed = slice6Enabled ? `
+INSERT INTO identity.role_assignment_merchant_scopes
+  (role_assignment_id, merchant_id)
+VALUES
+  ('30000000-0000-4000-8000-000000000001', '00000000-0000-4000-8000-000000000011');
+INSERT INTO ledger.accounts
+  (id, tenant_id, account_code, currency, status, created_at)
+VALUES
+  ('70000000-0000-4000-8000-000000000001', '00000000-0000-4000-8000-000000000001', 'PROVIDER_CLEARING', 'USD', 'ACTIVE', now()),
+  ('70000000-0000-4000-8000-000000000002', '00000000-0000-4000-8000-000000000001', 'MERCHANT_PAYABLE', 'USD', 'ACTIVE', now());
+INSERT INTO payment.payments
+  (id, tenant_id, merchant_id, customer_id, amount, currency, payment_method_category,
+   idempotency_key, request_fingerprint, status, version, created_at, updated_at)
+VALUES
+  ('00000000-0000-4000-8000-000000000021',
+   '00000000-0000-4000-8000-000000000001',
+   '00000000-0000-4000-8000-000000000011',
+   '60000000-0000-4000-8000-000000000001',
+   125.00, 'USD', 'CARD', 'playwright-slice6-payment',
+   repeat('c', 64), 'COMPLETED', 0, now(), now());
+INSERT INTO ledger.transactions
+  (id, tenant_id, source_type, source_id, compensates_transaction_id, posted_at,
+   currency, entry_count, debit_total, credit_total)
+VALUES
+  ('80000000-0000-4000-8000-000000000001',
+   '00000000-0000-4000-8000-000000000001',
+   'PAYMENT', '00000000-0000-4000-8000-000000000021', NULL, now(),
+   'USD', 2, 125.00, 125.00);
+INSERT INTO ledger.entries
+  (tenant_id, transaction_id, entry_index, account_id, direction, amount, currency)
+VALUES
+  ('00000000-0000-4000-8000-000000000001', '80000000-0000-4000-8000-000000000001', 0,
+   '70000000-0000-4000-8000-000000000001', 'DEBIT', 125.00, 'USD'),
+  ('00000000-0000-4000-8000-000000000001', '80000000-0000-4000-8000-000000000001', 1,
+   '70000000-0000-4000-8000-000000000002', 'CREDIT', 125.00, 'USD');
+` : "";
   const sql = `
 BEGIN;
 INSERT INTO tenancy.tenants
@@ -228,7 +267,7 @@ INSERT INTO identity.tenant_memberships
 VALUES ('20000000-0000-4000-8000-000000000001', '10000000-0000-4000-8000-000000000001', '00000000-0000-4000-8000-000000000001', 'ACTIVE', now(), now());
 INSERT INTO identity.tenant_role_assignments
   (id, membership_id, role, scope_mode)
-VALUES ('30000000-0000-4000-8000-000000000001', '20000000-0000-4000-8000-000000000001', 'TENANT_ADMIN', 'TENANT_WIDE');
+VALUES ('30000000-0000-4000-8000-000000000001', '20000000-0000-4000-8000-000000000001', '${seededRole}', '${seededScopeMode}');
 INSERT INTO identity.tenant_memberships
   (id, application_user_id, tenant_id, status, is_initial, version, created_at, updated_at)
 VALUES
@@ -244,6 +283,7 @@ INSERT INTO identity.invitation_grants
 VALUES
   ('40000000-0000-4000-8000-000000000001', '50000000-0000-4000-8000-000000000001', '00000000-0000-4000-8000-000000000001', 'VIEWER', 'TENANT_WIDE'),
   ('40000000-0000-4000-8000-000000000002', '50000000-0000-4000-8000-000000000002', '00000000-0000-4000-8000-000000000001', 'VIEWER', 'TENANT_WIDE');
+${slice6Seed}
 COMMIT;
 `;
   await new Promise((resolvePromise, reject) => {
@@ -258,12 +298,30 @@ COMMIT;
 }
 
 async function verifySeedWithPsql() {
+  const slice6Verification = process.env.E2E_SLICE6 === "true" ? `
+  AND EXISTS (
+    SELECT 1
+      FROM payment.payments
+     WHERE id = '00000000-0000-4000-8000-000000000021'
+       AND tenant_id = '00000000-0000-4000-8000-000000000001'
+       AND status = 'COMPLETED'
+  )
+  AND EXISTS (
+    SELECT 1
+      FROM ledger.transactions
+     WHERE tenant_id = '00000000-0000-4000-8000-000000000001'
+       AND source_type = 'PAYMENT'
+       AND source_id = '00000000-0000-4000-8000-000000000021'
+       AND debit_total = 125.00
+       AND credit_total = 125.00
+  )` : "";
   const sql = `
 SELECT
   EXISTS (SELECT 1 FROM tenancy.tenants WHERE id = '00000000-0000-4000-8000-000000000002')
   AND EXISTS (SELECT 1 FROM merchant.merchants WHERE id = '00000000-0000-4000-8000-000000000012' AND tenant_id = '00000000-0000-4000-8000-000000000002')
   AND NOT EXISTS (SELECT 1 FROM identity.tenant_memberships WHERE application_user_id = '10000000-0000-4000-8000-000000000001' AND tenant_id = '00000000-0000-4000-8000-000000000002')
-  AND NOT EXISTS (SELECT 1 FROM tenancy.tenants WHERE id = '00000000-0000-4000-8000-000000000099');
+  AND NOT EXISTS (SELECT 1 FROM tenancy.tenants WHERE id = '00000000-0000-4000-8000-000000000099')
+${slice6Verification};
 `;
   const output = await new Promise((resolvePromise, reject) => {
     const child = spawn(docker, ["compose", "-p", projectName, "-f", composeFile, "exec", "-T", "postgres", "psql", "-tA", "-v", "ON_ERROR_STOP=1", "-U", "ledgerops", "-d", "ledgerops"], {
@@ -395,6 +453,7 @@ try {
       REDIS_URL: `redis://127.0.0.1:${ports.redis}`,
       CORE_BASE_URL: `http://127.0.0.1:${ports.core}`,
       BFF_ORIGIN: `http://127.0.0.1:${ports.bff}`,
+      NEXT_DIST_DIR: process.env.E2E_NEXT_DIST_DIR ?? ".next-e2e",
     },
   });
   nextIdentity = captureProcessIdentity(next.pid, "next/dist/bin/next");

@@ -1,6 +1,6 @@
 # Release 0.3 Slice 6 - Full-payment Reversal
 
-Status: Pending  
+Status: Implemented — automated backend/frontend verification complete
 Owner: One implementation owner  
 Release: 0.3
 
@@ -58,7 +58,18 @@ Excluded:
 
 ## Completion report
 
-- Changed: Pending
-- Verified: Pending
-- Incomplete: Slice 6
+- Changed:
+  - Added the pure full-Reversal aggregate, one-Reversal-per-Payment persistence, typed Payment Attempt subject migration/backfill, Provider operation identity, and versioned Reversal Provider result contract.
+  - Added authorized request/processing/retry application services with confirmation/reason/audit, immutable retry applications, bounded three-attempt history, and no automatic Reversal resubmission.
+  - Added the `ledger::api` exact inverse compensation boundary, accepted final Reversal evidence, one-compensation-per-target database safeguard, and atomic Provider-result completion that changes Reversal to `COMPLETED` and Payment to `REVERSED` together.
+  - Added Reversal HTTP actions, the Payment operational-detail Reversal snapshot, correct Reversal lifecycle timeline attribution, and Operations Web request/retry/detail evidence with support-mode read-only behavior.
+- Verified:
+  - Focused Slice 6 backend tests, including domain, request/processing/result/retry services, persistence migrations, Provider command/result routing, contracts, modularity, and the Reversal timeline regression, pass.
+  - Operations Web TypeScript, lint, unit tests, and production build pass; the environment still reports the documented Node 22 versus Node 24.18–24.x engine warning.
+  - Root `GRADLE_USER_HOME=/Users/Siddegx/.gradle ./gradlew :check --console=plain` passes after preserving typed PAYMENT identity for legacy Provider webhook interactions/results.
+  - The dedicated authenticated Operations Web Playwright test passes: it signs in, selects the authorised Tenant/Merchant scope, opens a completed Payment, submits a confirmed full Reversal, verifies the `REQUESTED` response, and verifies the state after reload.
+  - `git diff --check` passes.
+- Incomplete:
+  - Browser coverage for asynchronous Provider success/failure/retry completion remains outstanding; the authenticated browser test currently covers the authorised request and persisted initial `REQUESTED` state.
+  - Release-wide regression/closure remains a later release gate; Slice 7–10 evidence is still pending.
 - Deviations: None

@@ -2,4 +2,11 @@ import nextVitals from "eslint-config-next/core-web-vitals";
 
 const config = [...nextVitals];
 
-export default config;
+const finalConfig = [
+  {
+    ignores: [".next/**", ".next-e2e/**", "playwright-report/**", "test-results/**"],
+  },
+  ...config,
+];
+
+export default finalConfig;

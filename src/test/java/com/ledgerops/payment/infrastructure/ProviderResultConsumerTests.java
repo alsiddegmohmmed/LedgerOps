@@ -4,11 +4,15 @@ import com.ledgerops.messaging.api.ConsumerFailureResult;
 import com.ledgerops.messaging.api.ConsumerMessageStore;
 import com.ledgerops.messaging.api.IncomingMessage;
 import com.ledgerops.payment.application.ApplyProviderResult;
+import com.ledgerops.payment.application.ApplyProviderReversalResult;
 import com.ledgerops.payment.application.PaymentProviderResultConsistencyException;
 import com.ledgerops.payment.application.PaymentProviderResultOutcome;
 import com.ledgerops.payment.application.PaymentProviderResultResult;
 import com.ledgerops.payment.application.ProviderEvidenceUnavailableException;
+import com.ledgerops.payment.application.ReversalProviderResultOutcome;
+import com.ledgerops.payment.application.ReversalProviderResultResult;
 import com.ledgerops.payment.domain.PaymentStatus;
+import com.ledgerops.payment.domain.ReversalStatus;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.junit.jupiter.api.Test;
@@ -50,6 +54,38 @@ class ProviderResultConsumerTests {
         verify(messages, never()).recordFailure(
                 any(), any(), any(), any(), anyInt(), anyLong(), any(), any(), any(), anyBoolean()
         );
+    }
+
+    @Test
+    void validReversalResultIsRoutedToTheReversalApplication() {
+        ConsumerMessageStore messages = mock(ConsumerMessageStore.class);
+        ApplyProviderResult paymentApplication = mock(ApplyProviderResult.class);
+        ApplyProviderReversalResult reversalApplication = mock(ApplyProviderReversalResult.class);
+        Acknowledgment acknowledgment = mock(Acknowledgment.class);
+        UUID paymentId = UUID.randomUUID();
+        UUID reversalId = UUID.randomUUID();
+        String raw = reversalEnvelope(
+                UUID.randomUUID(), UUID.randomUUID(), paymentId, reversalId);
+        when(reversalApplication.apply(any(), any())).thenReturn(new ReversalProviderResultResult(
+                reversalId,
+                ReversalStatus.COMPLETED,
+                PaymentStatus.REVERSED,
+                ReversalProviderResultOutcome.COMPLETED,
+                UUID.randomUUID(),
+                UUID.randomUUID()
+        ));
+        ProviderResultConsumer consumer = new ProviderResultConsumer(
+                messages,
+                paymentApplication,
+                reversalApplication,
+                new SimpleMeterRegistry()
+        );
+
+        consumer.receive(record(paymentId, raw), acknowledgment);
+
+        verify(reversalApplication).apply(any(IncomingMessage.class), any());
+        verify(paymentApplication, never()).apply(any(), any());
+        verify(acknowledgment).acknowledge();
     }
 
     @Test
@@ -199,6 +235,40 @@ class ProviderResultConsumerTests {
                 "\"providerEvidenceId\":\"" + evidenceId + "\"," +
                 "\"providerId\":\"SIMULATOR\"," +
                 "\"providerIdempotencyKey\":\"payment:" + paymentId + "\"," +
+                "\"providerReference\":\"simulator-reference\"," +
+                "\"providerResultId\":\"" + resultId + "\"," +
+                "\"providerResultCategory\":\"SUCCESS\"," +
+                "\"retryDisposition\":\"NOT_RETRYABLE\"}}";
+    }
+
+    private String reversalEnvelope(
+            UUID messageId,
+            UUID tenantId,
+            UUID paymentId,
+            UUID reversalId
+    ) {
+        UUID attemptId = UUID.randomUUID();
+        UUID evidenceId = UUID.randomUUID();
+        UUID resultId = UUID.randomUUID();
+        return "{" +
+                "\"messageId\":\"" + messageId + "\"," +
+                "\"messageType\":\"ProviderReversalResultObserved\"," +
+                "\"schemaVersion\":1," +
+                "\"aggregateId\":\"" + paymentId + "\"," +
+                "\"tenantId\":\"" + tenantId + "\"," +
+                "\"correlationId\":\"" + UUID.randomUUID() + "\"," +
+                "\"causationId\":\"" + UUID.randomUUID() + "\"," +
+                "\"occurredAt\":\"2026-07-21T12:00:00Z\"," +
+                "\"payload\":{" +
+                "\"attemptId\":\"" + attemptId + "\"," +
+                "\"evidenceOrigin\":\"SUBMISSION_RESPONSE\"," +
+                "\"observedAt\":\"2026-07-21T12:00:00Z\"," +
+                "\"paymentId\":\"" + paymentId + "\"," +
+                "\"operationType\":\"REVERSAL\"," +
+                "\"reversalId\":\"" + reversalId + "\"," +
+                "\"providerEvidenceId\":\"" + evidenceId + "\"," +
+                "\"providerId\":\"SIMULATOR\"," +
+                "\"providerIdempotencyKey\":\"reversal:" + reversalId + "\"," +
                 "\"providerReference\":\"simulator-reference\"," +
                 "\"providerResultId\":\"" + resultId + "\"," +
                 "\"providerResultCategory\":\"SUCCESS\"," +

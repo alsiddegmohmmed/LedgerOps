@@ -17,6 +17,7 @@ import java.time.Clock;
 import java.time.Duration;
 import java.util.HexFormat;
 import java.util.LinkedHashMap;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 
@@ -172,6 +173,8 @@ final class ProviderSimulatorController {
     private void validateSubmission(JsonNode request) {
         uuid(request, "attemptId");
         UUID paymentId = uuid(request, "paymentId");
+        boolean reversal = "REVERSAL".equals(request.path("operationType").asString());
+        UUID operationId = reversal ? uuid(request, "reversalId") : paymentId;
         JsonNode sequence = request.get("attemptSequence");
         String providerId = text(request, "providerId");
         String providerKey = text(request, "providerIdempotencyKey");
@@ -179,12 +182,17 @@ final class ProviderSimulatorController {
         String currency = text(request, "currency");
         text(request, "paymentMethodCategory");
         hash(request, "requestIntentHash");
+        if (reversal) {
+            text(request, "merchantId");
+            text(request, "originalProviderReference");
+        }
         if (request.has("contractVersion")) {
             scenarioRequest(request);
         }
         if (sequence == null || !sequence.isIntegralNumber() || sequence.intValue() < 1
                 || !"SIMULATOR".equals(providerId)
-                || !providerKey.equals("payment:" + paymentId.toString().toLowerCase())
+                || !providerKey.equals((reversal ? "reversal:" + operationId : "payment:" + operationId)
+                .toLowerCase(Locale.ROOT))
                 || !amount.matches("^(0|[1-9][0-9]*)(\\.[0-9]+)?$")
                 || new java.math.BigDecimal(amount).signum() <= 0
                 || !currency.matches("^[A-Z]{3}$")) {

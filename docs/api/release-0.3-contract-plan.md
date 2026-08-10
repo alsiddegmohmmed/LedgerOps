@@ -38,6 +38,33 @@ create, rotate, and revoke actions. Further projections and search filters
 remain separate contracts introduced only when their read models are
 implemented.
 
+Slice 6 extends the authenticated Payment operational-detail response at
+`GET /api/v1/tenants/{tenantId}/payments/{paymentId}` with an optional
+`reversal` object. The object is a read-only lifecycle snapshot containing the
+Reversal ID, originating Payment ID, Merchant, full amount/currency, status,
+request actor/reason/time, processing/failure/completion times, failure
+category, and version. It contains no Provider secret or other secret
+material. The field is `null` when the Payment has no Reversal.
+
+The approved Reversal actions are:
+
+```text
+POST /api/v1/tenants/{tenantId}/reversals
+POST /api/v1/tenants/{tenantId}/reversals/{reversalId}/retry
+```
+
+The request action requires the completed Payment ID, `confirmation: true`,
+and a non-blank reason. The retry action requires the originating Payment ID,
+the previous Reversal Attempt ID, the durable Provider evidence ID,
+`confirmation: true`, and a non-blank reason. The backend rechecks Tenant and
+Merchant scope, current lifecycle state, and the ADR-023 safe-retry evidence;
+the Operations Web does not make those decisions from presentation state.
+
+The Operations Web shows the Reversal lifecycle/timeline evidence on the
+Payment detail page. It displays a retry form only when the latest durable
+Reversal evidence is `SAFE_TO_RESUBMIT`, proves no Provider acceptance, and
+does not find a Provider transaction. Support sessions remain read-only.
+
 Slice 5 contracts are documented in
 [Release 0.3 Slice 5 Provider and Merchant webhook contracts](release-0.3-slice-5-provider-and-webhook-contracts.md).
 

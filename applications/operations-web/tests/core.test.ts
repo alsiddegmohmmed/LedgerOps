@@ -11,6 +11,8 @@ import {
   provisionCredential,
   updateTenantConfiguration,
   startSupportSession,
+  requestReversal,
+  retryReversal,
 } from "../lib/core";
 
 describe("Core credential metadata client", () => {
@@ -238,6 +240,71 @@ describe("Core credential metadata client", () => {
     expect(JSON.parse(String(init.body))).toEqual({
       confirmation: true,
       reason: "No longer required",
+    });
+  });
+
+  it("posts the approved Reversal actions with explicit confirmation and reason", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        reversalId: "00000000-0000-4000-8000-000000000005",
+        tenantId: "00000000-0000-4000-8000-000000000001",
+        paymentId: "00000000-0000-4000-8000-000000000002",
+        merchantId: "00000000-0000-4000-8000-000000000003",
+        amount: "25.00",
+        currency: "SAR",
+        status: "REQUESTED",
+        requestedBy: "00000000-0000-4000-8000-000000000004",
+        requestReason: "Customer requested reversal",
+        requestedAt: "2026-08-10T10:00:00Z",
+        processingAt: null,
+        failedAt: null,
+        completedAt: null,
+        failureCategory: null,
+        version: 0,
+      }), { status: 201 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        reversalId: "00000000-0000-4000-8000-000000000005",
+        paymentId: "00000000-0000-4000-8000-000000000002",
+        attemptId: "00000000-0000-4000-8000-000000000006",
+        attemptSequence: 2,
+        status: "PROCESSING",
+        replay: false,
+      }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(requestReversal(
+      "00000000-0000-4000-8000-000000000001",
+      "00000000-0000-4000-8000-000000000002",
+      "server-only-token",
+      { confirmation: true, reason: "Customer requested reversal" },
+    )).resolves.toMatchObject({ kind: "ok", result: { status: "REQUESTED" } });
+    await expect(retryReversal(
+      "00000000-0000-4000-8000-000000000001",
+      "00000000-0000-4000-8000-000000000005",
+      "server-only-token",
+      {
+        paymentId: "00000000-0000-4000-8000-000000000002",
+        previousAttemptId: "00000000-0000-4000-8000-000000000006",
+        providerEvidenceId: "00000000-0000-4000-8000-000000000007",
+        confirmation: true,
+        reason: "Provider proved no acceptance",
+      },
+    )).resolves.toMatchObject({ kind: "ok", result: { status: "PROCESSING" } });
+
+    const [requestUrl, requestInit] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(requestUrl).toContain("/api/v1/tenants/00000000-0000-4000-8000-000000000001/reversals");
+    expect(requestInit.method).toBe("POST");
+    expect(JSON.parse(String(requestInit.body))).toEqual({
+      paymentId: "00000000-0000-4000-8000-000000000002",
+      confirmation: true,
+      reason: "Customer requested reversal",
+    });
+    const [retryUrl, retryInit] = fetchMock.mock.calls[1] as unknown as [string, RequestInit];
+    expect(retryUrl).toContain("/reversals/00000000-0000-4000-8000-000000000005/retry");
+    expect(JSON.parse(String(retryInit.body))).toMatchObject({
+      previousAttemptId: "00000000-0000-4000-8000-000000000006",
+      providerEvidenceId: "00000000-0000-4000-8000-000000000007",
+      confirmation: true,
     });
   });
 

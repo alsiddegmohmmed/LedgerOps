@@ -493,13 +493,14 @@ class PaymentSubmissionIntegrationTests {
         assertThrows(Exception.class, () -> jdbcTemplate.update(
                 """
                 INSERT INTO payment.payment_attempts (
-                    id, tenant_id, payment_id, sequence, provider_id,
+                    id, tenant_id, payment_id, attempt_subject_type, attempt_subject_id,
+                    sequence, provider_id,
                     provider_idempotency_key, initiated_at, merchant_id,
                     customer_id, amount, currency, payment_method_category,
                     request_intent_hash
-                ) VALUES (?, ?, ?, 1, 'SIMULATOR', ?, now(), ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, 'PAYMENT', ?, 1, 'SIMULATOR', ?, now(), ?, ?, ?, ?, ?, ?)
                 """,
-                UUID.randomUUID(), UUID.randomUUID(), payment.id().value(),
+                UUID.randomUUID(), UUID.randomUUID(), payment.id().value(), payment.id().value(),
                 "payment:" + payment.id().value(), payment.merchantReference().value(),
                 payment.customerId().value(), payment.amount().amount(),
                 payment.amount().currency().getCurrencyCode(),
@@ -651,13 +652,14 @@ class PaymentSubmissionIntegrationTests {
         jdbcTemplate.update(
                 """
                 INSERT INTO payment.payment_attempts (
-                    id, tenant_id, payment_id, sequence, provider_id,
+                    id, tenant_id, payment_id, attempt_subject_type, attempt_subject_id,
+                    sequence, provider_id,
                     provider_idempotency_key, initiated_at, merchant_id,
                     customer_id, amount, currency, payment_method_category,
                     request_intent_hash
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, 'PAYMENT', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
-                attemptId, payment.tenantId(), payment.id().value(),
+                attemptId, payment.tenantId(), payment.id().value(), payment.id().value(),
                 sequence, providerId, "payment:" + payment.id().value(),
                 Timestamp.from(Instant.parse("2026-07-21T12:00:00Z")),
                 merchantId, payment.customerId().value(),

@@ -4,6 +4,7 @@ import com.ledgerops.ledger.api.LedgerPostingEvidence;
 import com.ledgerops.payment.api.PaymentAttemptSnapshot;
 import com.ledgerops.payment.api.PaymentNoteSnapshot;
 import com.ledgerops.payment.api.PaymentDetailsSnapshot;
+import com.ledgerops.payment.api.ReversalDetailsSnapshot;
 import com.ledgerops.provider.api.ProviderEvidence;
 import com.ledgerops.provider.api.ProviderPaymentOperations;
 import com.ledgerops.risk.api.RiskPaymentSnapshot;
@@ -19,7 +20,8 @@ public record PaymentOperationalDetail(
         List<PaymentTimelineEntry> timeline,
         List<PaymentNoteSnapshot> notes,
         List<PaymentAttemptSnapshot> attempts,
-        ProviderPaymentOperations providerOperations
+        ProviderPaymentOperations providerOperations,
+        ReversalDetailsSnapshot reversal
 ) {
 
     public PaymentOperationalDetail {

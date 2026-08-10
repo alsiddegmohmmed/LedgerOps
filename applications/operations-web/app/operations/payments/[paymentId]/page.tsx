@@ -6,6 +6,8 @@ import { redis } from "../../../../lib/redis";
 import { isSessionExpired, isSupportSessionActive, readSession, SESSION_COOKIE } from "../../../../lib/session";
 import { PaymentNoteForm } from "../payment-note-form";
 import { PaymentRetryForm } from "../payment-retry-form";
+import { ReversalRequestForm } from "../reversal-request-form";
+import { ReversalRetryForm } from "../reversal-retry-form";
 
 export const dynamic = "force-dynamic";
 
@@ -37,6 +39,16 @@ export default async function PaymentDetailPage({ params }: { params: Promise<{ 
 
 function PaymentDetail({ detail, tenantName, csrfToken, supportActive }: { detail: CorePaymentDetail; tenantName: string; csrfToken: string; supportActive: boolean }) {
   const payment = detail.payment;
+  const reversalRecovery = detail.providerOperations?.recovery
+    .filter((recovery) => recovery.operationType === "REVERSAL"
+      && recovery.operationId === detail.reversal?.reversalId)
+    .sort((left, right) => right.observedAt.localeCompare(left.observedAt)) ?? [];
+  const latestReversalRecovery = reversalRecovery[0];
+  const safeRetryEvidence = detail.reversal?.status === "FAILED"
+    && latestReversalRecovery?.retryDisposition === "SAFE_TO_RESUBMIT"
+    && latestReversalRecovery.providerTransactionFound === false
+    && latestReversalRecovery.noAcceptanceProven === true
+    ? latestReversalRecovery : null;
   return <>
     <div className="eyebrow">Payment operations / detail</div>
     <h1>{payment.paymentId}</h1>
@@ -51,6 +63,8 @@ function PaymentDetail({ detail, tenantName, csrfToken, supportActive }: { detai
     <section className="panel"><div className="eyebrow">Ledger evidence</div>{detail.ledgerPosting ? <><p>Transaction: <span className="monospace">{detail.ledgerPosting.transactionId}</span></p><p>{detail.ledgerPosting.totalDebits} debits / {detail.ledgerPosting.totalCredits} credits · {detail.ledgerPosting.currency}</p><div className="data-list">{detail.ledgerPosting.entries.map((entry) => <div key={`${entry.accountId}-${entry.direction}`}><strong>{entry.direction} {entry.amount} {entry.currency} · {entry.accountCode}</strong><span className="monospace">Account {entry.accountId} · <Link href={`/operations/ledger?accountId=${encodeURIComponent(entry.accountId)}&transactionId=${encodeURIComponent(detail.ledgerPosting!.transactionId)}`}>Open Ledger account</Link></span></div>)}</div></> : <p>No Payment-source Ledger posting is present.</p>}</section>
     <section className="panel"><div className="eyebrow">Timeline</div>{detail.timeline.length === 0 ? <p>No timeline events are available.</p> : <div className="data-list">{detail.timeline.map((entry) => <div key={entry.sourceMessageId}><strong>{entry.displayText}</strong><span>{entry.outcome} · {entry.actorSource} · {formatDate(entry.occurredAt)}</span><span className="table-secondary">{entry.reasonCode} · {entry.sourceModule}/{entry.sourceType}</span></div>)}</div>}</section>
     <section className="panel"><div className="eyebrow">Manual retry</div><p>Retry now only accelerates an existing durable safe-to-resubmit work item. It does not create a Provider attempt.</p>{supportActive ? <p className="table-secondary">Support mode is read-only; retry acceleration is unavailable.</p> : <PaymentRetryForm paymentId={payment.paymentId} csrfToken={csrfToken} />}</section>
+    {payment.state === "COMPLETED" && !detail.reversal && <section className="panel"><div className="eyebrow">Full Reversal</div><p>This action requests one full Reversal for the completed Payment. It does not post Ledger compensation or call the Provider from the request transaction.</p>{supportActive ? <p className="table-secondary">Support mode is read-only; Reversal requests are unavailable.</p> : <ReversalRequestForm paymentId={payment.paymentId} csrfToken={csrfToken} />}</section>}
+    {detail.reversal && <section className="panel"><div className="eyebrow">Full Reversal</div><h2>{detail.reversal.amount} {detail.reversal.currency}</h2><p>Status: <span className="status-badge">{detail.reversal.status}</span></p><p>Reversal ID: <span className="monospace">{detail.reversal.reversalId}</span></p><p>Requested: {formatDate(detail.reversal.requestedAt)}</p><p>Reason: {detail.reversal.requestReason}</p>{detail.reversal.processingAt && <p>Processing started: {formatDate(detail.reversal.processingAt)}</p>}{detail.reversal.failedAt && <p>Failed: {formatDate(detail.reversal.failedAt)}{detail.reversal.failureCategory ? ` · ${detail.reversal.failureCategory}` : ""}</p>}{detail.reversal.completedAt && <p>Completed: {formatDate(detail.reversal.completedAt)}</p>}{detail.reversal.status === "FAILED" && (safeRetryEvidence ? (supportActive ? <p className="table-secondary">Support mode is read-only; safe Reversal retry is unavailable.</p> : <><p>The latest durable Provider evidence proves that resubmission is safe.</p><ReversalRetryForm reversalId={detail.reversal.reversalId} paymentId={payment.paymentId} previousAttemptId={safeRetryEvidence.attemptId} providerEvidenceId={safeRetryEvidence.evidenceId} csrfToken={csrfToken} /></>) : <p className="table-secondary">No current safe-to-resubmit evidence is available. Do not resubmit this Reversal blindly.</p>)}</section>}
     <section className="panel"><div className="eyebrow">Notes</div>{detail.notes.length === 0 ? <p>No notes yet.</p> : <div className="data-list">{detail.notes.map((note) => <div key={note.noteId}><strong>{note.authorSubject}</strong><span>{formatDate(note.createdAt)}</span><p>{note.content}</p></div>)}</div>}<PaymentNoteForm paymentId={payment.paymentId} csrfToken={csrfToken} disabled={supportActive} /></section>
   </>;
 }

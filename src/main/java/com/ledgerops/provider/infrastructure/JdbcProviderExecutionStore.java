@@ -91,6 +91,9 @@ class JdbcProviderExecutionStore implements ProviderExecutionStore, ProviderEvid
                         rs.getObject("tenant_id", UUID.class),
                         rs.getObject("attempt_id", UUID.class),
                         rs.getObject("payment_id", UUID.class),
+                        com.ledgerops.provider.api.ProviderOperationType.valueOf(
+                                rs.getString("operation_type")),
+                        rs.getObject("operation_id", UUID.class),
                         rs.getInt("attempt_sequence"),
                         ProviderWorkType.valueOf(rs.getString("work_type")),
                         rs.getString("provider_id"),
@@ -328,12 +331,14 @@ class JdbcProviderExecutionStore implements ProviderExecutionStore, ProviderEvid
         jdbc.update("""
                 INSERT INTO provider.interactions
                     (interaction_id, tenant_id, work_id, attempt_id, payment_id,
+                     operation_type, operation_id,
                      provider_id, work_type, request_id, request_body_hash,
                      response_body_hash, http_status, communication_outcome,
                      latency_millis, safe_error_code, started_at, completed_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, interactionId, claim.tenantId(), claim.workId(), claim.attemptId(),
-                claim.paymentId(), claim.providerId(), claim.workType().name(), result.requestId(),
+                claim.paymentId(), claim.operationType().name(), claim.operationId(),
+                claim.providerId(), claim.workType().name(), result.requestId(),
                 result.requestBodyHash(), result.responseBodyHash(), result.httpStatus(),
                 result.communicationOutcome(), result.latencyMillis(), result.safeErrorCode(),
                 Timestamp.from(result.startedAt()), Timestamp.from(result.completedAt()));
@@ -351,14 +356,16 @@ class JdbcProviderExecutionStore implements ProviderExecutionStore, ProviderEvid
             int inserted = jdbc.update("""
                     INSERT INTO provider.results
                         (evidence_id, tenant_id, interaction_id, work_id, attempt_id,
-                         payment_id, provider_id, provider_idempotency_key,
+                         payment_id, operation_type, operation_id, provider_id,
+                         provider_idempotency_key,
                          provider_result_id, provider_reference,
                          result_category, retry_disposition, provider_transaction_found,
                          no_acceptance_proven, evidence_origin, observed_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ON CONFLICT (tenant_id, provider_id, provider_result_id) DO NOTHING
                     """, evidenceId, claim.tenantId(), interactionId, claim.workId(),
-                    claim.attemptId(), claim.paymentId(), claim.providerId(),
+                    claim.attemptId(), claim.paymentId(), claim.operationType().name(),
+                    claim.operationId(), claim.providerId(),
                     claim.providerIdempotencyKey(), result.providerResultId(),
                     result.providerReference(), result.category().name(),
                     result.disposition().name(), result.providerTransactionFound(),
@@ -459,16 +466,18 @@ class JdbcProviderExecutionStore implements ProviderExecutionStore, ProviderEvid
                 submission.workId(), submission.tenantId());
         jdbc.update("""
                 INSERT INTO provider.work
-                    (id, tenant_id, attempt_id, payment_id, attempt_sequence, work_type,
+                    (id, tenant_id, attempt_id, payment_id, operation_type, operation_id,
+                     attempt_sequence, work_type,
                      status, provider_id, provider_idempotency_key, request_intent_hash,
                      command_payload, scenario_profile_id, scenario_profile_version, scenario_snapshot,
                      due_at, correlation_id, causation_id,
                      traceparent, tracestate, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, 'STATUS_QUERY', 'PENDING', ?, ?, ?, '{}', ?, ?, ?::jsonb,
+                VALUES (?, ?, ?, ?, ?, ?, ?, 'STATUS_QUERY', 'PENDING', ?, ?, ?, '{}', ?, ?, ?::jsonb,
                         ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT (tenant_id, attempt_id, work_type) DO NOTHING
                 """, statusWorkId, submission.tenantId(), submission.attemptId(),
-                submission.paymentId(), submission.attemptSequence(), submission.providerId(),
+                submission.paymentId(), submission.operationType().name(), submission.operationId(),
+                submission.attemptSequence(), submission.providerId(),
                 submission.providerIdempotencyKey(), submission.requestIntentHash(),
                 scenario.profileId(), scenario.profileVersion(), scenario.snapshot(),
                 Timestamp.from(dueAt), submission.correlationId(), submission.causationId(),
@@ -497,19 +506,23 @@ class JdbcProviderExecutionStore implements ProviderExecutionStore, ProviderEvid
     @Override
     public Optional<ProviderEvidence> find(UUID tenantId, UUID evidenceId) {
         return jdbc.query("""
-                SELECT evidence_id, tenant_id, payment_id, attempt_id, provider_id,
+                SELECT evidence_id, tenant_id, payment_id, operation_type, operation_id,
+                       attempt_id, provider_id,
                        provider_idempotency_key, provider_result_id, provider_reference, result_category,
                        retry_disposition, provider_transaction_found,
                        no_acceptance_proven, evidence_origin, observed_at
                   FROM provider.results WHERE tenant_id = ? AND evidence_id = ?
                 """, rs -> rs.next() ? Optional.of(new ProviderEvidence(
                         rs.getObject(1, UUID.class), rs.getObject(2, UUID.class),
-                        rs.getObject(3, UUID.class), rs.getObject(4, UUID.class),
-                        rs.getString(5), rs.getString(6), rs.getObject(7, UUID.class),
-                        rs.getString(8), ProviderResultCategory.valueOf(rs.getString(9)),
-                        RetryDisposition.valueOf(rs.getString(10)), rs.getBoolean(11),
-                        rs.getBoolean(12), rs.getString(13),
-                        rs.getTimestamp(14).toInstant())) : Optional.empty(),
+                        rs.getObject(3, UUID.class),
+                        com.ledgerops.provider.api.ProviderOperationType.valueOf(
+                                rs.getString(4)),
+                        rs.getObject(5, UUID.class), rs.getObject(6, UUID.class),
+                        rs.getString(7), rs.getString(8), rs.getObject(9, UUID.class),
+                        rs.getString(10), ProviderResultCategory.valueOf(rs.getString(11)),
+                        RetryDisposition.valueOf(rs.getString(12)), rs.getBoolean(13),
+                        rs.getBoolean(14), rs.getString(15),
+                        rs.getTimestamp(16).toInstant())) : Optional.empty(),
                 tenantId, evidenceId);
     }
 
@@ -519,7 +532,8 @@ class JdbcProviderExecutionStore implements ProviderExecutionStore, ProviderEvid
             UUID paymentId
     ) {
         return jdbc.query("""
-                SELECT evidence_id, tenant_id, payment_id, attempt_id, provider_id,
+                SELECT evidence_id, tenant_id, payment_id, operation_type, operation_id,
+                       attempt_id, provider_id,
                        provider_idempotency_key, provider_result_id, provider_reference,
                        result_category, retry_disposition, provider_transaction_found,
                        no_acceptance_proven, evidence_origin, observed_at
@@ -530,6 +544,9 @@ class JdbcProviderExecutionStore implements ProviderExecutionStore, ProviderEvid
                 rs.getObject("evidence_id", UUID.class),
                 rs.getObject("tenant_id", UUID.class),
                 rs.getObject("payment_id", UUID.class),
+                com.ledgerops.provider.api.ProviderOperationType.valueOf(
+                        rs.getString("operation_type")),
+                rs.getObject("operation_id", UUID.class),
                 rs.getObject("attempt_id", UUID.class),
                 rs.getString("provider_id"),
                 rs.getString("provider_idempotency_key"),
@@ -547,7 +564,8 @@ class JdbcProviderExecutionStore implements ProviderExecutionStore, ProviderEvid
     private OutboxMessageDraft resultDraft(
             ProviderWorkClaim claim, ProviderCallResult result, ResultMessage message) {
         return ProviderResultOutboxFactory.draft(
-                claim.tenantId(), claim.paymentId(), claim.attemptId(), message.evidenceId(),
+                claim.tenantId(), claim.paymentId(), claim.operationType(), claim.operationId(),
+                claim.attemptId(), message.evidenceId(),
                 result.providerResultId(), message.providerIdempotencyKey(),
                 message.providerReference(), message.category(), message.disposition(),
                 message.origin(), message.observedAt(), claim.correlationId(),
@@ -608,7 +626,8 @@ class JdbcProviderExecutionStore implements ProviderExecutionStore, ProviderEvid
     private Optional<ExistingResult> existingResult(
             UUID tenantId, String providerId, UUID providerResultId) {
         return jdbc.query("""
-                SELECT evidence_id, payment_id, attempt_id, provider_idempotency_key,
+                SELECT evidence_id, payment_id, operation_type, operation_id, attempt_id,
+                       provider_idempotency_key,
                        provider_reference,
                        result_category, retry_disposition, provider_transaction_found,
                        no_acceptance_proven, evidence_origin, observed_at
@@ -616,15 +635,19 @@ class JdbcProviderExecutionStore implements ProviderExecutionStore, ProviderEvid
                  WHERE tenant_id = ? AND provider_id = ? AND provider_result_id = ?
                 """, rs -> rs.next() ? Optional.of(new ExistingResult(
                         rs.getObject(1, UUID.class), rs.getObject(2, UUID.class),
-                        rs.getObject(3, UUID.class), rs.getString(4), rs.getString(5),
-                        rs.getString(6), rs.getString(7), rs.getBoolean(8),
-                        rs.getBoolean(9), rs.getString(10), rs.getTimestamp(11).toInstant()))
+                        com.ledgerops.provider.api.ProviderOperationType.valueOf(rs.getString(3)),
+                        rs.getObject(4, UUID.class), rs.getObject(5, UUID.class),
+                        rs.getString(6), rs.getString(7), rs.getString(8), rs.getString(9),
+                        rs.getBoolean(10), rs.getBoolean(11), rs.getString(12),
+                        rs.getTimestamp(13).toInstant()))
                         : Optional.empty(), tenantId, providerId, providerResultId);
     }
 
     private record ExistingResult(
             UUID evidenceId,
             UUID paymentId,
+            com.ledgerops.provider.api.ProviderOperationType operationType,
+            UUID operationId,
             UUID attemptId,
             String providerIdempotencyKey,
             String providerReference,
@@ -637,6 +660,8 @@ class JdbcProviderExecutionStore implements ProviderExecutionStore, ProviderEvid
     ) {
         boolean matches(ProviderWorkClaim claim, ProviderCallResult result) {
             return paymentId.equals(claim.paymentId())
+                    && operationType == claim.operationType()
+                    && operationId.equals(claim.operationId())
                     && attemptId.equals(claim.attemptId())
                     && java.util.Objects.equals(providerReference, result.providerReference())
                     && category.equals(result.category().name())

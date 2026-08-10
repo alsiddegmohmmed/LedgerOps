@@ -42,6 +42,33 @@ class PaymentAttemptTests {
         ));
     }
 
+    @Test
+    void supportsAReversalSubjectWithoutIntroducingASecondAttemptType() {
+        UUID paymentId = UUID.randomUUID();
+        UUID reversalId = UUID.randomUUID();
+
+        PaymentAttempt attempt = new PaymentAttempt(
+                PaymentAttemptId.from(UUID.randomUUID()),
+                UUID.randomUUID(),
+                PaymentId.from(paymentId),
+                AttemptSubjectType.REVERSAL,
+                reversalId,
+                1,
+                ProviderId.SIMULATOR,
+                "reversal:" + reversalId,
+                Instant.parse("2026-07-21T12:00:00Z"),
+                UUID.randomUUID(),
+                CustomerId.from(UUID.randomUUID()),
+                Money.of(new BigDecimal("1.00"), Currency.getInstance("SAR")),
+                PaymentMethodCategory.from("CARD"),
+                "b".repeat(64)
+        );
+
+        assertEquals(AttemptSubjectType.REVERSAL, attempt.subjectType());
+        assertEquals(reversalId, attempt.subjectId());
+        assertEquals(paymentId, attempt.paymentId().value());
+    }
+
     private PaymentAttempt attempt(int sequence) {
         UUID paymentId = UUID.randomUUID();
         return new PaymentAttempt(

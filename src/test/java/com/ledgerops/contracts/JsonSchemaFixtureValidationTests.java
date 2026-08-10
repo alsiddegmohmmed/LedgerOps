@@ -19,14 +19,22 @@ class JsonSchemaFixtureValidationTests {
     private static final JsonMapper JSON = JsonMapper.builder().build();
     private static final JsonSchemaFactory SCHEMAS = JsonSchemaFactory.getInstance(
             SpecVersion.VersionFlag.V202012);
-    private static final Map<String, String> FIXTURES = Map.of(
-            "MessageEnvelope.schema.json", "message-envelope-valid.json",
-            "SubmitPaymentToProvider.schema.json", "submit-payment-valid.json",
-            "ProviderResultObserved.schema.json", "provider-result-observed-valid.json",
-            "PaymentCompleted.schema.json", "payment-completed-valid.json",
-            "PaymentFailed.schema.json", "payment-failed-valid.json",
-            "PaymentSubmissionRetryRequested.schema.json",
-            "payment-submission-retry-requested-valid.json"
+    private static final Map<String, String> FIXTURES = Map.ofEntries(
+            Map.entry("MessageEnvelope.schema.json", "message-envelope-valid.json"),
+            Map.entry("SubmitPaymentToProvider.schema.json", "submit-payment-valid.json"),
+            Map.entry("SubmitReversalToProvider.schema.json", "submit-reversal-valid.json"),
+            Map.entry("ProviderResultObserved.schema.json", "provider-result-observed-valid.json"),
+            Map.entry("ProviderReversalResultObserved.schema.json",
+                    "provider-reversal-result-observed-valid.json"),
+            Map.entry("PaymentCompleted.schema.json", "payment-completed-valid.json"),
+            Map.entry("PaymentFailed.schema.json", "payment-failed-valid.json"),
+            Map.entry("ReversalRequested.schema.json", "reversal-requested-valid.json"),
+            Map.entry("ReversalProcessingStarted.schema.json",
+                    "reversal-processing-started-valid.json"),
+            Map.entry("ReversalFailed.schema.json", "reversal-failed-valid.json"),
+            Map.entry("ReversalCompleted.schema.json", "reversal-completed-valid.json"),
+            Map.entry("PaymentSubmissionRetryRequested.schema.json",
+                    "payment-submission-retry-requested-valid.json")
     );
 
     @Test

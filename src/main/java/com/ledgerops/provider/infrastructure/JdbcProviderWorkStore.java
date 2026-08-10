@@ -47,16 +47,18 @@ class JdbcProviderWorkStore implements ProviderWorkStore {
                 ? command.canonicalPayload() : enrichPayload(command.canonicalPayload(), scenario.snapshot());
         jdbc.update("""
                 INSERT INTO provider.work
-                    (id, tenant_id, attempt_id, payment_id, work_type, status,
+                    (id, tenant_id, attempt_id, payment_id, operation_type, operation_id,
+                     work_type, status,
                      attempt_sequence, provider_id, provider_idempotency_key, request_intent_hash,
                      command_payload, scenario_profile_id, scenario_profile_version, scenario_snapshot,
                      due_at, correlation_id, causation_id,
                      traceparent, tracestate, created_at, updated_at)
-                VALUES (?, ?, ?, ?, 'SUBMISSION', 'PENDING', ?, ?, ?, ?, ?, ?, ?, ?::jsonb,
+                VALUES (?, ?, ?, ?, ?, ?, 'SUBMISSION', 'PENDING', ?, ?, ?, ?, ?, ?, ?, ?::jsonb,
                         ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT (tenant_id, attempt_id, work_type) DO NOTHING
                 """, UUID.randomUUID(), command.tenantId(), command.attemptId(),
-                command.paymentId(), command.attemptSequence(), command.providerId(),
+                command.paymentId(), command.operationType().name(), command.operationId(),
+                command.attemptSequence(), command.providerId(),
                 command.providerIdempotencyKey(),
                 command.requestIntentHash(), canonicalPayload,
                 scenario == null ? null : scenario.snapshot().profileId(),
@@ -69,6 +71,8 @@ class JdbcProviderWorkStore implements ProviderWorkStore {
 
         Boolean matches = jdbc.query("""
                 SELECT payment_id = ?
+                   AND operation_type = ?
+                   AND operation_id = ?
                    AND attempt_sequence = ?
                    AND provider_id = ?
                    AND provider_idempotency_key = ?
@@ -79,7 +83,8 @@ class JdbcProviderWorkStore implements ProviderWorkStore {
                   FROM provider.work
                  WHERE tenant_id = ? AND attempt_id = ? AND work_type = 'SUBMISSION'
                 """, rs -> rs.next() && rs.getBoolean(1),
-                command.paymentId(), command.attemptSequence(), command.providerId(),
+                command.paymentId(), command.operationType().name(), command.operationId(),
+                command.attemptSequence(), command.providerId(),
                 command.providerIdempotencyKey(),
                 command.requestIntentHash(), canonicalPayload, command.traceparent(),
                 command.tracestate(), command.tenantId(),
@@ -93,7 +98,7 @@ class JdbcProviderWorkStore implements ProviderWorkStore {
 
     private ScenarioBinding pinScenario(ProviderSubmissionCommand command, Instant now) {
         ProviderScenarioSnapshot snapshot = scenarios.resolveAndPin(
-                command.tenantId(), command.paymentId(), "PAYMENT", now);
+                command.tenantId(), command.operationId(), command.operationType().name(), now);
         return new ScenarioBinding(snapshot);
     }
 
