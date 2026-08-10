@@ -12,6 +12,7 @@ import java.util.UUID;
 
 final class PaymentCaseCommandFactory {
     private static final JsonMapper JSON = JsonMapper.builder().build();
+    private static final String RISK_ESCALATION_CASE_SEVERITY = "HIGH";
 
     private PaymentCaseCommandFactory() { }
 
@@ -28,7 +29,7 @@ final class PaymentCaseCommandFactory {
         payload.put("sourceCategory", "RISK_REVIEW");
         payload.put("sourceId", review.reviewId().toString());
         payload.put("paymentId", payment.id().value().toString());
-        payload.put("severity", "HIGH");
+        payload.put("severity", RISK_ESCALATION_CASE_SEVERITY);
         payload.put("dueAt", review.dueAt().toString());
         payload.put("riskReviewId", review.reviewId().toString());
         payload.put("requestedAt", occurredAt.toString());

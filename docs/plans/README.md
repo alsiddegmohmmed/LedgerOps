@@ -11,4 +11,4 @@ Plans preserve task state for work that spans more than a tiny change. They conn
 The current milestone plan is `release-0.3-financial-operations.md`.
 
 Release 0.1 and Release 0.2 are completed baselines. Release 0.3 is active;
-Slices 0 through 3 are complete or backend-verified, and Slice 4 is next.
+Slices 0 through 4 are complete or backend-verified; NTF-01 notification consumption remains intentionally partial until Slice 10.
