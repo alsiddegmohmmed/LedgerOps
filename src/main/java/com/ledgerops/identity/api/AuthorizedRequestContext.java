@@ -130,6 +130,34 @@ public record AuthorizedRequestContext(
         return hasPermission(Permission.RISK_READ);
     }
 
+    public boolean canReadRiskConfiguration() {
+        return hasPermission(Permission.RISK_READ);
+    }
+
+    public boolean canManageRiskConfiguration() {
+        return hasPermission(Permission.RISK_CONFIGURATION_MANAGE);
+    }
+
+    public boolean canRetryPayments() {
+        return hasPermission(Permission.PAYMENT_RETRY);
+    }
+
+    public boolean canReadProviderHealth() {
+        return hasPermission(Permission.PROVIDER_HEALTH_READ);
+    }
+
+    public boolean canManageWebhookEndpoints() {
+        return hasPermission(Permission.WEBHOOK_ENDPOINT_MANAGE);
+    }
+
+    public boolean canTriggerWebhookTests() {
+        return hasPermission(Permission.WEBHOOK_TEST_TRIGGER);
+    }
+
+    public boolean canReadNotifications() {
+        return hasPermission(Permission.NOTIFICATION_READ);
+    }
+
     public boolean canAssignRiskReviews() {
         return hasPermission(Permission.RISK_REVIEW_ASSIGN);
     }

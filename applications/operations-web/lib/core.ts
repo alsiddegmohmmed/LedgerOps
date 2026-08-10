@@ -152,6 +152,176 @@ export type CoreProviderEvidence = {
   observedAt: string;
 };
 
+export type CoreProviderWorkOperation = {
+  workId: string;
+  tenantId: string;
+  paymentId: string;
+  attemptId: string;
+  attemptSequence: number;
+  workType: string;
+  status: string;
+  providerId: string;
+  providerIdempotencyKey: string;
+  dueAt: string;
+  executionCount: number;
+  transportRetryCount: number;
+  lastErrorCode: string | null;
+  scenarioProfileId: string | null;
+  scenarioProfileVersion: number | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type CoreProviderInteractionOperation = {
+  interactionId: string;
+  tenantId: string;
+  workId: string | null;
+  webhookEventId: string | null;
+  paymentId: string;
+  attemptId: string;
+  providerId: string;
+  workType: string;
+  requestId: string;
+  httpStatus: number | null;
+  communicationOutcome: string;
+  latencyMillis: number;
+  safeErrorCode: string | null;
+  startedAt: string;
+  completedAt: string;
+};
+
+export type CoreProviderRecoveryOperation = {
+  evidenceId: string;
+  workId: string | null;
+  attemptId: string;
+  retryRequestId: string | null;
+  workStatus: string | null;
+  resultCategory: string;
+  retryDisposition: string;
+  providerTransactionFound: boolean;
+  noAcceptanceProven: boolean;
+  dueAt: string | null;
+  requestedAt: string | null;
+  observedAt: string;
+};
+
+export type CoreProviderWebhookOperation = {
+  eventId: string;
+  providerEventId: string;
+  paymentId: string;
+  attemptId: string;
+  resultCategory: string;
+  status: string;
+  receiptCount: number;
+  receivedAt: string;
+  updatedAt: string;
+};
+
+export type CoreProviderOperations = {
+  tenantId: string;
+  paymentId: string;
+  work: CoreProviderWorkOperation[];
+  interactions: CoreProviderInteractionOperation[];
+  recovery: CoreProviderRecoveryOperation[];
+  webhooks: CoreProviderWebhookOperation[];
+} | null;
+
+export type CoreProviderHealth = {
+  evaluationId: string;
+  providerId: string;
+  policyId: string;
+  policyVersion: number;
+  healthVersion: number;
+  state: "UNKNOWN" | "HEALTHY" | "DEGRADED" | "UNAVAILABLE";
+  completedCalls: number;
+  successfulCommunications: number;
+  timeoutCount: number;
+  systemErrorCount: number;
+  p95LatencyMillis: number;
+  circuitState: string;
+  windowStartedAt: string;
+  windowEndedAt: string;
+  evaluatedAt: string;
+};
+
+export type CoreProviderScenarioAssignment = {
+  assignmentId: string;
+  scope: "GLOBAL" | "TENANT" | "PAYMENT";
+  tenantId: string | null;
+  paymentId: string | null;
+  profileId: string;
+  profileVersion: number;
+  active: boolean;
+  createdAt: string;
+};
+
+export type CoreProviderScenarioProfile = {
+  profileId: string;
+  version: number;
+  submissionOutcome: string;
+  webhookMode: string;
+  settlementMode: string;
+  delayMillis: number;
+  fixtureId: string | null;
+  parameters: Record<string, string>;
+  createdAt: string;
+};
+
+export type CoreWebhookEndpoint = {
+  endpointId: string;
+  tenantId: string;
+  merchantId: string;
+  label: string;
+  endpointUrl: string;
+  status: "ACTIVE" | "REVOKED";
+  keyVersion: string;
+  allowedEventTypes: string[];
+  createdAt: string;
+  rotatedAt: string | null;
+  revokedAt: string | null;
+};
+
+export type CoreWebhookDelivery = {
+  deliveryId: string;
+  eventId: string;
+  tenantId: string;
+  merchantId: string;
+  endpointId: string;
+  endpointStatus: "ACTIVE" | "REVOKED";
+  eventType: string;
+  status: string;
+  attemptCount: number;
+  nextAttemptAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  lastHttpStatus: number | null;
+  lastOutcome: string | null;
+  lastSafeSummary: string | null;
+};
+
+export type CoreWebhookSecretResult = {
+  endpoint: CoreWebhookEndpoint;
+  plaintextSecret: string;
+};
+
+export type CoreRiskRuleConfiguration = {
+  currency: string;
+  amountThreshold: number | string | null;
+  scoreContribution: number;
+  enabled: boolean;
+};
+
+export type CoreRiskConfiguration = {
+  tenantId: string;
+  profileId: string;
+  version: number;
+  reviewThreshold: number;
+  rejectThreshold: number;
+  active: boolean;
+  createdAt: string;
+  rules: CoreRiskRuleConfiguration[];
+};
+
 export type CoreLedgerPostingEntry = {
   accountId: string;
   accountCode: string;
@@ -210,6 +380,7 @@ export type CorePaymentDetail = {
   timeline: CorePaymentTimelineEntry[];
   notes: CorePaymentNote[];
   attempts: CorePaymentAttempt[];
+  providerOperations: CoreProviderOperations;
 };
 
 export type CoreLedgerBalance = {
@@ -1028,4 +1199,291 @@ async function postMembershipAction(
     return { kind: "error", status: 502, code: "unexpected_core_response" };
   }
   return { kind: "ok", result: await response.json() as CoreInvitationRevocationResult };
+}
+
+export async function getProviderHealth(
+  tenantId: string,
+  accessToken: string,
+  readOptions: CoreReadOptions = {},
+) {
+  const response = await fetch(
+    `${config.coreBaseUrl}/api/v1/tenants/${encodeURIComponent(tenantId)}/provider/health`,
+    { headers: readHeaders(accessToken, readOptions), cache: "no-store" },
+  );
+  if (response.status === 401) return { kind: "unauthenticated" as const };
+  if (response.status === 403 || response.status === 404) return { kind: "unavailable" as const };
+  if (!response.ok) return { kind: "error" as const };
+  return { kind: "ok" as const, health: await response.json() as CoreProviderHealth };
+}
+
+export async function getRiskConfiguration(tenantId: string, accessToken: string) {
+  const response = await fetch(
+    `${config.coreBaseUrl}/api/v1/tenants/${encodeURIComponent(tenantId)}/risk/configuration`,
+    { headers: { authorization: `Bearer ${accessToken}` }, cache: "no-store" },
+  );
+  if (response.status === 401) return { kind: "unauthenticated" as const };
+  if (response.status === 403 || response.status === 404) return { kind: "unavailable" as const };
+  if (!response.ok) return { kind: "error" as const };
+  return { kind: "ok" as const, configuration: await response.json() as CoreRiskConfiguration };
+}
+
+export async function getRiskConfigurationHistory(tenantId: string, accessToken: string) {
+  const response = await fetch(
+    `${config.coreBaseUrl}/api/v1/tenants/${encodeURIComponent(tenantId)}/risk/configuration/history`,
+    { headers: { authorization: `Bearer ${accessToken}` }, cache: "no-store" },
+  );
+  if (response.status === 401) return { kind: "unauthenticated" as const };
+  if (response.status === 403 || response.status === 404) return { kind: "unavailable" as const };
+  if (!response.ok) return { kind: "error" as const };
+  return { kind: "ok" as const, history: await response.json() as CoreRiskConfiguration[] };
+}
+
+export function updateRiskConfiguration(
+  tenantId: string,
+  accessToken: string,
+  body: {
+    reviewThreshold: number;
+    rejectThreshold: number;
+    rules: CoreRiskRuleConfiguration[];
+    expectedVersion: number | null;
+    confirmation: true;
+    reason: string;
+  },
+): Promise<CoreActionResponse<CoreRiskConfiguration>> {
+  return requestCoreAction(
+    "PUT",
+    `/api/v1/tenants/${encodeURIComponent(tenantId)}/risk/configuration`,
+    accessToken,
+    body,
+    200,
+  );
+}
+
+export async function getProviderHealthHistory(
+  tenantId: string,
+  accessToken: string,
+  readOptions: CoreReadOptions = {},
+) {
+  const response = await fetch(
+    `${config.coreBaseUrl}/api/v1/tenants/${encodeURIComponent(tenantId)}/provider/health/history`,
+    { headers: readHeaders(accessToken, readOptions), cache: "no-store" },
+  );
+  if (response.status === 401) return { kind: "unauthenticated" as const };
+  if (response.status === 403 || response.status === 404) return { kind: "unavailable" as const };
+  if (!response.ok) return { kind: "error" as const };
+  return { kind: "ok" as const, history: await response.json() as CoreProviderHealth[] };
+}
+
+export async function getProviderScenarioAssignments(accessToken: string) {
+  const response = await fetch(
+    `${config.coreBaseUrl}/api/v1/platform/provider/scenarios/assignments`,
+    { headers: { authorization: `Bearer ${accessToken}` }, cache: "no-store" },
+  );
+  if (response.status === 401) return { kind: "unauthenticated" as const };
+  if (response.status === 403 || response.status === 404) return { kind: "unavailable" as const };
+  if (!response.ok) return { kind: "error" as const };
+  const body = await response.json() as { assignments: CoreProviderScenarioAssignment[] };
+  return { kind: "ok" as const, assignments: body.assignments };
+}
+
+export type CoreProviderScenarioActionResponse =
+  | { kind: "unauthenticated" }
+  | { kind: "error"; status: number; code?: string }
+  | { kind: "ok"; result: CoreProviderScenarioProfile | CoreProviderScenarioAssignment };
+
+export function createProviderScenarioProfile(
+  accessToken: string,
+  body: {
+    profileId: string | null;
+    expectedPreviousVersion: number | null;
+    submissionOutcome: string;
+    webhookMode: string;
+    settlementMode: string;
+    delayMillis: number;
+    fixtureId: string | null;
+    parameters: Record<string, string>;
+  },
+): Promise<CoreProviderScenarioActionResponse> {
+  return requestCoreAction(
+    "POST",
+    "/api/v1/platform/provider/scenarios/profiles",
+    accessToken,
+    body,
+    200,
+  ) as Promise<CoreProviderScenarioActionResponse>;
+}
+
+export function assignProviderScenario(
+  accessToken: string,
+  body: {
+    scope: string;
+    tenantId: string | null;
+    paymentId: string | null;
+    profileId: string;
+    profileVersion: number;
+  },
+): Promise<CoreProviderScenarioActionResponse> {
+  return requestCoreAction(
+    "POST",
+    "/api/v1/platform/provider/scenarios/assignments",
+    accessToken,
+    body,
+    200,
+  ) as Promise<CoreProviderScenarioActionResponse>;
+}
+
+export type CorePaymentRetryNowResult = {
+  paymentId: string;
+  providerWorkId: string;
+  previousDueAt: string;
+  dueAt: string;
+  status: "ACCELERATED";
+};
+
+export function retryPaymentNow(
+  tenantId: string,
+  paymentId: string,
+  accessToken: string,
+  body: { confirmation: true; reason: string },
+): Promise<CoreActionResponse<CorePaymentRetryNowResult>> {
+  return requestCoreAction(
+    "POST",
+    `/api/v1/tenants/${encodeURIComponent(tenantId)}/payments/${encodeURIComponent(paymentId)}/retry`,
+    accessToken,
+    body,
+    200,
+  );
+}
+
+export async function getWebhookEndpoints(
+  tenantId: string,
+  merchantId: string,
+  accessToken: string,
+  readOptions: CoreReadOptions = {},
+) {
+  const response = await fetch(
+    `${config.coreBaseUrl}/api/v1/tenants/${encodeURIComponent(tenantId)}/merchants/${encodeURIComponent(merchantId)}/webhooks`,
+    { headers: readHeaders(accessToken, readOptions), cache: "no-store" },
+  );
+  if (response.status === 401) return { kind: "unauthenticated" as const };
+  if (response.status === 403 || response.status === 404) return { kind: "unavailable" as const };
+  if (!response.ok) return { kind: "error" as const };
+  return { kind: "ok" as const, endpoints: await response.json() as CoreWebhookEndpoint[] };
+}
+
+export async function getWebhookDeliveries(
+  tenantId: string,
+  merchantId: string,
+  endpointId: string,
+  accessToken: string,
+  readOptions: CoreReadOptions = {},
+) {
+  const response = await fetch(
+    `${config.coreBaseUrl}/api/v1/tenants/${encodeURIComponent(tenantId)}/merchants/${encodeURIComponent(merchantId)}/webhooks/${encodeURIComponent(endpointId)}/deliveries`,
+    { headers: readHeaders(accessToken, readOptions), cache: "no-store" },
+  );
+  if (response.status === 401) return { kind: "unauthenticated" as const };
+  if (response.status === 403 || response.status === 404) return { kind: "unavailable" as const };
+  if (!response.ok) return { kind: "error" as const };
+  return { kind: "ok" as const, deliveries: await response.json() as CoreWebhookDelivery[] };
+}
+
+export type CoreWebhookActionResponse =
+  | { kind: "unauthenticated" }
+  | { kind: "error"; status: number; code?: string }
+  | { kind: "ok"; result: CoreWebhookSecretResult | CoreWebhookEndpoint | CoreWebhookDelivery };
+
+export function createWebhookEndpoint(
+  tenantId: string,
+  merchantId: string,
+  accessToken: string,
+  body: { label: string; endpointUrl: string; allowedEventTypes: string[] },
+): Promise<CoreWebhookActionResponse> {
+  return requestCoreAction(
+    "POST",
+    `/api/v1/tenants/${encodeURIComponent(tenantId)}/merchants/${encodeURIComponent(merchantId)}/webhooks`,
+    accessToken,
+    body,
+    201,
+  ) as Promise<CoreWebhookActionResponse>;
+}
+
+export function rotateWebhookEndpoint(
+  tenantId: string,
+  merchantId: string,
+  endpointId: string,
+  accessToken: string,
+): Promise<CoreWebhookActionResponse> {
+  return requestCoreAction(
+    "POST",
+    `/api/v1/tenants/${encodeURIComponent(tenantId)}/merchants/${encodeURIComponent(merchantId)}/webhooks/${encodeURIComponent(endpointId)}/rotate`,
+    accessToken,
+    undefined,
+    200,
+  ) as Promise<CoreWebhookActionResponse>;
+}
+
+export function revokeWebhookEndpoint(
+  tenantId: string,
+  merchantId: string,
+  endpointId: string,
+  accessToken: string,
+): Promise<CoreWebhookActionResponse> {
+  return requestCoreAction(
+    "DELETE",
+    `/api/v1/tenants/${encodeURIComponent(tenantId)}/merchants/${encodeURIComponent(merchantId)}/webhooks/${encodeURIComponent(endpointId)}`,
+    accessToken,
+    undefined,
+    200,
+  ) as Promise<CoreWebhookActionResponse>;
+}
+
+export function triggerWebhookTest(
+  tenantId: string,
+  merchantId: string,
+  endpointId: string,
+  accessToken: string,
+  body: { eventType: string; payload: Record<string, unknown> },
+): Promise<CoreWebhookActionResponse> {
+  return requestCoreAction(
+    "POST",
+    `/api/v1/tenants/${encodeURIComponent(tenantId)}/merchants/${encodeURIComponent(merchantId)}/webhooks/${encodeURIComponent(endpointId)}/test-events`,
+    accessToken,
+    body,
+    202,
+  ) as Promise<CoreWebhookActionResponse>;
+}
+
+async function requestCoreAction<T>(
+  method: "POST" | "PUT" | "DELETE",
+  path: string,
+  accessToken: string,
+  body: Record<string, unknown> | undefined,
+  expectedStatus: number,
+): Promise<CoreActionResponse<T>> {
+  const response = await fetch(`${config.coreBaseUrl}${path}`, {
+    method,
+    headers: {
+      authorization: `Bearer ${accessToken}`,
+      ...(body ? { "content-type": "application/json" } : {}),
+    },
+    ...(body ? { body: JSON.stringify(body) } : {}),
+    cache: "no-store",
+  });
+  if (response.status === 401) return { kind: "unauthenticated" };
+  if (!response.ok) {
+    let code: string | undefined;
+    try {
+      const problem = await response.json() as { code?: unknown; type?: unknown };
+      if (typeof problem.code === "string") code = problem.code;
+      if (typeof problem.type === "string") code = problem.type;
+    } catch {
+      // The BFF maps an unparseable Core response to a generic action error.
+    }
+    return { kind: "error", status: response.status, code };
+  }
+  if (response.status !== expectedStatus) {
+    return { kind: "error", status: 502, code: "unexpected_core_response" };
+  }
+  return { kind: "ok", result: await response.json() as T };
 }

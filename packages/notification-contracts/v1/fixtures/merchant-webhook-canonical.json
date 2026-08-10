@@ -1,0 +1,12 @@
+{
+  "secret": "merchant-test-secret",
+  "method": "POST",
+  "rawPath": "/merchant/webhooks/endpoint",
+  "endpointId": "018f47f2-bd77-7d62-a90e-8e276d5608e8",
+  "keyVersion": "v1",
+  "timestamp": "1784635200",
+  "eventId": "018f47f2-bd77-7d62-a90e-8e276d5608e9",
+  "rawBody": "{\"eventId\":\"018f47f2-bd77-7d62-a90e276d5608e9\",\"paymentId\":\"00000000-0000-0000-0000-000000000001\",\"status\":\"COMPLETED\"}",
+  "canonical": "v1\nPOST\n/merchant/webhooks/endpoint\n018f47f2-bd77-7d62-a90e-8e276d5608e8\nv1\n1784635200\n018f47f2-bd77-7d62-a90e-8e276d5608e9\n01041aacecc52a75d3fa80efb919046d7c61c91277261382c0ce8f2b7fb48a44",
+  "signature": "v1=la2uROQqAxavY6uNVZQC55dQWBDVcpEmyYlKTnkTUxg"
+}

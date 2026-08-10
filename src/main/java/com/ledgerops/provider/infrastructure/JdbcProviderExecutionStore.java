@@ -21,6 +21,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.Clock;
 import java.time.Duration;
@@ -446,20 +448,40 @@ class JdbcProviderExecutionStore implements ProviderExecutionStore, ProviderEvid
     private void createStatusQueryWork(ProviderWorkClaim submission, Instant now) {
         UUID statusWorkId = UUID.randomUUID();
         Instant dueAt = now.plus(ProviderSchedule.statusDelay(statusWorkId, 1));
+        ScenarioMetadata scenario = jdbc.query("""
+                SELECT scenario_profile_id, scenario_profile_version, scenario_snapshot::text
+                  FROM provider.work
+                 WHERE id = ? AND tenant_id = ?
+                """, rs -> rs.next() ? new ScenarioMetadata(
+                rs.getObject("scenario_profile_id", UUID.class),
+                nullableLong(rs, "scenario_profile_version"),
+                rs.getString("scenario_snapshot")) : new ScenarioMetadata(null, null, null),
+                submission.workId(), submission.tenantId());
         jdbc.update("""
                 INSERT INTO provider.work
                     (id, tenant_id, attempt_id, payment_id, attempt_sequence, work_type,
                      status, provider_id, provider_idempotency_key, request_intent_hash,
-                     command_payload, due_at, correlation_id, causation_id,
+                     command_payload, scenario_profile_id, scenario_profile_version, scenario_snapshot,
+                     due_at, correlation_id, causation_id,
                      traceparent, tracestate, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, 'STATUS_QUERY', 'PENDING', ?, ?, ?, '{}', ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, 'STATUS_QUERY', 'PENDING', ?, ?, ?, '{}', ?, ?, ?::jsonb,
+                        ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT (tenant_id, attempt_id, work_type) DO NOTHING
                 """, statusWorkId, submission.tenantId(), submission.attemptId(),
                 submission.paymentId(), submission.attemptSequence(), submission.providerId(),
                 submission.providerIdempotencyKey(), submission.requestIntentHash(),
+                scenario.profileId(), scenario.profileVersion(), scenario.snapshot(),
                 Timestamp.from(dueAt), submission.correlationId(), submission.causationId(),
                 submission.traceparent(), submission.tracestate(),
                 Timestamp.from(now), Timestamp.from(now));
+    }
+
+    private Long nullableLong(ResultSet rs, String column) throws SQLException {
+        long value = rs.getLong(column);
+        return rs.wasNull() ? null : value;
+    }
+
+    private record ScenarioMetadata(UUID profileId, Long profileVersion, String snapshot) {
     }
 
     private void recordOperationalEvent(

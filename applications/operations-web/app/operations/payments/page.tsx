@@ -1,4 +1,5 @@
 import { cookies } from "next/headers";
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getPaymentPage, getTenant, type CorePaymentPage } from "../../../lib/core";
 import { redis } from "../../../lib/redis";
@@ -44,7 +45,7 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Sea
   return (
     <main>
       <section className="shell">
-        <a href="/operations">← Operations</a>
+        <Link href="/operations">← Operations</Link>
         <div className="eyebrow">Payment operations</div>
         <h1>Payments</h1>
         <p>{tenantResult.tenant.name}. Results are filtered by the Core authorization context.</p>
@@ -74,7 +75,7 @@ function PaymentSearchForm({ filters }: { filters: Record<string, string | undef
         <label>Risk decision<input name="riskDecision" defaultValue={filters.riskDecision} placeholder="APPROVE" /></label>
         <label>Reconciliation status<input name="reconciliationStatus" defaultValue={filters.reconciliationStatus} placeholder="AWAITING_BATCH" /></label>
       </div>
-      <div className="button-row"><button type="submit">Search Payments</button><a className="button secondary" href="/operations/payments">Clear</a></div>
+      <div className="button-row"><button type="submit">Search Payments</button><Link className="button secondary" href="/operations/payments">Clear</Link></div>
     </form>
   );
 }
@@ -92,7 +93,7 @@ function PaymentTable({ page, filters }: { page: CorePaymentPage; filters: Recor
           <thead><tr><th>Payment</th><th>Amount</th><th>State</th><th>Risk</th><th>Reconciliation</th><th>Created</th></tr></thead>
           <tbody>{page.items.map((payment) => (
             <tr key={payment.paymentId}>
-              <th scope="row"><a href={`/operations/payments/${encodeURIComponent(payment.paymentId)}`} className="monospace">{payment.paymentId}</a><span className="table-secondary">Merchant ref: {payment.merchantReference}</span></th>
+              <th scope="row"><Link href={`/operations/payments/${encodeURIComponent(payment.paymentId)}`} className="monospace">{payment.paymentId}</Link><span className="table-secondary">Merchant ref: {payment.merchantReference}</span></th>
               <td>{payment.amount} {payment.currency}</td>
               <td><span className="status-badge">{payment.state}</span></td>
               <td>{payment.riskDecision ?? "—"}</td>
@@ -102,7 +103,7 @@ function PaymentTable({ page, filters }: { page: CorePaymentPage; filters: Recor
           ))}</tbody>
         </table></div>
       )}
-      {page.nextCursor && <a className="button" href={`/operations/payments?${nextQuery.toString()}&cursor=${encodeURIComponent(page.nextCursor)}`}>Next page</a>}
+      {page.nextCursor && <Link className="button" href={`/operations/payments?${nextQuery.toString()}&cursor=${encodeURIComponent(page.nextCursor)}`}>Next page</Link>}
     </div>
   );
 }

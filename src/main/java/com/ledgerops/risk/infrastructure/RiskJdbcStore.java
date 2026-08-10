@@ -1,7 +1,9 @@
 package com.ledgerops.risk.infrastructure;
 
 import com.ledgerops.risk.application.RiskEvaluationStore;
+import com.ledgerops.risk.api.RiskConfigurationStore;
 import com.ledgerops.risk.application.RiskProfileStore;
+import com.ledgerops.risk.application.RiskConfigurationConflictException;
 import com.ledgerops.risk.application.RiskReviewStore;
 import com.ledgerops.risk.domain.EvaluatedRiskRule;
 import com.ledgerops.risk.domain.PaymentAmountThresholdRule;
@@ -34,7 +36,8 @@ import java.util.Set;
 import java.util.UUID;
 
 @Repository
-class RiskJdbcStore implements RiskProfileStore, RiskEvaluationStore, RiskPaymentQuery, RiskReviewStore {
+class RiskJdbcStore implements RiskProfileStore, RiskConfigurationStore,
+        RiskEvaluationStore, RiskPaymentQuery, RiskReviewStore {
 
     private static final String INSERT_PROFILE_SQL = """
             INSERT INTO risk.risk_profiles (
@@ -238,11 +241,88 @@ class RiskJdbcStore implements RiskProfileStore, RiskEvaluationStore, RiskPaymen
             );
         }
 
-        ProfileRow profile = profiles.getFirst();
+        return toProfile(profiles.getFirst());
+    }
+
+    @Override
+    public Optional<RiskProfile> findActiveProfile(UUID tenantId) {
+        List<ProfileRow> profiles = jdbcTemplate.query(
+                FIND_ACTIVE_PROFILE_SQL,
+                this::mapProfileRow,
+                tenantId
+        );
+        if (profiles.size() > 1) {
+            throw new RiskConfigurationException(
+                    RiskConfigurationError.MULTIPLE_ACTIVE_PROFILES,
+                    "Multiple active Risk profiles exist for the tenant");
+        }
+        return profiles.isEmpty() ? Optional.empty() : Optional.of(toProfile(profiles.getFirst()));
+    }
+
+    @Override
+    public List<RiskProfile> findProfileHistory(UUID tenantId) {
+        return jdbcTemplate.query(
+                """
+                SELECT id, tenant_id, version, review_threshold, reject_threshold, active, created_at
+                  FROM risk.risk_profiles
+                 WHERE tenant_id = ?
+                 ORDER BY version DESC
+                """,
+                this::mapProfileRow,
+                tenantId
+        ).stream().map(this::toProfile).toList();
+    }
+
+    @Override
+    @Transactional
+    public RiskProfile appendActiveProfile(RiskProfile profile, Long expectedActiveVersion) {
+        List<ProfileRow> current = jdbcTemplate.query(
+                FIND_ACTIVE_PROFILE_SQL + " FOR UPDATE",
+                this::mapProfileRow,
+                profile.tenantId()
+        );
+        if (current.size() > 1) {
+            throw new RiskConfigurationException(
+                    RiskConfigurationError.MULTIPLE_ACTIVE_PROFILES,
+                    "Multiple active Risk profiles exist for the tenant");
+        }
+        Long currentVersion = current.isEmpty() ? null : current.getFirst().version();
+        if (expectedActiveVersion != null
+                && !expectedActiveVersion.equals(currentVersion)) {
+            throw new RiskConfigurationConflictException(
+                    "Risk configuration changed; expected active version "
+                            + expectedActiveVersion + " but found " + currentVersion);
+        }
+        if (currentVersion != null && profile.version() <= currentVersion) {
+            throw new RiskConfigurationConflictException(
+                    "Risk configuration version must advance beyond the active version");
+        }
+        if (currentVersion != null) {
+            jdbcTemplate.update(
+                    "UPDATE risk.risk_profiles SET active = false WHERE tenant_id = ? AND active",
+                    profile.tenantId());
+        }
+
+        jdbcTemplate.update(
+                INSERT_PROFILE_SQL,
+                profile.profileId().value(), profile.tenantId(), profile.version(),
+                profile.reviewThreshold(), profile.rejectThreshold(), profile.active(),
+                Timestamp.from(profile.createdAt()));
+        for (PaymentAmountThresholdRule rule : profile.rules()) {
+            jdbcTemplate.update(
+                    INSERT_RULE_SQL,
+                    rule.ruleId().value(), profile.tenantId(), rule.profileId().value(),
+                    rule.currency().getCurrencyCode(), rule.amountThreshold(),
+                    rule.scoreContribution(), rule.enabled());
+        }
+        return profile;
+    }
+
+    private RiskProfile toProfile(ProfileRow profile) {
         List<PaymentAmountThresholdRule> rules = jdbcTemplate.query(
                 FIND_PROFILE_RULES_SQL,
                 this::mapRule,
-                tenantId,
+                profile.tenantId(),
                 profile.profileId().value()
         );
 

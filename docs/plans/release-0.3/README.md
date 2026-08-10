@@ -7,8 +7,8 @@ Follow the slices in numeric order. The active release plan is [`../release-0.3-
 - Slice 2: Tenant/Merchant onboarding, membership, credentials, and support - completed.
 - Slice 3: Payment/Ledger operations, timeline, notes, and audit search - implemented; backend verification complete.
 - Slice 4: Casework foundation and manual Risk workflow - complete for Slice 4 scope; NTF-01 notification consumption remains partial until Slice 10.
-- Slice 5: Risk configuration, Provider controls, manual retry, and merchant webhooks - next.
-- Slices 5-10: pending functional vertical slices.
+- Slice 5: Risk configuration, Provider controls, manual retry, and merchant webhooks - complete for Slice 5 scope; NTF-01 remains partial until Slice 10.
+- Slices 6-10: pending functional vertical slices.
 - Slice 11: pending release verification gate.
 
 Use [`ORCHESTRATION.md`](ORCHESTRATION.md) for agent ownership and contradiction handling.

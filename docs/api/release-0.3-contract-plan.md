@@ -38,6 +38,9 @@ create, rotate, and revoke actions. Further projections and search filters
 remain separate contracts introduced only when their read models are
 implemented.
 
+Slice 5 contracts are documented in
+[Release 0.3 Slice 5 Provider and Merchant webhook contracts](release-0.3-slice-5-provider-and-webhook-contracts.md).
+
 The first published Tenant configuration boundary is the authenticated
 `/api/v1/tenants/{tenantId}/configuration` resource. `GET` returns the current
 append-only configuration version and returns `404` before the first version

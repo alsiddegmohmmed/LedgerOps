@@ -2,7 +2,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { getMemberships, getMerchants, getTenant } from "../../../lib/core";
 import { redis } from "../../../lib/redis";
-import { isSessionExpired, readSession, SESSION_COOKIE } from "../../../lib/session";
+import { isSessionExpired, isSupportSessionActive, readSession, SESSION_COOKIE } from "../../../lib/session";
 import { SupportConsole } from "./support-console";
 
 export const dynamic = "force-dynamic";
@@ -13,12 +13,7 @@ export default async function SupportPage() {
   const session = await readSession(redis(), sessionId);
   if (!session || isSessionExpired(session)) redirect("/api/auth/login");
 
-  const supportActive = Boolean(
-    session.supportSessionId
-      && session.supportTenantId
-      && session.supportExpiresAt
-      && session.supportExpiresAt > Date.now(),
-  );
+  const supportActive = isSupportSessionActive(session);
 
   if (!supportActive) {
     return (

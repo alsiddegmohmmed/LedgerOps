@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import Link from "next/link";
 import { getTenant } from "../../lib/core";
 import { redis } from "../../lib/redis";
 import { isSessionExpired, isSupportSessionActive, readSession, SESSION_COOKIE } from "../../lib/session";
@@ -37,7 +38,7 @@ export default async function OperationsPage() {
         {supportActive && (
           <div className="panel status">
             Support mode is active. Use the dedicated support console for audited read-only access.
-            <br /><a className="button secondary" href="/operations/support">Open support console</a>
+            <br /><Link className="button secondary" href="/operations/support">Open support console</Link>
           </div>
         )}
         {!supportActive && tenantResult?.kind === "ok" && (
@@ -52,19 +53,22 @@ export default async function OperationsPage() {
             <div className="eyebrow">Financial operations</div>
             <h2>Payments</h2>
             <p>Search scoped Payment records and inspect their composed operational evidence.</p>
-            <a className="button" href="/operations/payments">Open Payments</a>
+            <Link className="button" href="/operations/payments">Open Payments</Link>
             <h2>Risk reviews</h2>
             <p>Review manual risk items, assign analysts, and record the final decision.</p>
-            <a className="button secondary" href="/operations/risk-reviews">Open risk reviews</a>
+            <Link className="button secondary" href="/operations/risk-reviews">Open risk reviews</Link>
             <h2>Casework</h2>
             <p>Investigate escalated cases, record evidence, resolve, and close them.</p>
-            <a className="button secondary" href="/operations/cases">Open casework</a>
+            <Link className="button secondary" href="/operations/cases">Open casework</Link>
             <h2>Ledger</h2>
             <p>Review balances and half-open date-bounded statements for a Ledger account.</p>
-            <a className="button secondary" href="/operations/ledger">Open Ledger</a>
+            <Link className="button secondary" href="/operations/ledger">Open Ledger</Link>
             <h2>Audit</h2>
             <p>Search Tenant-wide audit evidence using deterministic keyset pagination.</p>
-            <a className="button secondary" href="/operations/audit">Open Audit</a>
+            <Link className="button secondary" href="/operations/audit">Open Audit</Link>
+            <h2>Provider operations</h2>
+            <p>Inspect durable Provider health and Platform Admin scenario assignments.</p>
+            <Link className="button secondary" href="/operations/provider">Open Provider operations</Link>
           </div>
         )}
         {tenantResult?.kind === "unavailable" && (
@@ -78,22 +82,28 @@ export default async function OperationsPage() {
             <div className="eyebrow">Administration</div>
             <h2>Credentials</h2>
             <p>Review non-secret metadata for this Tenant&apos;s sandbox credentials.</p>
-            <a className="button" href="/operations/credentials">Open credentials</a>
+            <Link className="button" href="/operations/credentials">Open credentials</Link>
             <h2>Tenant configuration</h2>
             <p>Manage versioned currencies, locale, timezone, and display settings.</p>
-            <a className="button secondary" href="/operations/configuration">Open configuration</a>
+            <Link className="button secondary" href="/operations/configuration">Open configuration</Link>
+            <h2>Risk configuration</h2>
+            <p>Manage Tenant-wide versioned Risk rules and thresholds.</p>
+            <Link className="button secondary" href="/operations/risk-configuration">Open Risk configuration</Link>
             <h2>Operational contacts</h2>
             <p>Maintain audited contacts used by Tenant operations.</p>
-            <a className="button secondary" href="/operations/contacts">Open contacts</a>
+            <Link className="button secondary" href="/operations/contacts">Open contacts</Link>
             <h2>Merchants</h2>
             <p>Review the Merchants available in the selected Tenant scope.</p>
-            <a className="button secondary" href="/operations/merchants">Open Merchants</a>
+            <Link className="button secondary" href="/operations/merchants">Open Merchants</Link>
             <h2>Memberships</h2>
             <p>Review Tenant membership, roles, scopes, and invitation status.</p>
-            <a className="button secondary" href="/operations/memberships">Open memberships</a>
+            <Link className="button secondary" href="/operations/memberships">Open memberships</Link>
+            <h2>Merchant webhooks</h2>
+            <p>Create, rotate, revoke, test, and inspect signed webhook deliveries.</p>
+            <Link className="button secondary" href="/operations/webhooks">Open webhooks</Link>
             <h2>Platform support</h2>
             <p>Enter an explicit, expiring, read-only support session for a Tenant.</p>
-            <a className="button secondary" href="/operations/support">Open support mode</a>
+            <Link className="button secondary" href="/operations/support">Open support mode</Link>
           </div>
         )}
         <form action="/api/auth/logout" method="post">

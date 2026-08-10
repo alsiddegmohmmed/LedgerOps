@@ -1,5 +1,9 @@
 @org.springframework.modulith.ApplicationModule(
         displayName = "Provider",
-        allowedDependencies = "messaging::api"
+        allowedDependencies = {
+                "audit::api",
+                "identity::api",
+                "messaging::api"
+        }
 )
 package com.ledgerops.provider;

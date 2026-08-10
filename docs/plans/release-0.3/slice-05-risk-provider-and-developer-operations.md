@@ -1,6 +1,6 @@
 # Release 0.3 Slice 5 - Risk configuration, Provider controls, manual retry, and merchant webhooks
 
-Status: Pending  
+Status: Complete for Slice 5 scope; NTF-01 remains partial by design
 Owner: One implementation owner  
 Release: 0.3
 
@@ -58,7 +58,26 @@ Excluded:
 
 ## Completion report
 
-- Changed: Pending
-- Verified: Pending
-- Incomplete: Slice 5
-- Deviations: None
+- Changed:
+  - Added Tenant-wide versioned Risk configuration, exact threshold/rule validation, optimistic active-version updates, immutable history reads, audit evidence, authorization checks, and Operations Web management.
+  - Added Provider scenario profiles and GLOBAL/TENANT/PAYMENT assignments with immutable versions, precedence resolution, first-attempt canonical pinning, retry/status-query reuse, audit/outbox evidence, and signed Simulator contract v2 compatibility. The existing v1 Simulator contract remains supported.
+  - Added Provider health policy, append-only evaluations, current pointer, exact ADR-027 state boundaries, scheduled evaluation, history/current APIs, and `ProviderHealthChanged` state-change events.
+  - Added ADR-026 Payment `retry now` as an audited acceleration of an existing safe `WAITING_RETRY_REQUEST`; no attempt, retry request, or Payment/Ledger effect is created by the action.
+  - Added the `notification` Merchant webhook foundation: encrypted AES-GCM secrets, one-time create/rotate disclosure, revocation cancellation, HTTPS/SSRF/DNS/redirect controls, canonical HMAC signing, ADR-026-bounded 64 KiB response handling, bounded retry state, delivery attempts, synthetic test events, delivery history, and Operations Web controls.
+  - Added Provider work/interaction/recovery/webhook operational projections to the authorized Payment detail API and UI.
+  - Added V30/V31 forward-only migrations, provider/notification contract fixtures, Simulator persistence and v2 request handling, focused boundary tests, and the Slice 5 API reference.
+- Verified:
+  - `GRADLE_USER_HOME=/Users/Siddegx/.gradle ./gradlew :test --console=plain` passed: 621 tests, 0 failures, with the documented PostgreSQL, Kafka, Redis, and Keycloak Compose services healthy.
+  - `GRADLE_USER_HOME=/Users/Siddegx/.gradle ./gradlew :check --console=plain` passed.
+  - `GRADLE_USER_HOME=/Users/Siddegx/.gradle ./gradlew :applications:provider-simulator:test --console=plain` passed.
+  - Operations Web `corepack pnpm exec tsc --noEmit` passed; `corepack pnpm test` passed with 23 tests and 0 failures; `corepack pnpm lint` passed; and `corepack pnpm build` passed. The pinned package still reports the existing Node 22 versus Node 24.18–24.x engine warning in this environment.
+  - Provider health boundary, scenario validation/pinning, webhook encryption/URL/retry/64 KiB response bound, Risk persistence, Provider persistence, modularity, and Simulator contract tests passed within the root or focused suites.
+  - `git diff --check` passed.
+- Incomplete:
+  - NTF-01 remains partial by design. Slice 5 supplies webhook delivery infrastructure and does not implement the Notification consumer, in-product notification creation/read state, or target-breach scheduling; those remain Slice 10 work under ADR-027.
+  - Reversal retry remains Slice 6 work. Slice 5 implements only Payment retry acceleration.
+  - Production business-event producers beyond the synthetic Merchant webhook test events remain excluded by this plan.
+  - Authenticated browser Playwright/e2e verification and the documented two-second demo-read measurement were not run in this slice.
+- Deviations:
+  - None from the approved Slice 5 authority. Global Provider scenario/health outbox envelopes use the existing outbox's required non-null `tenant_id` field with a deterministic system identity; the domain assignments and API payloads remain global/provider-scoped and do not gain Tenant authority.
+  - The Simulator keeps the existing v1 request behavior while adding the approved v2 scenario snapshot fields and fixture.

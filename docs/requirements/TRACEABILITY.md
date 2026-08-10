@@ -24,12 +24,12 @@ Authority: Product Definition v1.7, Technical Specification v1.7, ADR-022 throug
 | RSK-02 | Preserved R0.1 + Slice 4 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Planned |
 | RSK-03 | Slice 4 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Planned |
 | RSK-04 | Slice 4 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Planned |
-| RSK-05 | Slice 5 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Planned |
-| PRV-01 | Slice 5/7 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Planned |
+| RSK-05 | Slice 5 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Verified in Slice 5; regression remains required |
+| PRV-01 | Slice 5/7 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Scenario control/pinning verified in Slice 5; Slice 7 regression remains required |
 | PRV-02 | Slices 3/6 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Planned |
 | PRV-03 | Slices 3/5/6 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Planned |
-| PRV-04 | Slices 5/6 (ADR-026/ADR-023) | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Planned |
-| PRV-05 | Slice 5/10 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Planned |
+| PRV-04 | Slices 5/6 (ADR-026/ADR-023) | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Payment retry-now verified in Slice 5; Reversal retry remains Slice 6 |
+| PRV-05 | Slice 5/10 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Provider health verified in Slice 5; Slice 10 projection regression remains required |
 | LED-01 | Preserved + Slices 6/8/9 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Planned |
 | LED-02 | Preserved + ADR-023/024 clarification | Existing executable evidence remains required. | Implemented |
 | LED-03 | Slices 3/6/8/9 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Planned |
@@ -49,16 +49,16 @@ Authority: Product Definition v1.7, Technical Specification v1.7, ADR-022 throug
 | OPS-02 | Slice 10 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Planned |
 | OPS-03 | Slices 4/5/10 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Planned |
 | OPS-04 | Slices 3/10 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Planned |
-| NTF-01 | Slices 4/5/10 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Planned |
+| NTF-01 | Slices 4/5/10 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Partial by design; lifecycle facts and webhook foundation exist, Notification consumer/read state remains Slice 10 |
 | NTF-02 | Deferred SHOULD | Product SHOULD; not release-blocking. | Deferred |
 | NTF-03 | Deferred SHOULD | Product SHOULD; not release-blocking. | Deferred |
 | AUD-01 | Slices 1-10 | Immutable Audit domain/persistence, append-only database protection, actor/principal/Tenant/correlation fields, and transactional Payment-create audit evidence in `src/test/java/com/ledgerops/audit` and `src/test/java/com/ledgerops/protectedpaths`. | Implemented for Slice 1 foundation; remaining sensitive actions are covered by later slices |
 | AUD-02 | Slice 3 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Planned |
 | AUD-03 | Slice 10 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Planned |
 | AUD-04 | Slice 10 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Planned |
-| DEV-01 | Slices 2/5/6/10 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Planned |
-| DEV-02 | Slice 5 (ADR-026) | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Planned |
-| DEV-03 | Slices 5/10 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Planned |
+| DEV-01 | Slices 2/5/6/10 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Slice 5 Provider/webhook fixtures and reference verified; later contract coverage remains required |
+| DEV-02 | Slice 5 (ADR-026) | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Verified in Slice 5 |
+| DEV-03 | Slices 5/10 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Slice 5 Platform scenario controls verified; Slice 10 complete scenario walkthrough remains required |
 | DEV-04 | Slice 10 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Planned |
 | LOC-01 | Slice 10 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Planned |
 | LOC-02 | Slice 10 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Planned |

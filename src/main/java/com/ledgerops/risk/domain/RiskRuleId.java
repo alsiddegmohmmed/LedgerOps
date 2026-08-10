@@ -12,4 +12,8 @@ public record RiskRuleId(UUID value) {
     public static RiskRuleId from(UUID value) {
         return new RiskRuleId(value);
     }
+
+    public static RiskRuleId newId() {
+        return from(UUID.randomUUID());
+    }
 }

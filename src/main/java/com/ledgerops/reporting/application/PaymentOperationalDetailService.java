@@ -7,6 +7,7 @@ import com.ledgerops.ledger.api.PaymentSuccessLedger;
 import com.ledgerops.payment.api.PaymentDetailsQuery;
 import com.ledgerops.payment.api.PaymentDetailsSnapshot;
 import com.ledgerops.provider.api.ProviderPaymentEvidenceQuery;
+import com.ledgerops.provider.api.ProviderPaymentOperationsQuery;
 import com.ledgerops.reporting.api.PaymentOperationalDetail;
 import com.ledgerops.reporting.api.PaymentTimelineEntry;
 import com.ledgerops.reporting.api.PaymentTimelineQuery;
@@ -24,6 +25,7 @@ public class PaymentOperationalDetailService {
     private final PaymentDetailsQuery payments;
     private final RiskPaymentQuery risk;
     private final ProviderPaymentEvidenceQuery provider;
+    private final ProviderPaymentOperationsQuery providerOperations;
     private final PaymentSuccessLedger ledger;
     private final PaymentTimelineQuery timeline;
     private final PaymentTimelineProjector projector;
@@ -32,6 +34,7 @@ public class PaymentOperationalDetailService {
             PaymentDetailsQuery payments,
             RiskPaymentQuery risk,
             ProviderPaymentEvidenceQuery provider,
+            ProviderPaymentOperationsQuery providerOperations,
             PaymentSuccessLedger ledger,
             PaymentTimelineQuery timeline,
             PaymentTimelineProjector projector
@@ -39,6 +42,7 @@ public class PaymentOperationalDetailService {
         this.payments = payments;
         this.risk = risk;
         this.provider = provider;
+        this.providerOperations = providerOperations;
         this.ledger = ledger;
         this.timeline = timeline;
         this.projector = projector;
@@ -67,7 +71,8 @@ public class PaymentOperationalDetailService {
                 reconciliationStatus(payment),
                 paymentTimeline,
                 payment.notes(),
-                payment.attempts());
+                payment.attempts(),
+                providerOperations.findByTenantAndPayment(tenantId, paymentId).orElse(null));
     }
 
     private void requireAccess(UUID tenantId, AuthorizedRequestContext authorization) {

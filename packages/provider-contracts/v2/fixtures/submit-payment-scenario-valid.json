@@ -1,0 +1,24 @@
+{
+  "contractVersion": 2,
+  "attemptId": "00000000-0000-0000-0000-000000000010",
+  "paymentId": "00000000-0000-0000-0000-000000000001",
+  "attemptSequence": 1,
+  "providerId": "SIMULATOR",
+  "providerIdempotencyKey": "payment:00000000-0000-0000-0000-000000000001",
+  "amount": "12.30",
+  "currency": "SAR",
+  "paymentMethodCategory": "CARD",
+  "requestIntentHash": "a759a31b7d2ca555352b5c6787514437e1e9c49cc538c8ed7c2872ac4ada8a5e",
+  "scenarioProfileId": "00000000-0000-0000-0000-000000000005",
+  "scenarioProfileVersion": 1,
+  "scenarioSnapshot": {
+    "profileId": "00000000-0000-0000-0000-000000000005",
+    "version": 1,
+    "submissionOutcome": "SUCCESS",
+    "webhookMode": "NORMAL",
+    "settlementMode": "EXACT",
+    "delayMillis": 0,
+    "fixtureId": null,
+    "parameters": {}
+  }
+}

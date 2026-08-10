@@ -1,0 +1,80 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ledgerops.dev/contracts/v2/SubmitPaymentToProvider.schema.json",
+  "title": "SubmitPaymentToProvider v2",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "contractVersion",
+    "attemptId",
+    "paymentId",
+    "attemptSequence",
+    "providerId",
+    "providerIdempotencyKey",
+    "amount",
+    "currency",
+    "paymentMethodCategory",
+    "requestIntentHash",
+    "scenarioProfileId",
+    "scenarioProfileVersion",
+    "scenarioSnapshot"
+  ],
+  "properties": {
+    "contractVersion": { "const": 2 },
+    "attemptId": { "type": "string", "format": "uuid" },
+    "paymentId": { "type": "string", "format": "uuid" },
+    "attemptSequence": { "type": "integer", "minimum": 1, "maximum": 3 },
+    "providerId": { "const": "SIMULATOR" },
+    "providerIdempotencyKey": {
+      "type": "string",
+      "pattern": "^payment:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+    },
+    "amount": { "type": "string", "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]+)?$" },
+    "currency": { "type": "string", "pattern": "^[A-Z]{3}$" },
+    "paymentMethodCategory": { "type": "string", "minLength": 1 },
+    "requestIntentHash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "scenarioProfileId": { "type": "string", "format": "uuid" },
+    "scenarioProfileVersion": { "type": "integer", "minimum": 1 },
+    "scenarioSnapshot": { "$ref": "#/$defs/scenarioSnapshot" }
+  },
+  "$defs": {
+    "scenarioSnapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "profileId",
+        "version",
+        "submissionOutcome",
+        "webhookMode",
+        "settlementMode",
+        "delayMillis",
+        "fixtureId",
+        "parameters"
+      ],
+      "properties": {
+        "profileId": { "type": "string", "format": "uuid" },
+        "version": { "type": "integer", "minimum": 1 },
+        "submissionOutcome": {
+          "enum": [
+            "SUCCESS",
+            "DECLINE",
+            "ACCEPTED",
+            "PENDING",
+            "TIMEOUT_AFTER_ACCEPTANCE",
+            "TEMPORARY_FAILURE_SAFE_TO_RESUBMIT",
+            "TEMPORARY_FAILURE_STATUS_RECOVERY"
+          ]
+        },
+        "webhookMode": {
+          "enum": ["NORMAL", "DELAYED", "DUPLICATE", "MISSING", "INVALID_SIGNATURE", "OUT_OF_ORDER"]
+        },
+        "settlementMode": {
+          "enum": ["EXACT", "MISSING", "AMOUNT_MISMATCH", "CURRENCY_MISMATCH", "STATUS_MISMATCH", "DUPLICATE_RECORD", "DATE_MISMATCH"]
+        },
+        "delayMillis": { "type": "integer", "minimum": 0, "maximum": 300000 },
+        "fixtureId": { "type": ["string", "null"] },
+        "parameters": { "type": "object", "additionalProperties": { "type": "string" } }
+      }
+    }
+  }
+}
