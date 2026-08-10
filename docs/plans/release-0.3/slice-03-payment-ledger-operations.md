@@ -1,6 +1,6 @@
 # Release 0.3 Slice 3 - Payment/Ledger operations, timeline, notes, and audit search
 
-Status: Pending  
+Status: Implemented — backend verification complete
 Owner: One implementation owner  
 Release: 0.3
 
@@ -55,7 +55,25 @@ Excluded:
 
 ## Completion report
 
-- Changed: Pending
-- Verified: Pending
-- Incomplete: Slice 3
-- Deviations: None
+- Changed:
+  - Added tenant/merchant/permission-scoped Payment search with deterministic keyset pagination, the approved filter set, composed Payment detail, provider/Risk/Ledger query contracts, and append-only Payment notes.
+  - Added the V26 Payment-notes migration and V27 rebuildable Payment-timeline projection with duplicate-event protection and the ADR-027 lifecycle event path.
+  - Added tenant-wide Ledger balance and half-open statement query APIs, Payment/Ledger navigation, and scoped Audit search with keyset pagination.
+  - Added Operations Web Payment list/detail/note, Ledger, and Audit surfaces, including empty/error/loading/read-only/support-mode states and a CSRF-protected note BFF route.
+  - Repaired the ADR-025 boundary violations inherited from the final Slice 2 administration changes: Identity no longer imports Merchant/Tenancy internals, and Administration no longer imports Identity internals.
+- Verified:
+  - `./gradlew :compileJava --console=plain` passed.
+  - Slice 3 focused backend tests for Payment, Audit, and Ledger passed.
+  - `ModularityTests` and `ArchitectureRulesTests` passed after the ADR-025 repair.
+  - Non-Keycloak Identity domain/API/unit regression tests passed.
+  - `git diff --check` passed.
+  - Operations Web `pnpm typecheck` passed and `pnpm build` passed. The build emitted the existing Node engine warning because the environment uses Node 22 while the project requests Node 24.18–24.x.
+  - Full backend `./gradlew :test --max-workers=1 --console=plain` passed: 602 tests, 0 failures, 0 errors.
+  - `./gradlew :check --max-workers=1 --console=plain` passed.
+- Incomplete:
+  - Browser Playwright/e2e verification was not completed.
+  - The documented two-second demo-read target was not performance-measured in this slice.
+- Deviations:
+  - Ledger query authorization is tenant-wide because the current Ledger account contract does not expose Merchant ownership; no undocumented Merchant-scoped Ledger rule was invented.
+  - Reconciliation status remains the ADR-024 placeholder composed from Reconciliation-owned semantics; no Payment reconciliation column was added.
+  - No account-list endpoint was added because the approved Slice 3 contract specifies balance and statement queries, not account discovery.

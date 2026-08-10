@@ -80,7 +80,7 @@ class PaymentSubmissionIntegrationTests {
         assertEquals(first.requestIntentHash(), result.attempt().requestIntentHash());
         assertEquals(PaymentStatus.PROCESSING, load(payment).payment().status());
         assertEquals(2, attemptCount(payment));
-        assertEquals(2, outboxCount(payment));
+        assertEquals(3, outboxCount(payment));
         assertEquals(1, jdbcTemplate.queryForObject("""
                 SELECT count(*) FROM payment.retry_applications
                  WHERE tenant_id = ? AND retry_request_id = ?
@@ -111,7 +111,7 @@ class PaymentSubmissionIntegrationTests {
                 () -> retryApplication.apply(incoming, command));
 
         assertEquals(1, attemptCount(payment));
-        assertEquals(1, outboxCount(payment));
+        assertEquals(2, outboxCount(payment));
         assertEquals(0, jdbcTemplate.queryForObject("""
                 SELECT count(*) FROM messaging.inbox
                  WHERE consumer_name = ? AND message_id = ?
@@ -145,7 +145,7 @@ class PaymentSubmissionIntegrationTests {
                     secondResult.get().attempt().attemptId());
         }
         assertEquals(2, attemptCount(payment));
-        assertEquals(2, outboxCount(payment));
+        assertEquals(3, outboxCount(payment));
         assertEquals(1, jdbcTemplate.queryForObject("""
                 SELECT count(*) FROM payment.retry_applications
                  WHERE tenant_id = ? AND payment_id = ?
@@ -178,7 +178,7 @@ class PaymentSubmissionIntegrationTests {
         }
 
         assertEquals(1, attemptCount(payment));
-        assertEquals(1, outboxCount(payment));
+        assertEquals(2, outboxCount(payment));
         assertEquals(0, jdbcTemplate.queryForObject("""
                 SELECT count(*) FROM payment.retry_applications
                  WHERE tenant_id = ? AND payment_id = ?
@@ -204,7 +204,7 @@ class PaymentSubmissionIntegrationTests {
         assertEquals(1, result.attempt().sequence());
         assertEquals("payment:" + payment.id().value(), result.attempt().providerIdempotencyKey());
         assertEquals(1, attemptCount(payment));
-        assertEquals(1, outboxCount(payment));
+        assertEquals(2, outboxCount(payment));
         assertEquals("SubmitPaymentToProvider", outboxValue(payment, "message_type"));
         assertEquals("ledgerops.provider.commands.v1", outboxValue(payment, "topic"));
         assertEquals(payment.id().value().toString(), outboxValue(payment, "partition_key"));
@@ -248,7 +248,7 @@ class PaymentSubmissionIntegrationTests {
         assertEquals(first.attempt().attemptId(), replay.attempt().attemptId());
         assertEquals(first.messageId(), replay.messageId());
         assertEquals(1, attemptCount(payment));
-        assertEquals(1, outboxCount(payment));
+        assertEquals(2, outboxCount(payment));
     }
 
     @Test
@@ -311,7 +311,7 @@ class PaymentSubmissionIntegrationTests {
             PaymentSubmissionResult secondResult = second.get();
             assertEquals(firstResult.messageId(), secondResult.messageId());
             assertEquals(1, attemptCount(payment));
-            assertEquals(1, outboxCount(payment));
+            assertEquals(2, outboxCount(payment));
             assertEquals(PaymentStatus.PROCESSING, load(payment).payment().status());
         }
     }
@@ -371,7 +371,7 @@ class PaymentSubmissionIntegrationTests {
         assertThrows(PaymentSubmissionConsistencyException.class, () -> submit(payment));
 
         assertEquals(1, attemptCount(payment));
-        assertEquals(1, outboxCount(payment));
+        assertEquals(2, outboxCount(payment));
         assertEquals("{\"corrupted\":true}", outboxValue(payment, "payload"));
     }
 
@@ -708,7 +708,7 @@ class PaymentSubmissionIntegrationTests {
 
     private String outboxValue(Payment payment, String column) {
         return jdbcTemplate.queryForObject(
-                "SELECT " + column + " FROM messaging.outbox WHERE tenant_id = ? AND aggregate_id = ?",
+                "SELECT " + column + " FROM messaging.outbox WHERE tenant_id = ? AND aggregate_id = ? AND message_type = 'SubmitPaymentToProvider'",
                 String.class, payment.tenantId(), payment.id().value()
         );
     }

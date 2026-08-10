@@ -7,6 +7,8 @@ import com.ledgerops.risk.domain.PaymentAmountThresholdRule;
 import com.ledgerops.risk.api.RiskConfigurationError;
 import com.ledgerops.risk.api.RiskConfigurationException;
 import com.ledgerops.risk.api.RiskDecision;
+import com.ledgerops.risk.api.RiskPaymentQuery;
+import com.ledgerops.risk.api.RiskPaymentSnapshot;
 import com.ledgerops.risk.domain.RiskEvaluation;
 import com.ledgerops.risk.domain.RiskEvaluationId;
 import com.ledgerops.risk.domain.RiskProfile;
@@ -26,7 +28,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 @Repository
-class RiskJdbcStore implements RiskProfileStore, RiskEvaluationStore {
+class RiskJdbcStore implements RiskProfileStore, RiskEvaluationStore, RiskPaymentQuery {
 
     private static final String INSERT_PROFILE_SQL = """
             INSERT INTO risk.risk_profiles (
@@ -275,6 +277,21 @@ class RiskJdbcStore implements RiskProfileStore, RiskEvaluationStore {
                         row.evaluatedAt().toInstant(),
                         loadRuleResults(row.tenantId(), row.evaluationId())
                 ));
+    }
+
+    @Override
+    public Optional<RiskPaymentSnapshot> findSnapshotByTenantAndPayment(
+            UUID tenantId,
+            UUID paymentId
+    ) {
+        return findByTenantAndPayment(tenantId, paymentId)
+                .map(evaluation -> new RiskPaymentSnapshot(
+                        evaluation.evaluationId().value(),
+                        evaluation.profileId().value(),
+                        evaluation.profileVersion(),
+                        evaluation.finalScore(),
+                        evaluation.decision(),
+                        evaluation.evaluatedAt()));
     }
 
     private List<EvaluatedRiskRule> loadRuleResults(

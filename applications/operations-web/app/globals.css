@@ -36,6 +36,12 @@ button:disabled { cursor: wait; opacity: .6; }
 .support-banner strong { color: #ffd4a8; display: block; font-size: 1.35rem; letter-spacing: .08em; margin-top: .35rem; }
 .support-banner p { margin: .35rem 0 0; }
 .form-grid { display: grid; gap: 1rem; }
+.form-grid-wide { gap: 1.25rem; }
+.grid-2 { display: grid; gap: 1rem; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.data-list { display: grid; gap: .8rem; margin-top: 1rem; }
+.data-list > div { border-left: 2px solid var(--border); padding-left: .9rem; }
+.data-list strong, .data-list span { display: block; }
+@media (max-width: 42rem) { .grid-2 { grid-template-columns: 1fr; } }
 .checkbox-label { align-items: center; display: flex; gap: .6rem; }
 .checkbox-label input { width: auto; }
 .checkbox-label.compact { font-size: .82rem; margin-top: .5rem; }

@@ -2,6 +2,7 @@
         displayName = "Merchant",
         allowedDependencies = {
                 "audit::api",
+                "identity::api",
                 "messaging::api",
                 "tenancy::api"
         }

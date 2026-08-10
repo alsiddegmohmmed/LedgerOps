@@ -86,6 +86,22 @@ public record AuthorizedRequestContext(
         return hasPermission(Permission.PAYMENT_CREATE);
     }
 
+    public boolean canReadPayments() {
+        return isSupportSession() || hasPermission(Permission.PAYMENT_READ);
+    }
+
+    public boolean canAddPaymentNote() {
+        return hasPermission(Permission.PAYMENT_NOTE_ADD);
+    }
+
+    public boolean canReadLedger() {
+        return isSupportSession() || hasPermission(Permission.LEDGER_READ);
+    }
+
+    public boolean canReadAudit() {
+        return isSupportSession() || hasPermission(Permission.AUDIT_READ);
+    }
+
     public boolean canManageCredentials() {
         return hasPermission(Permission.CREDENTIAL_MANAGE);
     }

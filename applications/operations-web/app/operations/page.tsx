@@ -47,6 +47,20 @@ export default async function OperationsPage() {
             <p>{tenantResult.tenant.status} · {tenantResult.tenant.defaultCurrency} · {tenantResult.tenant.defaultLocale}</p>
           </div>
         )}
+        {tenantResult?.kind === "ok" && (
+          <div className="panel">
+            <div className="eyebrow">Financial operations</div>
+            <h2>Payments</h2>
+            <p>Search scoped Payment records and inspect their composed operational evidence.</p>
+            <a className="button" href="/operations/payments">Open Payments</a>
+            <h2>Ledger</h2>
+            <p>Review balances and half-open date-bounded statements for a Ledger account.</p>
+            <a className="button secondary" href="/operations/ledger">Open Ledger</a>
+            <h2>Audit</h2>
+            <p>Search Tenant-wide audit evidence using deterministic keyset pagination.</p>
+            <a className="button secondary" href="/operations/audit">Open Audit</a>
+          </div>
+        )}
         {tenantResult?.kind === "unavailable" && (
           <div className="panel status error">This Tenant is unavailable to the signed-in user.</div>
         )}

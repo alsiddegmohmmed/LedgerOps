@@ -1,5 +1,4 @@
 @org.springframework.modulith.ApplicationModule(
-        displayName = "Audit",
-        allowedDependencies = "api"
+        displayName = "Audit"
 )
 package com.ledgerops.audit;

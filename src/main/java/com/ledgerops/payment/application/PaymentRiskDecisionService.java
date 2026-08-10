@@ -9,9 +9,11 @@ import com.ledgerops.risk.api.RiskEvaluationResult;
 import com.ledgerops.risk.api.RiskEvaluationUseCase;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
 import java.util.Objects;
 import java.util.UUID;
 
@@ -24,13 +26,27 @@ public class PaymentRiskDecisionService {
 
     private final PaymentLifecycleStore lifecycleStore;
     private final RiskEvaluationUseCase riskEvaluationUseCase;
+    private final PaymentLifecycleEventAppender lifecycleEvents;
+    private final Clock clock;
 
     public PaymentRiskDecisionService(
             PaymentLifecycleStore lifecycleStore,
             RiskEvaluationUseCase riskEvaluationUseCase
     ) {
+        this(lifecycleStore, riskEvaluationUseCase, PaymentLifecycleEventAppender.noOp(), Clock.systemUTC());
+    }
+
+    @Autowired
+    public PaymentRiskDecisionService(
+            PaymentLifecycleStore lifecycleStore,
+            RiskEvaluationUseCase riskEvaluationUseCase,
+            PaymentLifecycleEventAppender lifecycleEvents,
+            Clock clock
+    ) {
         this.lifecycleStore = lifecycleStore;
         this.riskEvaluationUseCase = riskEvaluationUseCase;
+        this.lifecycleEvents = lifecycleEvents;
+        this.clock = clock;
     }
 
     @Transactional
@@ -70,8 +86,18 @@ public class PaymentRiskDecisionService {
             );
         }
 
+        long newVersion = Math.addExact(current.version(), 1);
+        lifecycleEvents.append(
+                payment,
+                decided,
+                newVersion,
+                "AUTOMATED",
+                "RISK_DECISION_" + riskResult.decision().name(),
+                riskResult.evaluationId(),
+                riskResult.evaluationId(),
+                clock.instant());
         PaymentRiskDecisionResult result = new PaymentRiskDecisionResult(
-                new VersionedPayment(decided, Math.addExact(current.version(), 1)),
+                new VersionedPayment(decided, newVersion),
                 riskResult
         );
         LOGGER.info(

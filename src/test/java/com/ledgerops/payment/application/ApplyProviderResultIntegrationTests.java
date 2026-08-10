@@ -88,6 +88,7 @@ class ApplyProviderResultIntegrationTests {
         assertEquals(1, inboxCount(fixture.payment()));
         assertEquals(1, acceptedCount(fixture.payment()));
         assertEquals(1, lifecycleOutboxCount(fixture.payment()));
+        assertEquals(1, paymentLifecycleEventCount(fixture.payment()));
         assertEquals("PaymentCompleted", lifecycleValue(fixture.payment(), "message_type"));
         assertEquals("payment-final:" + fixture.payment().id().value(),
                 lifecycleValue(fixture.payment(), "deduplication_key"));
@@ -120,6 +121,7 @@ class ApplyProviderResultIntegrationTests {
         assertEquals(PaymentStatus.FAILED, load(fixture.payment()).payment().status());
         assertEquals(category.name(), acceptedValue(fixture.payment(), "final_category"));
         assertEquals("PaymentFailed", lifecycleValue(fixture.payment(), "message_type"));
+        assertEquals(1, paymentLifecycleEventCount(fixture.payment()));
         assertTrue(lifecycleValue(fixture.payment(), "payload").contains(
                 "\"finalCategory\":\"" + category + "\""
         ));
@@ -331,6 +333,7 @@ class ApplyProviderResultIntegrationTests {
         assertEquals(2, inboxCount(fixture.payment()));
         assertEquals(1, acceptedCount(fixture.payment()));
         assertEquals(1, lifecycleOutboxCount(fixture.payment()));
+        assertEquals(1, paymentLifecycleEventCount(fixture.payment()));
         assertEquals(1, postingCount(fixture.payment()));
         assertEquals(2, entryCount(fixture.payment()));
     }
@@ -351,6 +354,7 @@ class ApplyProviderResultIntegrationTests {
         assertEquals("SUCCESS", acceptedValue(fixture.payment(), "final_category"));
         assertEquals(1, inboxCount(fixture.payment()));
         assertEquals(1, lifecycleOutboxCount(fixture.payment()));
+        assertEquals(1, paymentLifecycleEventCount(fixture.payment()));
         assertEquals(1, postingCount(fixture.payment()));
     }
 
@@ -369,6 +373,7 @@ class ApplyProviderResultIntegrationTests {
         assertEquals(2, inboxCount(fixture.payment()));
         assertEquals(1, acceptedCount(fixture.payment()));
         assertEquals(1, lifecycleOutboxCount(fixture.payment()));
+        assertEquals(1, paymentLifecycleEventCount(fixture.payment()));
         assertEquals(1, postingCount(fixture.payment()));
     }
 
@@ -400,6 +405,7 @@ class ApplyProviderResultIntegrationTests {
         assertEquals(2, inboxCount(fixture.payment()));
         assertEquals(1, acceptedCount(fixture.payment()));
         assertEquals(1, lifecycleOutboxCount(fixture.payment()));
+        assertEquals(1, paymentLifecycleEventCount(fixture.payment()));
         assertEquals(1, postingCount(fixture.payment()));
     }
 
@@ -662,7 +668,7 @@ class ApplyProviderResultIntegrationTests {
         assertEquals(PaymentStatus.PROCESSING, load(payment).payment().status());
         assertEquals(0, inboxCount(payment));
         assertEquals(0, acceptedCount(payment));
-        assertEquals(0, lifecycleOutboxCount(payment));
+        assertEquals(0, allLifecycleOutboxCount(payment));
         assertEquals(0, postingCount(payment));
     }
 
@@ -692,13 +698,32 @@ class ApplyProviderResultIntegrationTests {
                 SELECT count(*) FROM messaging.outbox
                  WHERE tenant_id = ? AND aggregate_id = ?
                    AND topic = 'ledgerops.payment.lifecycle.v1'
+                   AND message_type IN ('PaymentCompleted', 'PaymentFailed')
+                """, Integer.class, payment.tenantId(), payment.id().value());
+    }
+
+    private int paymentLifecycleEventCount(Payment payment) {
+        return jdbc.queryForObject("""
+                SELECT count(*) FROM messaging.outbox
+                 WHERE tenant_id = ? AND aggregate_id = ?
+                   AND topic = 'ledgerops.payment.lifecycle.v1'
+                   AND message_type = 'PaymentLifecycleChanged'
+                """, Integer.class, payment.tenantId(), payment.id().value());
+    }
+
+    private int allLifecycleOutboxCount(Payment payment) {
+        return jdbc.queryForObject("""
+                SELECT count(*) FROM messaging.outbox
+                 WHERE tenant_id = ? AND aggregate_id = ?
+                   AND topic = 'ledgerops.payment.lifecycle.v1'
                 """, Integer.class, payment.tenantId(), payment.id().value());
     }
 
     private String lifecycleValue(Payment payment, String column) {
         return jdbc.queryForObject("SELECT " + column + " FROM messaging.outbox"
                 + " WHERE tenant_id = ? AND aggregate_id = ?"
-                + " AND topic = 'ledgerops.payment.lifecycle.v1'", String.class,
+                + " AND topic = 'ledgerops.payment.lifecycle.v1'"
+                + " AND message_type IN ('PaymentCompleted', 'PaymentFailed')", String.class,
                 payment.tenantId(), payment.id().value());
     }
 

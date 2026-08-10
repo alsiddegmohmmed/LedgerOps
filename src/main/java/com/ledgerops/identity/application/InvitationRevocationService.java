@@ -11,6 +11,7 @@ import com.ledgerops.identity.api.InvitationRevocationResult;
 import com.ledgerops.identity.domain.Invitation;
 import com.ledgerops.identity.domain.InvitationRepository;
 import com.ledgerops.identity.domain.InvitationStatus;
+import com.ledgerops.identity.domain.InvalidInvitationException;
 import com.ledgerops.identity.domain.ScopeMode;
 import com.ledgerops.identity.domain.TenantAdminRemovalContext;
 import com.ledgerops.identity.domain.TenantMembership;
@@ -60,27 +61,38 @@ public class InvitationRevocationService implements InvitationRevocationPort {
 
         TenantMembershipId membershipId = new TenantMembershipId(command.membershipId());
         Invitation invitation = invitations.findByMembershipIdForUpdate(membershipId)
-                .orElseThrow(InvitationNotFoundException::new);
+                .orElseThrow(() -> new com.ledgerops.identity.api.InvitationNotFoundException());
         if (!command.tenantId().equals(invitation.tenantId())
                 || !visible(invitation, command.authorization())) {
             throw new AuthorizationResourceNotFoundException();
         }
         if (invitation.status() != InvitationStatus.PENDING) {
-            invitation.revoke();
+            try {
+                invitation.revoke();
+            } catch (InvalidInvitationException exception) {
+                throw new com.ledgerops.identity.api.InvitationStateConflictException(
+                        exception.getMessage());
+            }
         }
 
         TenantMembership membership = memberships.findByIdForUpdate(membershipId)
                 .filter(candidate -> candidate.tenantId().equals(command.tenantId()))
-                .orElseThrow(InvitationNotFoundException::new);
+                .orElseThrow(() -> new com.ledgerops.identity.api.InvitationNotFoundException());
         if (membership.status() != TenantMembershipStatus.INVITED) {
-            throw new InvitationRevocationConflictException(
+            throw new com.ledgerops.identity.api.InvitationStateConflictException(
                     "Only an invited membership can have its invitation revoked");
         }
 
         Instant revokedAt = clock.instant();
         TenantMembership revokedMembership = membership.revoke(
                 Set.of(membership), TenantAdminRemovalContext.MEMBERSHIP_CHANGE);
-        Invitation revokedInvitation = invitation.revoke();
+        Invitation revokedInvitation;
+        try {
+            revokedInvitation = invitation.revoke();
+        } catch (InvalidInvitationException exception) {
+            throw new com.ledgerops.identity.api.InvitationStateConflictException(
+                    exception.getMessage());
+        }
         TenantMembership persistedMembership = memberships.save(revokedMembership);
         invitations.save(revokedInvitation, membership.id());
 

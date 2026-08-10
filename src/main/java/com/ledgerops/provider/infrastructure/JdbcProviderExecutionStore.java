@@ -5,6 +5,7 @@ import com.ledgerops.messaging.api.OutboxMessageDraft;
 import com.ledgerops.messaging.api.ProducerName;
 import com.ledgerops.provider.api.ProviderEvidence;
 import com.ledgerops.provider.api.ProviderEvidenceQuery;
+import com.ledgerops.provider.api.ProviderPaymentEvidenceQuery;
 import com.ledgerops.provider.api.ProviderResultCategory;
 import com.ledgerops.provider.api.RetryDisposition;
 import com.ledgerops.provider.application.ProviderCallResult;
@@ -29,7 +30,8 @@ import java.util.Optional;
 import java.util.UUID;
 
 @Component
-class JdbcProviderExecutionStore implements ProviderExecutionStore, ProviderEvidenceQuery {
+class JdbcProviderExecutionStore implements ProviderExecutionStore, ProviderEvidenceQuery,
+        ProviderPaymentEvidenceQuery {
     private static final Duration LEASE = Duration.ofSeconds(30);
     private final JdbcTemplate jdbc;
     private final MessageOutbox outbox;
@@ -487,6 +489,37 @@ class JdbcProviderExecutionStore implements ProviderExecutionStore, ProviderEvid
                         rs.getBoolean(12), rs.getString(13),
                         rs.getTimestamp(14).toInstant())) : Optional.empty(),
                 tenantId, evidenceId);
+    }
+
+    @Override
+    public java.util.List<ProviderEvidence> findByTenantAndPayment(
+            UUID tenantId,
+            UUID paymentId
+    ) {
+        return jdbc.query("""
+                SELECT evidence_id, tenant_id, payment_id, attempt_id, provider_id,
+                       provider_idempotency_key, provider_result_id, provider_reference,
+                       result_category, retry_disposition, provider_transaction_found,
+                       no_acceptance_proven, evidence_origin, observed_at
+                  FROM provider.results
+                 WHERE tenant_id = ? AND payment_id = ?
+                 ORDER BY observed_at, evidence_id
+                """, (rs, rowNumber) -> new ProviderEvidence(
+                rs.getObject("evidence_id", UUID.class),
+                rs.getObject("tenant_id", UUID.class),
+                rs.getObject("payment_id", UUID.class),
+                rs.getObject("attempt_id", UUID.class),
+                rs.getString("provider_id"),
+                rs.getString("provider_idempotency_key"),
+                rs.getObject("provider_result_id", UUID.class),
+                rs.getString("provider_reference"),
+                ProviderResultCategory.valueOf(rs.getString("result_category")),
+                RetryDisposition.valueOf(rs.getString("retry_disposition")),
+                rs.getBoolean("provider_transaction_found"),
+                rs.getBoolean("no_acceptance_proven"),
+                rs.getString("evidence_origin"),
+                rs.getTimestamp("observed_at").toInstant()),
+                tenantId, paymentId);
     }
 
     private OutboxMessageDraft resultDraft(

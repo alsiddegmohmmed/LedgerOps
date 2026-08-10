@@ -5,9 +5,11 @@ import com.ledgerops.payment.domain.PaymentId;
 import com.ledgerops.payment.domain.PaymentStatus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
 import java.util.Objects;
 import java.util.UUID;
 
@@ -19,9 +21,22 @@ public class PaymentValidationStartService {
     );
 
     private final PaymentLifecycleStore lifecycleStore;
+    private final PaymentLifecycleEventAppender lifecycleEvents;
+    private final Clock clock;
 
     public PaymentValidationStartService(PaymentLifecycleStore lifecycleStore) {
+        this(lifecycleStore, PaymentLifecycleEventAppender.noOp(), Clock.systemUTC());
+    }
+
+    @Autowired
+    public PaymentValidationStartService(
+            PaymentLifecycleStore lifecycleStore,
+            PaymentLifecycleEventAppender lifecycleEvents,
+            Clock clock
+    ) {
         this.lifecycleStore = lifecycleStore;
+        this.lifecycleEvents = lifecycleEvents;
+        this.clock = clock;
     }
 
     @Transactional
@@ -56,6 +71,15 @@ public class PaymentValidationStartService {
                 validating,
                 Math.addExact(current.version(), 1)
         );
+        lifecycleEvents.append(
+                payment,
+                validating,
+                result.version(),
+                "AUTOMATED",
+                "VALIDATION_STARTED",
+                PaymentLifecycleEventFactory.deterministicCorrelation(validating, result.version()),
+                PaymentLifecycleEventFactory.deterministicCausation(validating, result.version()),
+                clock.instant());
         LOGGER.info(
                 "Payment validation started tenantId={} paymentId={} status={} version={}",
                 validating.tenantId(),

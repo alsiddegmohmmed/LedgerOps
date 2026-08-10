@@ -1,10 +1,9 @@
 package com.ledgerops.administration.membership.api;
 
 import com.ledgerops.ApiProblemFactory;
-import com.ledgerops.identity.application.InvitationNotFoundException;
-import com.ledgerops.identity.application.InvitationRevocationConflictException;
-import com.ledgerops.identity.domain.InvalidInvitationException;
-import com.ledgerops.identity.domain.InvalidMembershipTransitionException;
+import com.ledgerops.identity.api.InvitationNotFoundException;
+import com.ledgerops.identity.api.InvitationStateConflictException;
+import com.ledgerops.identity.api.MembershipStateConflictException;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpStatus;
@@ -38,21 +37,8 @@ class MembershipMutationProblemHandler {
         );
     }
 
-    @ExceptionHandler(InvalidInvitationException.class)
-    ProblemDetail handleInvitationState(InvalidInvitationException exception) {
-        return problem(
-                HttpStatus.CONFLICT,
-                "Invitation cannot be revoked",
-                "The invitation is no longer pending",
-                "invitation-state-conflict",
-                "No membership or invitation state was changed.",
-                false,
-                "Refresh the membership state before retrying."
-        );
-    }
-
-    @ExceptionHandler(InvitationRevocationConflictException.class)
-    ProblemDetail handleMembershipState(InvitationRevocationConflictException exception) {
+    @ExceptionHandler(InvitationStateConflictException.class)
+    ProblemDetail handleMembershipState(InvitationStateConflictException exception) {
         return problem(
                 HttpStatus.CONFLICT,
                 "Invitation cannot be revoked",
@@ -64,8 +50,8 @@ class MembershipMutationProblemHandler {
         );
     }
 
-    @ExceptionHandler(InvalidMembershipTransitionException.class)
-    ProblemDetail handleMembershipTransition(InvalidMembershipTransitionException exception) {
+    @ExceptionHandler(MembershipStateConflictException.class)
+    ProblemDetail handleMembershipTransition(MembershipStateConflictException exception) {
         return problem(
                 HttpStatus.CONFLICT,
                 "Membership role change is not allowed",

@@ -17,6 +17,7 @@ import com.ledgerops.tenancy.api.TenantReference;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataAccessException;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
@@ -39,6 +40,7 @@ public class SubmitApprovedPayment {
     private final Clock clock;
     private final MeterRegistry meterRegistry;
     private final TenantActivityQuery tenantActivityQuery;
+    private final PaymentLifecycleEventAppender lifecycleEvents;
 
     public SubmitApprovedPayment(
             PaymentSubmissionStore paymentStore,
@@ -47,11 +49,25 @@ public class SubmitApprovedPayment {
             MeterRegistry meterRegistry,
             TenantActivityQuery tenantActivityQuery
     ) {
+        this(paymentStore, outbox, clock, meterRegistry, tenantActivityQuery,
+                PaymentLifecycleEventAppender.noOp());
+    }
+
+    @Autowired
+    public SubmitApprovedPayment(
+            PaymentSubmissionStore paymentStore,
+            MessageOutbox outbox,
+            Clock clock,
+            MeterRegistry meterRegistry,
+            TenantActivityQuery tenantActivityQuery,
+            PaymentLifecycleEventAppender lifecycleEvents
+    ) {
         this.paymentStore = paymentStore;
         this.outbox = outbox;
         this.clock = clock;
         this.meterRegistry = meterRegistry;
         this.tenantActivityQuery = tenantActivityQuery;
+        this.lifecycleEvents = lifecycleEvents;
     }
 
     @Transactional
@@ -133,6 +149,16 @@ public class SubmitApprovedPayment {
                 throw new PaymentOptimisticConcurrencyException(payment.id(), current.version());
             }
 
+            long newVersion = Math.addExact(current.version(), 1);
+            lifecycleEvents.append(
+                    payment,
+                    processing,
+                    newVersion,
+                    "AUTOMATED",
+                    "SUBMISSION_STARTED",
+                    command.correlationId(),
+                    command.causationId(),
+                    initiatedAt);
             StoredOutboxMessage message = outbox.appendOrGet(draft(command, attempt));
             observeAfterCommit("created", () -> LOGGER.info(
                     "Payment submitted durably tenantId={} paymentId={} attemptId={} messageId={} correlationId={}",
@@ -143,7 +169,7 @@ public class SubmitApprovedPayment {
                     command.correlationId()
             ));
             return new PaymentSubmissionResult(
-                    new VersionedPayment(processing, Math.addExact(current.version(), 1)),
+                    new VersionedPayment(processing, newVersion),
                     attempt,
                     message.outboxId(),
                     message.messageId(),

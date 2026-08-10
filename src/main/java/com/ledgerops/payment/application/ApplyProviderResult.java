@@ -19,6 +19,7 @@ import com.ledgerops.provider.api.RetryDisposition;
 import io.micrometer.core.instrument.MeterRegistry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
@@ -46,7 +47,9 @@ public class ApplyProviderResult {
     private final MessageOutbox outbox;
     private final Clock clock;
     private final MeterRegistry meters;
+    private final PaymentLifecycleEventAppender lifecycleEvents;
 
+    @Autowired
     public ApplyProviderResult(
             com.ledgerops.messaging.api.ConsumerMessageStore inbox,
             ProviderEvidenceQuery evidenceQuery,
@@ -54,7 +57,8 @@ public class ApplyProviderResult {
             CompletePaymentAfterProviderSuccess completion,
             MessageOutbox outbox,
             Clock clock,
-            MeterRegistry meters
+            MeterRegistry meters,
+            PaymentLifecycleEventAppender lifecycleEvents
     ) {
         this.inbox = inbox;
         this.evidenceQuery = evidenceQuery;
@@ -63,6 +67,7 @@ public class ApplyProviderResult {
         this.outbox = outbox;
         this.clock = clock;
         this.meters = meters;
+        this.lifecycleEvents = lifecycleEvents;
     }
 
     @Transactional
@@ -172,6 +177,15 @@ public class ApplyProviderResult {
                     current.version()
             );
         }
+        lifecycleEvents.append(
+                current.payment(),
+                failed,
+                Math.addExact(current.version(), 1),
+                "AUTOMATED",
+                "PROVIDER_FAILURE_APPLIED",
+                command.correlationId(),
+                command.messageId(),
+                appliedAt);
         paymentStore.insertAcceptedFinalResult(accepted);
         StoredOutboxMessage message = appendLifecycle(command, accepted, null, false);
         observeAfterCommit("failed", command, PaymentStatus.FAILED);

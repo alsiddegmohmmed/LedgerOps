@@ -11,10 +11,12 @@ import com.ledgerops.payment.domain.PaymentId;
 import com.ledgerops.payment.domain.PaymentStatus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.Clock;
 import java.util.Currency;
 import java.util.List;
 import java.util.Objects;
@@ -35,13 +37,27 @@ public class CompletePaymentAfterProviderSuccess {
 
     private final PaymentCompletionStore paymentStore;
     private final PaymentSuccessLedger ledger;
+    private final PaymentLifecycleEventAppender lifecycleEvents;
+    private final Clock clock;
 
     public CompletePaymentAfterProviderSuccess(
             PaymentCompletionStore paymentStore,
             PaymentSuccessLedger ledger
     ) {
+        this(paymentStore, ledger, PaymentLifecycleEventAppender.noOp(), Clock.systemUTC());
+    }
+
+    @Autowired
+    public CompletePaymentAfterProviderSuccess(
+            PaymentCompletionStore paymentStore,
+            PaymentSuccessLedger ledger,
+            PaymentLifecycleEventAppender lifecycleEvents,
+            Clock clock
+    ) {
         this.paymentStore = paymentStore;
         this.ledger = ledger;
+        this.lifecycleEvents = lifecycleEvents;
+        this.clock = clock;
     }
 
     @Transactional
@@ -119,8 +135,18 @@ public class CompletePaymentAfterProviderSuccess {
             );
         }
 
+        long newVersion = Math.addExact(current.version(), 1);
+        lifecycleEvents.append(
+                payment,
+                completed,
+                newVersion,
+                "AUTOMATED",
+                "PROVIDER_SUCCESS_APPLIED",
+                PaymentLifecycleEventFactory.deterministicCorrelation(completed, newVersion),
+                PaymentLifecycleEventFactory.deterministicCausation(completed, newVersion),
+                clock.instant());
         PaymentCompletionResult result = new PaymentCompletionResult(
-                new VersionedPayment(completed, Math.addExact(current.version(), 1)),
+                new VersionedPayment(completed, newVersion),
                 posted.transactionId(),
                 false
         );

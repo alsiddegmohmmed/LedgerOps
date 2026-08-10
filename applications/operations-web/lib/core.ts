@@ -35,6 +35,182 @@ export type CoreCredentialPage = {
   nextCursor: string | null;
 };
 
+export type CorePaymentSearchItem = {
+  paymentId: string;
+  tenantId: string;
+  merchantReference: string;
+  customerId: string;
+  amount: number | string;
+  currency: string;
+  state: string;
+  createdAt: string;
+  updatedAt: string;
+  riskDecision: string | null;
+  reconciliationStatus: string | null;
+};
+
+export type CorePaymentPage = {
+  items: CorePaymentSearchItem[];
+  nextCursor: string | null;
+};
+
+export type CorePaymentAttempt = {
+  attemptId: string;
+  sequence: number;
+  providerId: string;
+  providerIdempotencyKey: string;
+  initiatedAt: string;
+};
+
+export type CorePaymentNote = {
+  noteId: string;
+  tenantId: string;
+  paymentId: string;
+  merchantId: string;
+  authorIssuer: string;
+  authorSubject: string;
+  content: string;
+  createdAt: string;
+};
+
+export type CoreRiskSnapshot = {
+  evaluationId: string;
+  profileId: string;
+  profileVersion: number;
+  finalScore: number;
+  decision: string;
+  evaluatedAt: string;
+} | null;
+
+export type CoreProviderEvidence = {
+  evidenceId: string;
+  tenantId: string;
+  paymentId: string;
+  attemptId: string;
+  providerId: string;
+  providerIdempotencyKey: string;
+  providerResultId: string;
+  providerReference: string | null;
+  category: string;
+  retryDisposition: string;
+  providerTransactionFound: boolean;
+  noAcceptanceProven: boolean;
+  evidenceOrigin: string;
+  observedAt: string;
+};
+
+export type CoreLedgerPostingEntry = {
+  accountId: string;
+  accountCode: string;
+  direction: string;
+  amount: number | string;
+  currency: string;
+};
+
+export type CoreLedgerPosting = {
+  transactionId: string;
+  tenantId: string;
+  sourceType: string;
+  sourceId: string;
+  currency: string;
+  totalDebits: number | string;
+  totalCredits: number | string;
+  entries: CoreLedgerPostingEntry[];
+  compensatesTransactionId: string | null;
+} | null;
+
+export type CorePaymentTimelineEntry = {
+  sourceMessageId: string;
+  tenantId: string;
+  paymentId: string;
+  merchantId: string;
+  sourceModule: string;
+  sourceType: string;
+  sourceId: string;
+  occurredAt: string;
+  actorSource: string;
+  outcome: string;
+  reasonCode: string;
+  correlationId: string;
+  displayText: string;
+};
+
+export type CorePaymentDetail = {
+  payment: {
+    paymentId: string;
+    tenantId: string;
+    merchantId: string;
+    customerId: string;
+    amount: number | string;
+    currency: string;
+    paymentMethodCategory: string;
+    state: string;
+    createdAt: string;
+    updatedAt: string;
+    attempts: CorePaymentAttempt[];
+    notes: CorePaymentNote[];
+  };
+  risk: CoreRiskSnapshot;
+  providerEvidence: CoreProviderEvidence[];
+  ledgerPosting: CoreLedgerPosting;
+  reconciliationStatus: string;
+  timeline: CorePaymentTimelineEntry[];
+  notes: CorePaymentNote[];
+  attempts: CorePaymentAttempt[];
+};
+
+export type CoreLedgerBalance = {
+  accountId: string;
+  currency: string;
+  totalDebits: number | string;
+  totalCredits: number | string;
+  asOfExclusive: string;
+};
+
+export type CoreLedgerStatementEntry = {
+  transactionId: string;
+  entryIndex: number;
+  sourceType: string;
+  sourceId: string;
+  postedAt: string;
+  direction: string;
+  amount: number | string;
+  currency: string;
+};
+
+export type CoreLedgerStatement = {
+  accountId: string;
+  currency: string;
+  fromInclusive: string;
+  toExclusive: string;
+  totalDebits: number | string;
+  totalCredits: number | string;
+  totalEntries: number;
+  offset: number;
+  limit: number;
+  entries: CoreLedgerStatementEntry[];
+};
+
+export type CoreAuditItem = {
+  auditId: string;
+  actorIssuer: string;
+  actorSubject: string;
+  principalType: string;
+  tenantId: string;
+  action: string;
+  entity: string;
+  entityId: string;
+  correlationId: string;
+  reason: string;
+  details: string;
+  occurredAt: string;
+};
+
+export type CoreAuditPage = {
+  items: CoreAuditItem[];
+  nextCursor: string | null;
+};
+
 export type CoreTenantConfiguration = {
   tenantId: string;
   version: number;
@@ -238,6 +414,166 @@ export async function getCredentialPage(
   if (response.status === 403 || response.status === 404) return { kind: "unavailable" as const };
   if (!response.ok) return { kind: "error" as const };
   return { kind: "ok" as const, page: (await response.json()) as CoreCredentialPage };
+}
+
+export async function getPaymentPage(
+  tenantId: string,
+  accessToken: string,
+  options: {
+    platformId?: string;
+    merchantReference?: string;
+    providerId?: string;
+    customerId?: string;
+    from?: string;
+    to?: string;
+    minAmount?: string;
+    maxAmount?: string;
+    state?: string;
+    riskDecision?: string;
+    reconciliationStatus?: string;
+    limit?: number;
+    cursor?: string;
+  } = {},
+  readOptions: CoreReadOptions = {},
+) {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(options)) {
+    if (value !== undefined && value !== "") params.set(key, String(value));
+  }
+  const query = params.toString();
+  const response = await fetch(
+    `${config.coreBaseUrl}/api/v1/tenants/${encodeURIComponent(tenantId)}/payments${query ? `?${query}` : ""}`,
+    { headers: readHeaders(accessToken, readOptions), cache: "no-store" },
+  );
+  if (response.status === 401) return { kind: "unauthenticated" as const };
+  if (response.status === 403 || response.status === 404) return { kind: "unavailable" as const };
+  if (!response.ok) return { kind: "error" as const };
+  return { kind: "ok" as const, page: await response.json() as CorePaymentPage };
+}
+
+export async function getPaymentDetail(
+  tenantId: string,
+  paymentId: string,
+  accessToken: string,
+  readOptions: CoreReadOptions = {},
+) {
+  const response = await fetch(
+    `${config.coreBaseUrl}/api/v1/tenants/${encodeURIComponent(tenantId)}/payments/${encodeURIComponent(paymentId)}`,
+    { headers: readHeaders(accessToken, readOptions), cache: "no-store" },
+  );
+  if (response.status === 401) return { kind: "unauthenticated" as const };
+  if (response.status === 403 || response.status === 404) return { kind: "unavailable" as const };
+  if (!response.ok) return { kind: "error" as const };
+  return { kind: "ok" as const, detail: await response.json() as CorePaymentDetail };
+}
+
+export type CorePaymentNoteActionResponse =
+  | { kind: "unauthenticated" }
+  | { kind: "error"; status: number; code?: string }
+  | { kind: "ok"; result: CorePaymentNote };
+
+export async function addPaymentNote(
+  tenantId: string,
+  paymentId: string,
+  accessToken: string,
+  content: string,
+): Promise<CorePaymentNoteActionResponse> {
+  const response = await fetch(
+    `${config.coreBaseUrl}/api/v1/tenants/${encodeURIComponent(tenantId)}/payments/${encodeURIComponent(paymentId)}/notes`,
+    {
+      method: "POST",
+      headers: { authorization: `Bearer ${accessToken}`, "content-type": "application/json" },
+      body: JSON.stringify({ content }),
+      cache: "no-store",
+    },
+  );
+  if (response.status === 401) return { kind: "unauthenticated" };
+  if (!response.ok) {
+    let code: string | undefined;
+    try {
+      const problem = await response.json() as { type?: unknown; code?: unknown };
+      if (typeof problem.type === "string") code = problem.type;
+      if (typeof problem.code === "string") code = problem.code;
+    } catch {
+      // The BFF maps an unparseable Core response to a generic action error.
+    }
+    return { kind: "error", status: response.status, code };
+  }
+  if (response.status !== 201) return { kind: "error", status: 502, code: "unexpected_core_response" };
+  return { kind: "ok", result: await response.json() as CorePaymentNote };
+}
+
+export async function getLedgerBalance(
+  tenantId: string,
+  accountId: string,
+  accessToken: string,
+  options: { asOf?: string } = {},
+  readOptions: CoreReadOptions = {},
+) {
+  const params = new URLSearchParams();
+  if (options.asOf) params.set("asOf", options.asOf);
+  const query = params.toString();
+  const response = await fetch(
+    `${config.coreBaseUrl}/api/v1/tenants/${encodeURIComponent(tenantId)}/ledger/accounts/${encodeURIComponent(accountId)}/balance${query ? `?${query}` : ""}`,
+    { headers: readHeaders(accessToken, readOptions), cache: "no-store" },
+  );
+  if (response.status === 401) return { kind: "unauthenticated" as const };
+  if (response.status === 403 || response.status === 404) return { kind: "unavailable" as const };
+  if (!response.ok) return { kind: "error" as const };
+  return { kind: "ok" as const, balance: await response.json() as CoreLedgerBalance };
+}
+
+export async function getLedgerStatement(
+  tenantId: string,
+  accountId: string,
+  accessToken: string,
+  options: { from: string; to: string; offset?: number; limit?: number },
+  readOptions: CoreReadOptions = {},
+) {
+  const params = new URLSearchParams({ from: options.from, to: options.to });
+  if (options.offset !== undefined) params.set("offset", String(options.offset));
+  if (options.limit !== undefined) params.set("limit", String(options.limit));
+  const response = await fetch(
+    `${config.coreBaseUrl}/api/v1/tenants/${encodeURIComponent(tenantId)}/ledger/accounts/${encodeURIComponent(accountId)}/statement?${params.toString()}`,
+    { headers: readHeaders(accessToken, readOptions), cache: "no-store" },
+  );
+  if (response.status === 401) return { kind: "unauthenticated" as const };
+  if (response.status === 403 || response.status === 404) return { kind: "unavailable" as const };
+  if (!response.ok) return { kind: "error" as const };
+  return { kind: "ok" as const, statement: await response.json() as CoreLedgerStatement };
+}
+
+export async function getAuditPage(
+  tenantId: string,
+  accessToken: string,
+  options: {
+    actorIssuer?: string;
+    actorSubject?: string;
+    action?: string;
+    entity?: string;
+    entityId?: string;
+    from?: string;
+    to?: string;
+    result?: string;
+    correlationId?: string;
+    limit?: number;
+    cursor?: string;
+  } = {},
+  readOptions: CoreReadOptions = {},
+) {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(options)) {
+    if (value !== undefined && value !== "") params.set(key, String(value));
+  }
+  const query = params.toString();
+  const response = await fetch(
+    `${config.coreBaseUrl}/api/v1/tenants/${encodeURIComponent(tenantId)}/audit${query ? `?${query}` : ""}`,
+    { headers: readHeaders(accessToken, readOptions), cache: "no-store" },
+  );
+  if (response.status === 401) return { kind: "unauthenticated" as const };
+  if (response.status === 403 || response.status === 404) return { kind: "unavailable" as const };
+  if (!response.ok) return { kind: "error" as const };
+  return { kind: "ok" as const, page: await response.json() as CoreAuditPage };
 }
 
 export async function getTenantConfiguration(tenantId: string, accessToken: string) {

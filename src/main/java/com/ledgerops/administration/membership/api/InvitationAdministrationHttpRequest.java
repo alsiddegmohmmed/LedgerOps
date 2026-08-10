@@ -4,8 +4,8 @@ import com.ledgerops.identity.api.AuthenticatedPrincipal;
 import com.ledgerops.identity.api.AuthorizedRequestContext;
 import com.ledgerops.identity.api.InvitationAdministrationCommand;
 import com.ledgerops.identity.api.MembershipRoleAssignmentRequest;
-import com.ledgerops.identity.domain.ScopeMode;
-import com.ledgerops.identity.domain.TenantRole;
+import com.ledgerops.identity.api.TenantRoleName;
+import com.ledgerops.identity.api.TenantScopeMode;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.Email;
@@ -52,8 +52,8 @@ record InvitationAdministrationHttpRequest(
 }
 
 record MembershipRoleAssignmentHttpRequest(
-        @NotNull TenantRole role,
-        @NotNull ScopeMode scopeMode,
+        @NotNull TenantRoleName role,
+        @NotNull TenantScopeMode scopeMode,
         Set<UUID> merchantIds
 ) {
 

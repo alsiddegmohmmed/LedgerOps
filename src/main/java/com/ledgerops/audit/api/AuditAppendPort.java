@@ -13,6 +13,18 @@ public interface AuditAppendPort {
             String correlationId
     );
 
+    default void appendPaymentNoteAdded(
+            String actorIssuer,
+            String actorSubject,
+            UUID tenantId,
+            UUID merchantId,
+            UUID paymentId,
+            UUID noteId,
+            String correlationId
+    ) {
+        // Existing test doubles may ignore the optional Slice 3 evidence.
+    }
+
     void appendIdentityMembershipAccepted(
             String actorIssuer,
             String actorSubject,

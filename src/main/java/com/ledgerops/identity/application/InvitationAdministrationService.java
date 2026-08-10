@@ -8,6 +8,7 @@ import com.ledgerops.identity.api.AuthorizedRequestContext;
 import com.ledgerops.identity.api.InvitationAdministrationCommand;
 import com.ledgerops.identity.api.InvitationAdministrationPort;
 import com.ledgerops.identity.api.InvitationAdministrationResult;
+import com.ledgerops.identity.api.MerchantScopeOwnershipPort;
 import com.ledgerops.identity.api.MembershipRoleAssignmentRequest;
 import com.ledgerops.identity.api.MembershipRoleMutationCommand;
 import com.ledgerops.identity.api.MembershipRoleMutationResult;
@@ -15,6 +16,7 @@ import com.ledgerops.identity.domain.Invitation;
 import com.ledgerops.identity.domain.InvitationId;
 import com.ledgerops.identity.domain.InvitationRepository;
 import com.ledgerops.identity.domain.InvitationTokenHash;
+import com.ledgerops.identity.domain.InvalidMembershipTransitionException;
 import com.ledgerops.identity.domain.MerchantScope;
 import com.ledgerops.identity.domain.RoleGrantPolicy;
 import com.ledgerops.identity.domain.TenantAdminRemovalContext;
@@ -24,10 +26,7 @@ import com.ledgerops.identity.domain.TenantMembershipRepository;
 import com.ledgerops.identity.domain.TenantMembershipStatus;
 import com.ledgerops.identity.domain.TenantRoleAssignment;
 import com.ledgerops.identity.domain.TenantRoleAssignmentId;
-import com.ledgerops.merchant.domain.MerchantId;
-import com.ledgerops.merchant.domain.MerchantRepository;
 import com.ledgerops.messaging.api.MessageOutbox;
-import com.ledgerops.tenancy.api.TenantReference;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -44,7 +43,7 @@ public class InvitationAdministrationService implements InvitationAdministration
 
     private final TenantMembershipRepository memberships;
     private final InvitationRepository invitations;
-    private final MerchantRepository merchants;
+    private final MerchantScopeOwnershipPort merchantScopeOwnership;
     private final AuditAppendPort audit;
     private final MessageOutbox outbox;
     private final Clock clock;
@@ -52,14 +51,14 @@ public class InvitationAdministrationService implements InvitationAdministration
     public InvitationAdministrationService(
             TenantMembershipRepository memberships,
             InvitationRepository invitations,
-            MerchantRepository merchants,
+            MerchantScopeOwnershipPort merchantScopeOwnership,
             AuditAppendPort audit,
             MessageOutbox outbox,
             Clock clock
     ) {
         this.memberships = memberships;
         this.invitations = invitations;
-        this.merchants = merchants;
+        this.merchantScopeOwnership = merchantScopeOwnership;
         this.audit = audit;
         this.outbox = outbox;
         this.clock = clock;
@@ -116,9 +115,9 @@ public class InvitationAdministrationService implements InvitationAdministration
         TenantMembership previous = memberships.findByIdForUpdate(
                         new TenantMembershipId(command.revokedMembershipId()))
                 .filter(candidate -> candidate.tenantId().equals(command.tenantId()))
-                .orElseThrow(InvitationNotFoundException::new);
+                .orElseThrow(() -> new com.ledgerops.identity.api.InvitationNotFoundException());
         if (previous.status() != TenantMembershipStatus.REVOKED) {
-            throw new InvitationRevocationConflictException(
+            throw new com.ledgerops.identity.api.InvitationStateConflictException(
                     "Only a revoked membership can be reinvited");
         }
         TenantMembership membership = previous.reinvite(TenantMembershipId.newId(), Set.of());
@@ -165,8 +164,14 @@ public class InvitationAdministrationService implements InvitationAdministration
         }
         Set<TenantMembership> current = Set.copyOf(
                 memberships.findAllByTenantId(command.tenantId()));
-        TenantMembership changed = target.replaceRoleAssignments(
-                assignments, current, TenantAdminRemovalContext.MEMBERSHIP_CHANGE);
+        TenantMembership changed;
+        try {
+            changed = target.replaceRoleAssignments(
+                    assignments, current, TenantAdminRemovalContext.MEMBERSHIP_CHANGE);
+        } catch (InvalidMembershipTransitionException exception) {
+            throw new com.ledgerops.identity.api.MembershipStateConflictException(
+                    exception.getMessage());
+        }
         TenantMembership saved = memberships.save(changed);
         audit.appendIdentityMembershipRolesChanged(
                 command.actor().issuer(), command.actor().subject(), command.tenantId(),
@@ -190,26 +195,30 @@ public class InvitationAdministrationService implements InvitationAdministration
     ) {
         Set<TenantRoleAssignment> result = new LinkedHashSet<>();
         for (MembershipRoleAssignmentRequest request : requested) {
-            MerchantScope scope = request.scopeMode() == com.ledgerops.identity.domain.ScopeMode.MERCHANT_SET
+            com.ledgerops.identity.domain.ScopeMode scopeMode =
+                    com.ledgerops.identity.domain.ScopeMode.valueOf(request.scopeMode().name());
+            com.ledgerops.identity.domain.TenantRole role =
+                    com.ledgerops.identity.domain.TenantRole.valueOf(request.role().name());
+            MerchantScope scope = scopeMode == com.ledgerops.identity.domain.ScopeMode.MERCHANT_SET
                     ? merchantScope(tenantId, request.merchantIds())
                     : null;
-            TenantRoleAssignment assignment = request.scopeMode()
+            TenantRoleAssignment assignment = scopeMode
                     == com.ledgerops.identity.domain.ScopeMode.TENANT_WIDE
                     ? TenantRoleAssignment.tenantWide(
-                    TenantRoleAssignmentId.newId(), tenantId, request.role())
+                    TenantRoleAssignmentId.newId(), tenantId, role)
                     : TenantRoleAssignment.merchantScoped(
-                    TenantRoleAssignmentId.newId(), tenantId, request.role(), scope);
+                    TenantRoleAssignmentId.newId(), tenantId, role, scope);
             result.add(assignment);
         }
         return Set.copyOf(result);
     }
 
     private MerchantScope merchantScope(UUID tenantId, Set<UUID> merchantIds) {
+        if (!merchantScopeOwnership.allBelongToTenant(tenantId, merchantIds)) {
+            throw new AuthorizationResourceNotFoundException();
+        }
         Map<UUID, UUID> ownership = new LinkedHashMap<>();
         for (UUID merchantId : merchantIds) {
-            merchants.findById(
-                            TenantReference.from(tenantId), MerchantId.from(merchantId))
-                    .orElseThrow(() -> new AuthorizationResourceNotFoundException());
             ownership.put(merchantId, tenantId);
         }
         return MerchantScope.validated(tenantId, merchantIds, ownership);
