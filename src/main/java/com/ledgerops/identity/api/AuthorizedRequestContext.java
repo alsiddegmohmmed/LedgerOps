@@ -166,6 +166,18 @@ public record AuthorizedRequestContext(
         return hasPermission(Permission.NOTIFICATION_READ);
     }
 
+    public boolean canUploadSettlements() {
+        return hasPermission(Permission.SETTLEMENT_UPLOAD);
+    }
+
+    public boolean canReadReconciliation() {
+        return hasPermission(Permission.RECONCILIATION_READ);
+    }
+
+    public boolean canRunReconciliation() {
+        return hasPermission(Permission.RECONCILIATION_RUN);
+    }
+
     public boolean canAssignRiskReviews() {
         return hasPermission(Permission.RISK_REVIEW_ASSIGN);
     }

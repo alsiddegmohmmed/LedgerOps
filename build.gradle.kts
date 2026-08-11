@@ -19,10 +19,12 @@ repositories {
 }
 
 extra["springModulithVersion"] = "2.1.0"
+extra["awsSdkVersion"] = "2.51.4"
 
 dependencies {
 	implementation("com.fasterxml.jackson.core:jackson-databind")
 	implementation("org.springframework.boot:spring-boot-starter-actuator")
+	implementation("org.springframework.boot:spring-boot-starter-batch")
 	implementation("org.springframework.boot:spring-boot-starter-data-jpa")
 	implementation("org.springframework.boot:spring-boot-starter-flyway")
 	implementation("org.springframework.boot:spring-boot-starter-kafka")
@@ -35,9 +37,13 @@ dependencies {
 	implementation("io.github.resilience4j:resilience4j-bulkhead:2.4.0")
 	implementation("io.github.resilience4j:resilience4j-circuitbreaker:2.4.0")
 	implementation("org.apache.httpcomponents.client5:httpclient5")
+	implementation(platform("software.amazon.awssdk:bom:${property("awsSdkVersion")}"))
+	implementation("software.amazon.awssdk:s3")
+	implementation("software.amazon.awssdk:url-connection-client")
 	runtimeOnly("org.postgresql:postgresql")
 	runtimeOnly("io.micrometer:micrometer-registry-prometheus")
 	testImplementation("org.springframework.boot:spring-boot-starter-actuator-test")
+	testImplementation("org.springframework.batch:spring-batch-test")
 	testImplementation("org.springframework.boot:spring-boot-starter-data-jpa-test")
 	testImplementation("org.springframework.boot:spring-boot-starter-flyway-test")
 	testImplementation("org.springframework.boot:spring-boot-starter-kafka-test")

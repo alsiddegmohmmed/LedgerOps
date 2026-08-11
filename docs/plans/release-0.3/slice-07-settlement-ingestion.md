@@ -1,6 +1,6 @@
 # Release 0.3 Slice 7 - Settlement generation, upload, validation, and durable ingestion
 
-Status: Pending  
+Status: Complete
 Owner: One implementation owner  
 Release: 0.3
 
@@ -56,7 +56,7 @@ Excluded:
 
 ## Completion report
 
-- Changed: Pending
-- Verified: Pending
-- Incomplete: Slice 7
-- Deviations: None
+- Changed: Provider Simulator settlement-file generation and bounded lookup; V5 simulator payload migration; Core V36 Spring Batch/reconciliation schema; content-addressed S3/MinIO storage; streaming CSV validation; immutable batch/version/occurrence/canonical persistence; lifecycle/audit/outbox service; authenticated API and Operations Web upload/validation/processing UI; Slice 7 contract and integration tests.
+- Verified: `./gradlew compileJava --console=plain`; focused CSV/domain/service tests (6 tests); `SettlementSchemaIntegrationTests` (4 tests with PostgreSQL Testcontainers); `ModularityTests`; `LedgerOpsApplicationTests`; Provider Simulator tests; settlement route authentication tests; `corepack pnpm typecheck`; frontend lint/test/build; final root `./gradlew test`, `./gradlew check`, and `git diff --check`.
+- Incomplete: Matching, current-run promotion, discrepancy workflow, settlement posting, and Ledger effects remain explicitly deferred to Slice 8/9. A live MinIO/Keycloak/Kafka browser walkthrough is an environment-level release check, not part of Slice 7's Core persistence boundary.
+- Deviations: Corrected the API contract's stale `settlement:import` wording to the authoritative `settlement:upload`; no product or ADR decision changed.

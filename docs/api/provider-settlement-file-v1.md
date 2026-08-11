@@ -16,7 +16,7 @@ This contract defines the only Provider settlement-file format accepted in Relea
 - Maximum data rows: 100,000.
 - Empty files, additional columns, missing columns, reordered columns, duplicate headers, invalid UTF-8, NUL bytes, and embedded executable content are rejected structurally.
 - The complete raw object is hashed with SHA-256 before validation and stored immutably in S3-compatible storage.
-- Upload requires an authenticated Reconciliation Analyst with Tenant-wide `settlement:import` permission. Provider and Tenant are server-side route/authorization context, not trusted file fields.
+- Upload requires an authenticated Reconciliation Analyst with Tenant-wide `settlement:upload` permission. Provider and Tenant are server-side route/authorization context, not trusted file fields.
 
 ## Exact header
 

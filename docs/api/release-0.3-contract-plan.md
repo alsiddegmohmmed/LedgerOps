@@ -68,6 +68,28 @@ does not find a Provider transaction. Support sessions remain read-only.
 Slice 5 contracts are documented in
 [Release 0.3 Slice 5 Provider and Merchant webhook contracts](release-0.3-slice-5-provider-and-webhook-contracts.md).
 
+Slice 7 publishes the authenticated settlement-ingestion boundary:
+
+```text
+POST /api/v1/tenants/{tenantId}/settlement-batches
+GET  /api/v1/tenants/{tenantId}/settlement-batches
+GET  /api/v1/tenants/{tenantId}/settlement-batches/{batchVersionId}
+GET  /api/v1/tenants/{tenantId}/settlement-batches/{batchVersionId}/validation-items
+POST /api/v1/tenants/{tenantId}/settlement-batches/{batchVersionId}/validate
+POST /api/v1/tenants/{tenantId}/settlement-batches/{batchVersionId}/process
+```
+
+The upload is multipart form data containing the exact Provider settlement CSV,
+the Provider batch reference, and the declared settlement-period dates. The
+Core service hashes and stores the raw bytes before inserting batch metadata;
+the public response never exposes the internal object-storage key. Upload is
+authorized by Tenant-wide `settlement:upload`; batch reads and validation use
+`reconciliation:read`; processing requires `reconciliation:run` and
+`confirmation: true`. Validation must complete before processing is accepted.
+Slice 7 stops after normalized immutable occurrences and canonical record
+versions: matching, current-run promotion, discrepancies, and Ledger posting
+remain Slice 8/9 behavior.
+
 The first published Tenant configuration boundary is the authenticated
 `/api/v1/tenants/{tenantId}/configuration` resource. `GET` returns the current
 append-only configuration version and returns `404` before the first version

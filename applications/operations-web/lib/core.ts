@@ -35,6 +35,38 @@ export type CoreCredentialPage = {
   nextCursor: string | null;
 };
 
+export type CoreSettlementBatch = {
+  batchVersionId: string;
+  familyId: string;
+  tenantId: string;
+  providerId: string;
+  providerBatchReference: string;
+  settlementPeriodStart: string;
+  settlementPeriodEnd: string;
+  rawFileSha256: string;
+  byteSize: number;
+  status: "RECEIVED" | "VALIDATING" | "READY" | "PROCESSING" | "COMPLETED" | "COMPLETED_WITH_DISCREPANCIES" | "FAILED";
+  supersedesBatchVersionId: string | null;
+  totalRows: number;
+  validRows: number;
+  invalidRows: number;
+  structuralErrorCode: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type CoreSettlementValidationItem = {
+  validationItemId: string;
+  rowNumber: number;
+  reasonCode: string;
+  safeEvidence: Record<string, unknown>;
+  createdAt: string;
+};
+
+export type CoreSettlementBatchPage = {
+  items: CoreSettlementBatch[];
+};
+
 export type CorePaymentSearchItem = {
   paymentId: string;
   tenantId: string;
@@ -668,6 +700,111 @@ export async function getCredentialPage(
   if (response.status === 403 || response.status === 404) return { kind: "unavailable" as const };
   if (!response.ok) return { kind: "error" as const };
   return { kind: "ok" as const, page: (await response.json()) as CoreCredentialPage };
+}
+
+export async function getSettlementBatches(
+  tenantId: string,
+  accessToken: string,
+  readOptions: CoreReadOptions = {},
+) {
+  const response = await fetch(
+    `${config.coreBaseUrl}/api/v1/tenants/${encodeURIComponent(tenantId)}/settlement-batches`,
+    { headers: readHeaders(accessToken, readOptions), cache: "no-store" },
+  );
+  if (response.status === 401) return { kind: "unauthenticated" as const };
+  if (response.status === 403 || response.status === 404) return { kind: "unavailable" as const };
+  if (!response.ok) return { kind: "error" as const };
+  return { kind: "ok" as const, page: await response.json() as CoreSettlementBatchPage };
+}
+
+export async function getSettlementBatch(
+  tenantId: string,
+  batchVersionId: string,
+  accessToken: string,
+  readOptions: CoreReadOptions = {},
+) {
+  const response = await fetch(
+    `${config.coreBaseUrl}/api/v1/tenants/${encodeURIComponent(tenantId)}/settlement-batches/${encodeURIComponent(batchVersionId)}`,
+    { headers: readHeaders(accessToken, readOptions), cache: "no-store" },
+  );
+  if (response.status === 401) return { kind: "unauthenticated" as const };
+  if (response.status === 403 || response.status === 404) return { kind: "unavailable" as const };
+  if (!response.ok) return { kind: "error" as const };
+  return { kind: "ok" as const, batch: await response.json() as CoreSettlementBatch };
+}
+
+export async function getSettlementValidationItems(
+  tenantId: string,
+  batchVersionId: string,
+  accessToken: string,
+  readOptions: CoreReadOptions = {},
+) {
+  const response = await fetch(
+    `${config.coreBaseUrl}/api/v1/tenants/${encodeURIComponent(tenantId)}/settlement-batches/${encodeURIComponent(batchVersionId)}/validation-items`,
+    { headers: readHeaders(accessToken, readOptions), cache: "no-store" },
+  );
+  if (response.status === 401) return { kind: "unauthenticated" as const };
+  if (response.status === 403 || response.status === 404) return { kind: "unavailable" as const };
+  if (!response.ok) return { kind: "error" as const };
+  return { kind: "ok" as const, items: await response.json() as CoreSettlementValidationItem[] };
+}
+
+export async function uploadSettlementBatch(
+  tenantId: string,
+  accessToken: string,
+  form: FormData,
+): Promise<CoreActionResponse<CoreSettlementBatch>> {
+  const response = await fetch(
+    `${config.coreBaseUrl}/api/v1/tenants/${encodeURIComponent(tenantId)}/settlement-batches`,
+    {
+      method: "POST",
+      headers: { authorization: `Bearer ${accessToken}` },
+      body: form,
+      cache: "no-store",
+    },
+  );
+  if (response.status === 401) return { kind: "unauthenticated" };
+  if (!response.ok) {
+    let code: string | undefined;
+    try {
+      const problem = await response.json() as { code?: unknown; type?: unknown };
+      if (typeof problem.code === "string") code = problem.code;
+      if (typeof problem.type === "string") code = problem.type;
+    } catch {
+      // The BFF maps an unparseable Core response to a generic action failure.
+    }
+    return { kind: "error", status: response.status, code };
+  }
+  if (response.status !== 201) return { kind: "error", status: 502, code: "unexpected_core_response" };
+  return { kind: "ok", result: await response.json() as CoreSettlementBatch };
+}
+
+export function validateSettlementBatch(
+  tenantId: string,
+  batchVersionId: string,
+  accessToken: string,
+): Promise<CoreActionResponse<CoreSettlementBatch>> {
+  return requestCoreAction(
+    "POST",
+    `/api/v1/tenants/${encodeURIComponent(tenantId)}/settlement-batches/${encodeURIComponent(batchVersionId)}/validate`,
+    accessToken,
+    undefined,
+    200,
+  );
+}
+
+export function processSettlementBatch(
+  tenantId: string,
+  batchVersionId: string,
+  accessToken: string,
+): Promise<CoreActionResponse<CoreSettlementBatch>> {
+  return requestCoreAction(
+    "POST",
+    `/api/v1/tenants/${encodeURIComponent(tenantId)}/settlement-batches/${encodeURIComponent(batchVersionId)}/process`,
+    accessToken,
+    { confirmation: true },
+    200,
+  );
 }
 
 export async function getPaymentPage(

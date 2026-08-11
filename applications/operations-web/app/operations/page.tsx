@@ -69,6 +69,9 @@ export default async function OperationsPage() {
             <h2>Provider operations</h2>
             <p>Inspect durable Provider health and Platform Admin scenario assignments.</p>
             <Link className="button secondary" href="/operations/provider">Open Provider operations</Link>
+            <h2>Settlement ingestion</h2>
+            <p>Upload, validate, and explicitly process immutable Provider settlement files.</p>
+            <Link className="button secondary" href="/operations/settlements">Open settlement ingestion</Link>
           </div>
         )}
         {tenantResult?.kind === "unavailable" && (

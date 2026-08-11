@@ -15,16 +15,24 @@ import java.security.MessageDigest;
 import java.sql.Timestamp;
 import java.time.Clock;
 import java.time.Duration;
+import java.time.LocalDate;
+import java.time.format.DateTimeParseException;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
 import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 @RestController
 final class ProviderSimulatorController {
     private static final String SUBMIT_PATH = "/provider/v1/payments";
     private static final String STATUS_PATH = "/provider/v1/payment-status-queries";
+    private static final String SETTLEMENT_PATH = "/provider/v1/settlement-files";
     private final JdbcTemplate jdbc;
     private final HmacVerifier hmac;
     private final Clock clock;
@@ -80,8 +88,8 @@ final class ProviderSimulatorController {
                      request_intent_hash, request_content_hash, scenario,
                      result_category, provider_result_id, provider_reference,
                      traceparent, tracestate, scenario_profile_id, scenario_profile_version,
-                     scenario_snapshot, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb, ?, ?)
+                     scenario_snapshot, request_payload, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb, ?::jsonb, ?, ?)
                 ON CONFLICT (provider_client_id, provider_idempotency_key) DO NOTHING
                 """, transactionId, providerClientId, providerKey, intentHash,
                 contentHash, scenario, category, resultId, providerReference,
@@ -89,6 +97,7 @@ final class ProviderSimulatorController {
                 configured == null ? null : configured.profileId(),
                 configured == null ? null : configured.profileVersion(),
                 configured == null ? null : configured.snapshotJson(),
+                new String(body, java.nio.charset.StandardCharsets.UTF_8),
                 Timestamp.from(clock.instant()), Timestamp.from(clock.instant()));
         if (inserted == 0) {
             Map<String, Object> raced = find(providerKey);
@@ -122,6 +131,53 @@ final class ProviderSimulatorController {
         return existing == null
                 ? ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("found", false))
                 : ResponseEntity.ok(existing);
+    }
+
+    @PostMapping(path = SETTLEMENT_PATH, consumes = "application/json", produces = "text/csv")
+    ResponseEntity<byte[]> settlementFile(
+            @RequestBody byte[] body,
+            @RequestHeader("X-LedgerOps-Key-Id") String keyId,
+            @RequestHeader("X-LedgerOps-Timestamp") String timestamp,
+            @RequestHeader("X-LedgerOps-Request-Id") String requestId,
+            @RequestHeader("X-LedgerOps-Signature") String signature) {
+        authenticate(SETTLEMENT_PATH, keyId, timestamp, requestId, body, signature);
+        JsonNode request = parse(body);
+        LocalDate start = date(request, "settlementPeriodStart");
+        LocalDate end = date(request, "settlementPeriodEnd");
+        if (end.isBefore(start)) {
+            throw new SimulatorProblemException(HttpStatus.BAD_REQUEST,
+                    "INVALID_SETTLEMENT_REQUEST", "Settlement period end precedes start");
+        }
+        String batchReference = text(request, "providerBatchReference");
+        JsonNode keys = request.get("providerIdempotencyKeys");
+        if (keys == null || !keys.isArray() || keys.isEmpty() || keys.size() > 100_000) {
+            throw new SimulatorProblemException(HttpStatus.BAD_REQUEST,
+                    "INVALID_SETTLEMENT_REQUEST", "providerIdempotencyKeys must contain 1 to 100000 keys");
+        }
+        List<String> providerKeys = new ArrayList<>();
+        Set<String> uniqueKeys = new HashSet<>();
+        for (JsonNode key : keys) {
+            if (!key.isString() || key.asString().isBlank() || !uniqueKeys.add(key.asString())) {
+                throw new SimulatorProblemException(HttpStatus.BAD_REQUEST,
+                        "INVALID_SETTLEMENT_REQUEST", "providerIdempotencyKeys must be unique non-blank strings");
+            }
+            providerKeys.add(key.asString());
+        }
+        Map<String, SettlementFileGenerator.Transaction> transactions = findTransactions(providerKeys);
+        if (transactions.size() != providerKeys.size()) {
+            throw new SimulatorProblemException(HttpStatus.NOT_FOUND,
+                    "SETTLEMENT_SUBJECT_NOT_FOUND", "One or more Provider records do not exist");
+        }
+        Map<String, SettlementFileGenerator.Correction> corrections = corrections(request.get("corrections"));
+        byte[] csv = new SettlementFileGenerator().generate(
+                new SettlementFileGenerator.Request(batchReference, start, end, corrections),
+                transactions.values().stream().sorted(java.util.Comparator.comparing(
+                        SettlementFileGenerator.Transaction::providerIdempotencyKey)).toList());
+        return ResponseEntity.ok()
+                .header("Content-Disposition", "attachment; filename=settlement-" + batchReference + ".csv")
+                .header("X-Settlement-SHA256", sha256(csv))
+                .contentType(org.springframework.http.MediaType.parseMediaType("text/csv"))
+                .body(csv);
     }
 
     private void authenticate(String path, String keyId, String timestamp,
@@ -218,6 +274,85 @@ final class ProviderSimulatorController {
                 SELECT scenario FROM simulator.scenario_overrides
                  WHERE provider_client_id = ? AND provider_idempotency_key = ?
                 """, rs -> rs.next() ? rs.getString(1) : "SUCCESS", providerClientId, providerKey);
+    }
+
+    private Map<String, SettlementFileGenerator.Transaction> findTransactions(List<String> keys) {
+        Map<String, SettlementFileGenerator.Transaction> result = new HashMap<>();
+        for (int offset = 0; offset < keys.size(); offset += 1_000) {
+            List<String> chunk = keys.subList(offset, Math.min(offset + 1_000, keys.size()));
+            String placeholders = String.join(",", java.util.Collections.nCopies(chunk.size(), "?"));
+            List<Object> arguments = new ArrayList<>();
+            arguments.add(providerClientId);
+            arguments.addAll(chunk);
+            jdbc.query("""
+                    SELECT provider_idempotency_key, provider_reference, result_category,
+                           request_payload::text, scenario_snapshot::text, created_at
+                      FROM simulator.provider_transactions
+                     WHERE provider_client_id = ?
+                       AND provider_idempotency_key IN (""" + placeholders + ")", rs -> {
+                while (rs.next()) {
+                    result.put(rs.getString("provider_idempotency_key"),
+                            new SettlementFileGenerator.Transaction(
+                                    rs.getString("provider_idempotency_key"),
+                                    rs.getString("provider_reference"),
+                                    rs.getString("result_category"),
+                                    parseJson(rs.getString("request_payload")),
+                                    rs.getString("scenario_snapshot") == null
+                                            ? null : parseJson(rs.getString("scenario_snapshot")),
+                                    rs.getTimestamp("created_at").toInstant()));
+                }
+                return null;
+            }, arguments.toArray());
+        }
+        return result;
+    }
+
+    private Map<String, SettlementFileGenerator.Correction> corrections(JsonNode node) {
+        if (node == null || node.isNull()) return Map.of();
+        if (!node.isObject()) {
+            throw new SimulatorProblemException(HttpStatus.BAD_REQUEST,
+                    "INVALID_SETTLEMENT_REQUEST", "corrections must be an object");
+        }
+        Map<String, SettlementFileGenerator.Correction> result = new HashMap<>();
+        node.properties().forEach(entry -> {
+            JsonNode correction = entry.getValue();
+            if (!correction.isObject()) {
+                throw new SimulatorProblemException(HttpStatus.BAD_REQUEST,
+                        "INVALID_SETTLEMENT_REQUEST", "Each correction must be an object");
+            }
+            String amount = optionalText(correction, "amount");
+            String currency = optionalText(correction, "currency");
+            String status = optionalText(correction, "transactionStatus");
+            LocalDate date = correction.get("settlementDate") == null
+                    ? null : date(correction, "settlementDate");
+            result.put(entry.getKey(), new SettlementFileGenerator.Correction(amount, currency, status, date));
+        });
+        return result;
+    }
+
+    private LocalDate date(JsonNode request, String field) {
+        try {
+            String value = text(request, field);
+            LocalDate parsed = LocalDate.parse(value);
+            if (!parsed.toString().equals(value)) throw new DateTimeParseException("not canonical", value, 0);
+            return parsed;
+        } catch (Exception exception) {
+            throw new SimulatorProblemException(HttpStatus.BAD_REQUEST,
+                    "INVALID_SETTLEMENT_REQUEST", field + " must be an ISO-8601 date");
+        }
+    }
+
+    private String optionalText(JsonNode request, String field) {
+        JsonNode value = request.get(field);
+        return value == null || value.isNull() ? null : text(request, field);
+    }
+
+    private JsonNode parseJson(String value) {
+        try {
+            return json.readTree(value);
+        } catch (Exception exception) {
+            throw new IllegalStateException("Simulator JSON evidence is invalid", exception);
+        }
     }
 
     private ScenarioRequest scenarioRequest(JsonNode request) {
