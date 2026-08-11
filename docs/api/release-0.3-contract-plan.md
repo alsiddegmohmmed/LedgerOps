@@ -90,6 +90,120 @@ Slice 7 stops after normalized immutable occurrences and canonical record
 versions: matching, current-run promotion, discrepancies, and Ledger posting
 remain Slice 8/9 behavior.
 
+## Slice 8 reconciliation and settlement-posting contract
+
+Slice 8 publishes the authenticated Reconciliation run, evidence, current-run,
+status-history, and controlled settlement-posting boundaries. All routes are
+Tenant-scoped. Read routes require Tenant-wide `reconciliation:read`.
+Mutation routes require Tenant-wide `reconciliation:run` or
+`reconciliation:promote` as listed below. An out-of-scope Tenant or resource is
+returned as unavailable; the response does not disclose whether another
+Tenant's resource exists.
+
+### Run and evidence routes
+
+```text
+POST /api/v1/tenants/{tenantId}/reconciliation-runs
+GET  /api/v1/tenants/{tenantId}/reconciliation-runs
+GET  /api/v1/tenants/{tenantId}/reconciliation-runs/current?batchFamilyId={uuid}
+GET  /api/v1/tenants/{tenantId}/reconciliation-runs/{runId}
+GET  /api/v1/tenants/{tenantId}/reconciliation-runs/{runId}/results
+GET  /api/v1/tenants/{tenantId}/reconciliation-runs/{runId}/postings
+GET  /api/v1/tenants/{tenantId}/reconciliation-runs/subjects/{subjectType}/{subjectId}/status-history
+```
+
+The run request is JSON with the required fields `batchVersionId`,
+`rulesVersion`, `sourceCutoff`, and `confirmation: true`. `rulesVersion` is a
+printable 1–64 character value. `sourceCutoff` is an ISO-8601 instant. The
+selected settlement batch must be `COMPLETED` or
+`COMPLETED_WITH_DISCREPANCIES`. The response is `201` and contains the
+terminal `ReconciliationRunSnapshot`, including the immutable snapshot ID,
+run number, rules version, source cutoff, status, counts, timestamps, and
+failure reason when present.
+
+The run captures immutable settlement occurrences and immutable Payment and
+Reversal financial facts through published module APIs. The Payment query
+uses accepted final Provider results at or before `sourceCutoff`; it does not
+use mutable Payment or Reversal status as the financial evidence. Provider and
+Ledger evidence is then copied into the immutable snapshot. A run does not
+hold one cross-module transaction while it reads those bounded pages.
+
+The run collection accepts optional `batchFamilyId` and `limit` query
+parameters. `limit` defaults to `25` and must be between `1` and `100`. Result
+reads accept optional `status` (`MATCHED` or `DISCREPANCY`), `category`,
+`limit` (default `50`, range `1–100`), and non-negative `offset`. Posting reads
+accept `limit` and non-negative `offset` with the same default and range.
+Result and posting read pages are ordered deterministically by creation time
+and stable identifiers. The current-run route returns the one promoted run
+for the batch family or `404` when no current run exists. Status history is
+append-only and accepts only `PAYMENT` or `REVERSAL` subject types.
+
+The result response exposes `providerValuesJson` and `internalValuesJson` as
+safe evidence projections. It never exposes bearer tokens, client secrets,
+invitation token hashes, or other secret material.
+
+### Promotion and posting actions
+
+```text
+POST /api/v1/tenants/{tenantId}/reconciliation-runs/{runId}/promote
+POST /api/v1/tenants/{tenantId}/reconciliation-runs/{runId}/postings/prepare
+POST /api/v1/tenants/{tenantId}/reconciliation-runs/{runId}/postings
+```
+
+Each request contains `batchFamilyId`, `confirmation: true`, and a non-blank
+`reason` of at most 512 characters. Promotion requires
+`reconciliation:promote`. Posting preparation and application require
+`reconciliation:run`. The selected run must be terminal and eligible; the
+backend rechecks the Tenant, batch family, current pointer, immutable match,
+and posting state. The Operations Web does not make those decisions from
+presentation state. Support sessions remain read-only.
+
+Promotion returns the `CurrentReconciliationRunSnapshot`. Preparation returns
+stable posting outcomes for exact matches and creates one immutable
+`SettlementPostingInstruction` plus one `PENDING` application per eligible
+identity. Application returns `POSTED`, `REPLAYED`, or
+`WAITING_FOR_PAYMENT` outcomes. A duplicate request reuses the existing
+instruction/application and cannot create a second Ledger transaction.
+
+Payment settlement uses:
+
+```text
+DEBIT  SETTLEMENT_RECEIVABLE
+CREDIT PROVIDER_CLEARING
+```
+
+Reversal settlement uses the inverse:
+
+```text
+DEBIT  PROVIDER_CLEARING
+CREDIT SETTLEMENT_RECEIVABLE
+```
+
+These are settlement postings. They are distinct from the existing Payment
+and Reversal source postings used as immutable evidence. A Reversal settlement
+is applied only after the exact Payment settlement application is `POSTED`;
+otherwise the result is retained as
+`REVERSAL_WITHOUT_PAYMENT_SETTLEMENT` and no Ledger effect is created.
+
+### Failure behavior and lifecycle events
+
+Malformed UUIDs, invalid enum filters, invalid limits, missing confirmation,
+invalid timestamps, and invalid request fields return `400` with an
+RFC 7807-style `invalid-reconciliation-request` problem. Missing or
+out-of-scope resources return `404`. Missing Tenant-wide authority returns
+`403`. Promotion, posting, and immutable-state races return `409` with a
+retryable reconciliation-state-conflict problem. No incompatible financial
+state is committed on a rejected action.
+
+Reconciliation emits `ReconciliationLifecycleChanged` version `1` to
+`ledgerops.reconciliation.lifecycle.v1` through the transactional outbox.
+Run and current-run events use `batchFamilyId` as the partition key. Posting
+events use `settlementPostingId`. Deduplication keys are stable per run/event,
+current-run/family/run, or posting/event. Discrepancies emit
+`CreateCaseRequested` through the Casework command topic. Slice 8 does not
+implement the Notification consumer; notification creation and read state
+remain Slice 10 behavior.
+
 The first published Tenant configuration boundary is the authenticated
 `/api/v1/tenants/{tenantId}/configuration` resource. `GET` returns the current
 append-only configuration version and returns `404` before the first version

@@ -67,6 +67,80 @@ export type CoreSettlementBatchPage = {
   items: CoreSettlementBatch[];
 };
 
+export type CoreReconciliationRun = {
+  runId: string;
+  tenantId: string;
+  batchFamilyId: string;
+  batchVersionId: string;
+  snapshotId: string;
+  runNumber: number;
+  rulesVersion: string;
+  sourceCutoff: string;
+  status: string;
+  matchedCount: number;
+  unmatchedCount: number;
+  discrepancyCount: number;
+  createdAt: string;
+  startedAt: string | null;
+  terminalAt: string | null;
+  failureReason: string | null;
+};
+
+export type CoreReconciliationResult = {
+  resultId: string;
+  occurrenceId: string | null;
+  canonicalRecordVersionId: string | null;
+  subjectType: string | null;
+  subjectId: string | null;
+  resultStatus: string;
+  discrepancyCategory: string | null;
+  providerValuesJson: string;
+  internalValuesJson: string;
+  createdAt: string;
+};
+
+export type CoreReconciliationCurrentRun = {
+  tenantId: string;
+  batchFamilyId: string;
+  runId: string;
+  promotedAt: string;
+};
+
+export type CoreReconciliationPosting = {
+  settlementPostingId: string;
+  tenantId: string;
+  runId: string;
+  canonicalRecordVersionId: string;
+  occurrenceId: string;
+  subjectType: string;
+  subjectId: string;
+  templateVersion: string;
+  amount: number | string;
+  currency: string;
+  instructionHash: string;
+  applicationStatus: string;
+  ledgerTransactionId: string | null;
+  createdAt: string;
+  postedAt: string | null;
+};
+
+export type CoreReconciliationStatusHistory = {
+  statusId: string;
+  tenantId: string;
+  subjectType: string;
+  subjectId: string;
+  runId: string | null;
+  status: string;
+  occurredAt: string;
+};
+
+export type CoreReconciliationPostingOutcome = {
+  settlementPostingId: string;
+  subjectType: string;
+  status: string;
+  ledgerTransactionId: string | null;
+};
+
 export type CorePaymentSearchItem = {
   paymentId: string;
   tenantId: string;
@@ -749,6 +823,102 @@ export async function getSettlementValidationItems(
   return { kind: "ok" as const, items: await response.json() as CoreSettlementValidationItem[] };
 }
 
+export async function getReconciliationRuns(
+  tenantId: string,
+  accessToken: string,
+  options: { batchFamilyId?: string; limit?: number } = {},
+  readOptions: CoreReadOptions = {},
+) {
+  const params = new URLSearchParams();
+  if (options.batchFamilyId) params.set("batchFamilyId", options.batchFamilyId);
+  if (options.limit !== undefined) params.set("limit", String(options.limit));
+  const query = params.toString();
+  const response = await fetch(
+    `${config.coreBaseUrl}/api/v1/tenants/${encodeURIComponent(tenantId)}/reconciliation-runs${query ? `?${query}` : ""}`,
+    { headers: readHeaders(accessToken, readOptions), cache: "no-store" },
+  );
+  if (response.status === 401) return { kind: "unauthenticated" as const };
+  if (response.status === 403 || response.status === 404) return { kind: "unavailable" as const };
+  if (!response.ok) return { kind: "error" as const };
+  return { kind: "ok" as const, runs: await response.json() as CoreReconciliationRun[] };
+}
+
+export async function getReconciliationRun(
+  tenantId: string,
+  runId: string,
+  accessToken: string,
+  readOptions: CoreReadOptions = {},
+) {
+  const response = await fetch(
+    `${config.coreBaseUrl}/api/v1/tenants/${encodeURIComponent(tenantId)}/reconciliation-runs/${encodeURIComponent(runId)}`,
+    { headers: readHeaders(accessToken, readOptions), cache: "no-store" },
+  );
+  if (response.status === 401) return { kind: "unauthenticated" as const };
+  if (response.status === 403 || response.status === 404) return { kind: "unavailable" as const };
+  if (!response.ok) return { kind: "error" as const };
+  return { kind: "ok" as const, run: await response.json() as CoreReconciliationRun };
+}
+
+export async function getCurrentReconciliationRun(
+  tenantId: string,
+  batchFamilyId: string,
+  accessToken: string,
+  readOptions: CoreReadOptions = {},
+) {
+  const response = await fetch(
+    `${config.coreBaseUrl}/api/v1/tenants/${encodeURIComponent(tenantId)}/reconciliation-runs/current?batchFamilyId=${encodeURIComponent(batchFamilyId)}`,
+    { headers: readHeaders(accessToken, readOptions), cache: "no-store" },
+  );
+  if (response.status === 401) return { kind: "unauthenticated" as const };
+  if (response.status === 403 || response.status === 404) return { kind: "unavailable" as const };
+  if (!response.ok) return { kind: "error" as const };
+  return { kind: "ok" as const, current: await response.json() as CoreReconciliationCurrentRun };
+}
+
+export async function getReconciliationResults(
+  tenantId: string,
+  runId: string,
+  accessToken: string,
+  options: { status?: string; category?: string; limit?: number; offset?: number } = {},
+  readOptions: CoreReadOptions = {},
+) {
+  const params = new URLSearchParams();
+  if (options.status) params.set("status", options.status);
+  if (options.category) params.set("category", options.category);
+  if (options.limit !== undefined) params.set("limit", String(options.limit));
+  if (options.offset !== undefined) params.set("offset", String(options.offset));
+  const query = params.toString();
+  const response = await fetch(
+    `${config.coreBaseUrl}/api/v1/tenants/${encodeURIComponent(tenantId)}/reconciliation-runs/${encodeURIComponent(runId)}/results${query ? `?${query}` : ""}`,
+    { headers: readHeaders(accessToken, readOptions), cache: "no-store" },
+  );
+  if (response.status === 401) return { kind: "unauthenticated" as const };
+  if (response.status === 403 || response.status === 404) return { kind: "unavailable" as const };
+  if (!response.ok) return { kind: "error" as const };
+  return { kind: "ok" as const, results: await response.json() as CoreReconciliationResult[] };
+}
+
+export async function getReconciliationPostings(
+  tenantId: string,
+  runId: string,
+  accessToken: string,
+  options: { limit?: number; offset?: number } = {},
+  readOptions: CoreReadOptions = {},
+) {
+  const params = new URLSearchParams();
+  if (options.limit !== undefined) params.set("limit", String(options.limit));
+  if (options.offset !== undefined) params.set("offset", String(options.offset));
+  const query = params.toString();
+  const response = await fetch(
+    `${config.coreBaseUrl}/api/v1/tenants/${encodeURIComponent(tenantId)}/reconciliation-runs/${encodeURIComponent(runId)}/postings${query ? `?${query}` : ""}`,
+    { headers: readHeaders(accessToken, readOptions), cache: "no-store" },
+  );
+  if (response.status === 401) return { kind: "unauthenticated" as const };
+  if (response.status === 403 || response.status === 404) return { kind: "unavailable" as const };
+  if (!response.ok) return { kind: "error" as const };
+  return { kind: "ok" as const, postings: await response.json() as CoreReconciliationPosting[] };
+}
+
 export async function uploadSettlementBatch(
   tenantId: string,
   accessToken: string,
@@ -803,6 +973,65 @@ export function processSettlementBatch(
     `/api/v1/tenants/${encodeURIComponent(tenantId)}/settlement-batches/${encodeURIComponent(batchVersionId)}/process`,
     accessToken,
     { confirmation: true },
+    200,
+  );
+}
+
+export function executeReconciliationRun(
+  tenantId: string,
+  accessToken: string,
+  body: { batchVersionId: string; rulesVersion: string; sourceCutoff: string; confirmation: true },
+): Promise<CoreActionResponse<CoreReconciliationRun>> {
+  return requestCoreAction(
+    "POST",
+    `/api/v1/tenants/${encodeURIComponent(tenantId)}/reconciliation-runs`,
+    accessToken,
+    body,
+    201,
+  );
+}
+
+export function promoteReconciliationRun(
+  tenantId: string,
+  runId: string,
+  accessToken: string,
+  body: { batchFamilyId: string; confirmation: true; reason: string },
+): Promise<CoreActionResponse<CoreReconciliationCurrentRun>> {
+  return requestCoreAction(
+    "POST",
+    `/api/v1/tenants/${encodeURIComponent(tenantId)}/reconciliation-runs/${encodeURIComponent(runId)}/promote`,
+    accessToken,
+    body,
+    200,
+  );
+}
+
+export function prepareReconciliationPosting(
+  tenantId: string,
+  runId: string,
+  accessToken: string,
+  body: { batchFamilyId: string; confirmation: true; reason: string },
+): Promise<CoreActionResponse<CoreReconciliationPostingOutcome[]>> {
+  return requestCoreAction(
+    "POST",
+    `/api/v1/tenants/${encodeURIComponent(tenantId)}/reconciliation-runs/${encodeURIComponent(runId)}/postings/prepare`,
+    accessToken,
+    body,
+    200,
+  );
+}
+
+export function postReconciliation(
+  tenantId: string,
+  runId: string,
+  accessToken: string,
+  body: { batchFamilyId: string; confirmation: true; reason: string },
+): Promise<CoreActionResponse<CoreReconciliationPostingOutcome[]>> {
+  return requestCoreAction(
+    "POST",
+    `/api/v1/tenants/${encodeURIComponent(tenantId)}/reconciliation-runs/${encodeURIComponent(runId)}/postings`,
+    accessToken,
+    body,
     200,
   );
 }

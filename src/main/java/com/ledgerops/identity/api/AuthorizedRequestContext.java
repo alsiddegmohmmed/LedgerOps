@@ -178,6 +178,10 @@ public record AuthorizedRequestContext(
         return hasPermission(Permission.RECONCILIATION_RUN);
     }
 
+    public boolean canPromoteReconciliation() {
+        return hasPermission(Permission.RECONCILIATION_PROMOTE);
+    }
+
     public boolean canAssignRiskReviews() {
         return hasPermission(Permission.RISK_REVIEW_ASSIGN);
     }

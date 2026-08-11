@@ -4,6 +4,7 @@ import com.ledgerops.messaging.api.MessageOutbox;
 import com.ledgerops.messaging.api.OutboxMessageDraft;
 import com.ledgerops.messaging.api.ProducerName;
 import com.ledgerops.provider.api.ProviderEvidence;
+import com.ledgerops.provider.api.ProviderEvidenceBatchQuery;
 import com.ledgerops.provider.api.ProviderEvidenceQuery;
 import com.ledgerops.provider.api.ProviderPaymentEvidenceQuery;
 import com.ledgerops.provider.api.ProviderResultCategory;
@@ -28,12 +29,17 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.HexFormat;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
 @Component
 class JdbcProviderExecutionStore implements ProviderExecutionStore, ProviderEvidenceQuery,
-        ProviderPaymentEvidenceQuery {
+        ProviderPaymentEvidenceQuery, ProviderEvidenceBatchQuery {
     private static final Duration LEASE = Duration.ofSeconds(30);
     private final JdbcTemplate jdbc;
     private final MessageOutbox outbox;
@@ -559,6 +565,55 @@ class JdbcProviderExecutionStore implements ProviderExecutionStore, ProviderEvid
                 rs.getString("evidence_origin"),
                 rs.getTimestamp("observed_at").toInstant()),
                 tenantId, paymentId);
+    }
+
+    @Override
+    public Map<UUID, ProviderEvidence> findByTenantAndEvidenceIds(
+            UUID tenantId,
+            Collection<UUID> evidenceIds
+    ) {
+        if (evidenceIds == null || evidenceIds.isEmpty()) {
+            return Map.of();
+        }
+        List<UUID> distinctIds = evidenceIds.stream().distinct().toList();
+        String placeholders = String.join(", ",
+                java.util.Collections.nCopies(distinctIds.size(), "?"));
+        List<Object> arguments = new ArrayList<>();
+        arguments.add(tenantId);
+        arguments.addAll(distinctIds);
+        return jdbc.query("""
+                SELECT evidence_id, tenant_id, payment_id, operation_type, operation_id,
+                       attempt_id, provider_id, provider_idempotency_key, provider_result_id,
+                       provider_reference, result_category, retry_disposition,
+                       provider_transaction_found, no_acceptance_proven, evidence_origin,
+                       observed_at
+                  FROM provider.results
+                 WHERE tenant_id = ? AND evidence_id IN (%s)
+                """.formatted(placeholders), rs -> {
+            Map<UUID, ProviderEvidence> result = new LinkedHashMap<>();
+            while (rs.next()) {
+                ProviderEvidence evidence = new ProviderEvidence(
+                        rs.getObject("evidence_id", UUID.class),
+                        rs.getObject("tenant_id", UUID.class),
+                        rs.getObject("payment_id", UUID.class),
+                        com.ledgerops.provider.api.ProviderOperationType.valueOf(
+                                rs.getString("operation_type")),
+                        rs.getObject("operation_id", UUID.class),
+                        rs.getObject("attempt_id", UUID.class),
+                        rs.getString("provider_id"),
+                        rs.getString("provider_idempotency_key"),
+                        rs.getObject("provider_result_id", UUID.class),
+                        rs.getString("provider_reference"),
+                        ProviderResultCategory.valueOf(rs.getString("result_category")),
+                        RetryDisposition.valueOf(rs.getString("retry_disposition")),
+                        rs.getBoolean("provider_transaction_found"),
+                        rs.getBoolean("no_acceptance_proven"),
+                        rs.getString("evidence_origin"),
+                        rs.getTimestamp("observed_at").toInstant());
+                result.put(evidence.evidenceId(), evidence);
+            }
+            return result;
+        }, arguments.toArray());
     }
 
     private OutboxMessageDraft resultDraft(

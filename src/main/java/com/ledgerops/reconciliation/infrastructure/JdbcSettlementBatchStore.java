@@ -60,6 +60,15 @@ class JdbcSettlementBatchStore implements SettlementBatchStore {
                 identity.settlementPeriodEnd(), Timestamp.from(now));
         if (familyId == null) throw new IllegalStateException("Settlement batch family was not created");
 
+        jdbc.update("""
+                INSERT INTO reconciliation.batch_family_controls
+                    (batch_family_id, tenant_id, created_at)
+                SELECT family_id, tenant_id, ?
+                  FROM reconciliation.settlement_batch_families
+                 WHERE family_id = ?
+                ON CONFLICT (batch_family_id) DO NOTHING
+                """, Timestamp.from(now), familyId);
+
         if (supersedesBatchVersionId != null) {
             Integer sameFamily = jdbc.queryForObject("""
                     SELECT count(*)
@@ -319,7 +328,8 @@ class JdbcSettlementBatchStore implements SettlementBatchStore {
     public List<SettlementOccurrenceRow> readValidOccurrences(UUID batchVersionId, int page, int pageSize) {
         return jdbc.query("""
                 SELECT occurrence_id, batch_version_id, tenant_id, row_number,
-                       provider_record_key, normalized_content_hash, normalized_content::text
+                       provider_record_key, normalized_content_hash, normalized_content::text,
+                       canonical_record_version_id, validation_state, reason_code
                   FROM reconciliation.settlement_record_occurrences
                  WHERE batch_version_id = ? AND validation_state = 'VALID'
                  ORDER BY row_number
@@ -331,7 +341,32 @@ class JdbcSettlementBatchStore implements SettlementBatchStore {
                         rs.getLong("row_number"),
                         rs.getString("provider_record_key"),
                         rs.getString("normalized_content_hash"),
-                        rs.getString("normalized_content")),
+                        rs.getString("normalized_content"),
+                        rs.getObject("canonical_record_version_id", UUID.class),
+                        rs.getString("validation_state"), rs.getString("reason_code")),
+                batchVersionId, pageSize, page * pageSize);
+    }
+
+    @Override
+    public List<SettlementOccurrenceRow> readOccurrences(UUID batchVersionId, int page, int pageSize) {
+        return jdbc.query("""
+                SELECT occurrence_id, batch_version_id, tenant_id, row_number,
+                       provider_record_key, normalized_content_hash, normalized_content::text,
+                       canonical_record_version_id, validation_state, reason_code
+                  FROM reconciliation.settlement_record_occurrences
+                 WHERE batch_version_id = ?
+                 ORDER BY row_number
+                 LIMIT ? OFFSET ?
+                """, (rs, row) -> new SettlementOccurrenceRow(
+                        rs.getObject("occurrence_id", UUID.class),
+                        rs.getObject("batch_version_id", UUID.class),
+                        rs.getObject("tenant_id", UUID.class),
+                        rs.getLong("row_number"),
+                        rs.getString("provider_record_key"),
+                        rs.getString("normalized_content_hash"),
+                        rs.getString("normalized_content"),
+                        rs.getObject("canonical_record_version_id", UUID.class),
+                        rs.getString("validation_state"), rs.getString("reason_code")),
                 batchVersionId, pageSize, page * pageSize);
     }
 

@@ -70,7 +70,8 @@ class SettlementBatchJobConfiguration {
     ) throws Exception {
         PostgresPagingQueryProvider provider = new PostgresPagingQueryProvider();
         provider.setSelectClause("select occurrence_id, batch_version_id, tenant_id, row_number, "
-                + "provider_record_key, normalized_content_hash, normalized_content::text");
+                + "provider_record_key, normalized_content_hash, normalized_content::text, "
+                + "canonical_record_version_id, validation_state, reason_code");
         provider.setFromClause("from reconciliation.settlement_record_occurrences");
         provider.setWhereClause("where batch_version_id = :batchVersionId and validation_state = 'VALID'");
         provider.setSortKeys(Map.of("row_number", Order.ASCENDING));
@@ -150,6 +151,8 @@ class SettlementBatchJobConfiguration {
                 rs.getLong("row_number"),
                 rs.getString("provider_record_key"),
                 rs.getString("normalized_content_hash"),
-                rs.getString("normalized_content"));
+                rs.getString("normalized_content"),
+                rs.getObject("canonical_record_version_id", UUID.class),
+                rs.getString("validation_state"), rs.getString("reason_code"));
     }
 }

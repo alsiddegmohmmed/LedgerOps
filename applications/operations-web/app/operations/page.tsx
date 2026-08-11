@@ -72,6 +72,9 @@ export default async function OperationsPage() {
             <h2>Settlement ingestion</h2>
             <p>Upload, validate, and explicitly process immutable Provider settlement files.</p>
             <Link className="button secondary" href="/operations/settlements">Open settlement ingestion</Link>
+            <h2>Reconciliation</h2>
+            <p>Compare immutable settlement and internal evidence, inspect discrepancies, and control exact settlement posting.</p>
+            <Link className="button secondary" href="/operations/reconciliation">Open reconciliation</Link>
           </div>
         )}
         {tenantResult?.kind === "unavailable" && (

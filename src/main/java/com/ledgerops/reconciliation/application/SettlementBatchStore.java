@@ -74,6 +74,8 @@ public interface SettlementBatchStore {
 
     List<SettlementOccurrenceRow> readValidOccurrences(UUID batchVersionId, int page, int pageSize);
 
+    List<SettlementOccurrenceRow> readOccurrences(UUID batchVersionId, int page, int pageSize);
+
     void persistCanonicalChunk(UUID batchVersionId, List<SettlementOccurrenceRow> rows, Instant now);
 
     record OccurrenceDraft(
@@ -104,7 +106,10 @@ public interface SettlementBatchStore {
             long rowNumber,
             String providerRecordKey,
             String normalizedContentHash,
-            String normalizedContent
+            String normalizedContent,
+            UUID canonicalRecordVersionId,
+            String validationState,
+            String reasonCode
     ) {
     }
 }
