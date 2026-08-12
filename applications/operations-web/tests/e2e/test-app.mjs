@@ -209,7 +209,10 @@ async function verifyTopology() {
 
 async function seedWithPsql() {
   const slice6Enabled = process.env.E2E_SLICE6 === "true";
-  const seededRole = slice6Enabled ? "MERCHANT_ADMIN" : "TENANT_ADMIN";
+  const slice9Enabled = process.env.E2E_SLICE9 === "true";
+  const seededRole = slice9Enabled
+    ? "RECONCILIATION_ANALYST"
+    : slice6Enabled ? "MERCHANT_ADMIN" : "TENANT_ADMIN";
   const seededScopeMode = slice6Enabled ? "MERCHANT_SET" : "TENANT_WIDE";
   const slice6Seed = slice6Enabled ? `
 INSERT INTO identity.role_assignment_merchant_scopes
@@ -246,6 +249,19 @@ VALUES
    '70000000-0000-4000-8000-000000000001', 'DEBIT', 125.00, 'USD'),
   ('00000000-0000-4000-8000-000000000001', '80000000-0000-4000-8000-000000000001', 1,
    '70000000-0000-4000-8000-000000000002', 'CREDIT', 125.00, 'USD');
+` : "";
+  const slice9Seed = slice9Enabled ? `
+INSERT INTO casework.cases
+  (id, tenant_id, source_category, source_id, related_payment_id, severity,
+   due_at, status, owner_id, resolution, resolution_note,
+   corrective_action_required, corrective_action_completed, created_at, updated_at)
+VALUES
+  ('90000000-0000-4000-8000-000000000001',
+   '00000000-0000-4000-8000-000000000001',
+   'RECONCILIATION_DISCREPANCY',
+   '91000000-0000-4000-8000-000000000001',
+   NULL, 'HIGH', now() + interval '24 hours', 'INVESTIGATING', NULL, NULL, NULL,
+   FALSE, FALSE, now(), now());
 ` : "";
   const sql = `
 BEGIN;
@@ -284,6 +300,7 @@ VALUES
   ('40000000-0000-4000-8000-000000000001', '50000000-0000-4000-8000-000000000001', '00000000-0000-4000-8000-000000000001', 'VIEWER', 'TENANT_WIDE'),
   ('40000000-0000-4000-8000-000000000002', '50000000-0000-4000-8000-000000000002', '00000000-0000-4000-8000-000000000001', 'VIEWER', 'TENANT_WIDE');
 ${slice6Seed}
+${slice9Seed}
 COMMIT;
 `;
   await new Promise((resolvePromise, reject) => {
@@ -315,13 +332,22 @@ async function verifySeedWithPsql() {
        AND debit_total = 125.00
        AND credit_total = 125.00
   )` : "";
+  const slice9Verification = process.env.E2E_SLICE9 === "true" ? `
+  AND EXISTS (
+    SELECT 1
+      FROM casework.cases
+     WHERE id = '90000000-0000-4000-8000-000000000001'
+       AND tenant_id = '00000000-0000-4000-8000-000000000001'
+       AND status = 'INVESTIGATING'
+       AND source_category = 'RECONCILIATION_DISCREPANCY'
+  )` : "";
   const sql = `
 SELECT
   EXISTS (SELECT 1 FROM tenancy.tenants WHERE id = '00000000-0000-4000-8000-000000000002')
   AND EXISTS (SELECT 1 FROM merchant.merchants WHERE id = '00000000-0000-4000-8000-000000000012' AND tenant_id = '00000000-0000-4000-8000-000000000002')
   AND NOT EXISTS (SELECT 1 FROM identity.tenant_memberships WHERE application_user_id = '10000000-0000-4000-8000-000000000001' AND tenant_id = '00000000-0000-4000-8000-000000000002')
   AND NOT EXISTS (SELECT 1 FROM tenancy.tenants WHERE id = '00000000-0000-4000-8000-000000000099')
-${slice6Verification};
+${slice6Verification}${slice9Verification};
 `;
   const output = await new Promise((resolvePromise, reject) => {
     const child = spawn(docker, ["compose", "-p", projectName, "-f", composeFile, "exec", "-T", "postgres", "psql", "-tA", "-v", "ON_ERROR_STOP=1", "-U", "ledgerops", "-d", "ledgerops"], {

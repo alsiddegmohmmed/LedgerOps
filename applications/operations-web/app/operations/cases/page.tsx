@@ -1,4 +1,5 @@
 import { cookies } from "next/headers";
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getCaseQueue, getTenant, type CoreCase } from "../../../lib/core";
 import { redis } from "../../../lib/redis";
@@ -52,7 +53,7 @@ function CaseTable({ cases, csrfToken, readOnly }: { cases: CoreCase[]; csrfToke
           </tr></thead>
           <tbody>{cases.map((caseFile) => (
             <tr key={caseFile.caseId}>
-              <th scope="row" className="monospace">{caseFile.caseId}<span className="table-secondary">Created: {formatDate(caseFile.createdAt)}</span></th>
+              <th scope="row" className="monospace"><Link href={`/operations/cases/${caseFile.caseId}`}>{caseFile.caseId}</Link><span className="table-secondary">Created: {formatDate(caseFile.createdAt)}</span></th>
               <td><span className="status-badge">{caseFile.status}</span><span className="table-secondary">{caseFile.resolution ?? "Unresolved"}</span></td>
               <td>{caseFile.severity}</td>
               <td>{caseFile.ownerId ?? "Unassigned"}</td>

@@ -29,6 +29,8 @@ final class CaseLifecycleEventFactory {
         payload.put("ownerId", file.ownerId() == null ? null : file.ownerId().toString());
         payload.put("dueAt", file.dueAt().toString());
         payload.put("resolution", file.resolution() == null ? null : file.resolution().name());
+        payload.put("correctiveActionRequired", file.correctiveActionRequired());
+        payload.put("correctiveActionCompleted", file.correctiveActionCompleted());
         payload.put("occurredAt", occurredAt.toString());
         try {
             return new OutboxMessageDraft(

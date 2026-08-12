@@ -47,6 +47,8 @@ final class RequestContextAuthenticationFilter extends OncePerRequestFilter {
             "^/api/v1/tenants/[0-9a-fA-F-]{36}/merchants(?:/.*)?$");
     private static final Pattern TENANT_MEMBERSHIPS_PATH = Pattern.compile(
             "^/api/v1/tenants/[0-9a-fA-F-]{36}/memberships(?:/.*)?$");
+    private static final Pattern TENANT_CASES_PATH = Pattern.compile(
+            "^/api/v1/tenants/[0-9a-fA-F-]{36}/cases(?:/.*)?$");
     private static final Pattern TENANT_PAYMENTS_PATH = Pattern.compile(
             "^/api/v1/tenants/[0-9a-fA-F-]{36}/payments(?:/.*)?$");
     private static final Pattern TENANT_REVERSALS_PATH = Pattern.compile(
@@ -194,6 +196,8 @@ final class RequestContextAuthenticationFilter extends OncePerRequestFilter {
                 && TENANT_MERCHANTS_PATH.matcher(request.getRequestURI()).matches())
                 || (("GET".equals(request.getMethod()) || "POST".equals(request.getMethod()))
                 && TENANT_MEMBERSHIPS_PATH.matcher(request.getRequestURI()).matches())
+                || (("GET".equals(request.getMethod()) || "POST".equals(request.getMethod()))
+                && TENANT_CASES_PATH.matcher(request.getRequestURI()).matches())
                 || ("POST".equals(request.getMethod())
                 && SUPPORT_SESSION_PATH.matcher(request.getRequestURI()).matches())
                 || (("GET".equals(request.getMethod()) || "POST".equals(request.getMethod()))

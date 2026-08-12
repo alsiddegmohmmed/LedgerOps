@@ -4,11 +4,10 @@ import com.ledgerops.ledger.api.LedgerPostingEvidence;
 import com.ledgerops.ledger.api.SettlementLedger;
 import com.ledgerops.ledger.api.SettlementPostingRequest;
 import com.ledgerops.ledger.api.SettlementPostingType;
-import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
-import javax.sql.DataSource;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.time.Clock;
@@ -35,14 +34,14 @@ public class ReconciliationSettlementPostingService {
             SettlementPostingStore postings,
             SettlementLedger ledger,
             Clock clock,
-            DataSource dataSource
+            PlatformTransactionManager transactionManager
     ) {
         this.snapshots = Objects.requireNonNull(snapshots, "Snapshot store must not be null");
         this.postings = Objects.requireNonNull(postings, "Posting store must not be null");
         this.ledger = Objects.requireNonNull(ledger, "Settlement Ledger must not be null");
         this.clock = Objects.requireNonNull(clock, "Clock must not be null");
         this.transactionTemplate = new TransactionTemplate(
-                new DataSourceTransactionManager(Objects.requireNonNull(dataSource, "Data source must not be null")));
+                Objects.requireNonNull(transactionManager, "Transaction manager must not be null"));
     }
 
     public List<SettlementPostingStore.PostingWork> prepareCurrentRun(PrepareCommand command) {

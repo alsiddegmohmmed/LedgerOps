@@ -15,4 +15,13 @@ public interface LedgerTransactionStore {
             LedgerSourceType sourceType,
             UUID sourceId
     );
+
+    Optional<LedgerTransaction> findById(UUID tenantId, UUID transactionId);
+
+    Optional<LedgerTransaction> lockById(UUID tenantId, UUID transactionId);
+
+    Optional<LedgerTransaction> findCompensationForTarget(
+            UUID tenantId,
+            UUID targetTransactionId
+    );
 }

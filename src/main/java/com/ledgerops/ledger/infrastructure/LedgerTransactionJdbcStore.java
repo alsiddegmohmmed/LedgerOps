@@ -67,6 +67,43 @@ class LedgerTransactionJdbcStore implements LedgerTransactionStore {
                AND source_id = ?
             """;
 
+    private static final String FIND_TRANSACTION_BY_ID_SQL = """
+            SELECT id,
+                   tenant_id,
+                   source_type,
+                   source_id,
+                   compensates_transaction_id,
+                   posted_at
+              FROM ledger.transactions
+             WHERE tenant_id = ?
+               AND id = ?
+            """;
+
+    private static final String LOCK_TRANSACTION_BY_ID_SQL = """
+            SELECT id,
+                   tenant_id,
+                   source_type,
+                   source_id,
+                   compensates_transaction_id,
+                   posted_at
+              FROM ledger.transactions
+             WHERE tenant_id = ?
+               AND id = ?
+             FOR UPDATE
+            """;
+
+    private static final String FIND_COMPENSATION_BY_TARGET_SQL = """
+            SELECT id,
+                   tenant_id,
+                   source_type,
+                   source_id,
+                   compensates_transaction_id,
+                   posted_at
+              FROM ledger.transactions
+             WHERE tenant_id = ?
+               AND compensates_transaction_id = ?
+            """;
+
     private static final String FIND_ENTRIES_SQL = """
             SELECT entry.account_id,
                    account.account_code,
@@ -134,6 +171,39 @@ class LedgerTransactionJdbcStore implements LedgerTransactionStore {
                 tenantId,
                 sourceType.name(),
                 sourceId
+        ).stream().findFirst().map(this::mapTransaction);
+    }
+
+    @Override
+    public Optional<LedgerTransaction> findById(UUID tenantId, UUID transactionId) {
+        return jdbcTemplate.query(
+                FIND_TRANSACTION_BY_ID_SQL,
+                (resultSet, rowNumber) -> mapHeader(resultSet),
+                tenantId,
+                transactionId
+        ).stream().findFirst().map(this::mapTransaction);
+    }
+
+    @Override
+    public Optional<LedgerTransaction> lockById(UUID tenantId, UUID transactionId) {
+        return jdbcTemplate.query(
+                LOCK_TRANSACTION_BY_ID_SQL,
+                (resultSet, rowNumber) -> mapHeader(resultSet),
+                tenantId,
+                transactionId
+        ).stream().findFirst().map(this::mapTransaction);
+    }
+
+    @Override
+    public Optional<LedgerTransaction> findCompensationForTarget(
+            UUID tenantId,
+            UUID targetTransactionId
+    ) {
+        return jdbcTemplate.query(
+                FIND_COMPENSATION_BY_TARGET_SQL,
+                (resultSet, rowNumber) -> mapHeader(resultSet),
+                tenantId,
+                targetTransactionId
         ).stream().findFirst().map(this::mapTransaction);
     }
 

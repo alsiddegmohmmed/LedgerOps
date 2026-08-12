@@ -237,6 +237,8 @@ export type CoreCase = {
   ownerId: string | null;
   resolution: string | null;
   resolutionNote: string | null;
+  correctiveActionRequired: boolean;
+  correctiveActionCompleted: boolean;
   history: CoreCaseHistoryEntry[];
   notes: CoreCaseNote[];
 };
@@ -1111,6 +1113,27 @@ export async function getCaseQueue(
   return { kind: "ok", cases: await response.json() as CoreCase[] };
 }
 
+export async function getCase(
+  tenantId: string,
+  caseId: string,
+  accessToken: string,
+  readOptions: CoreReadOptions = {},
+): Promise<
+  | { kind: "unauthenticated" }
+  | { kind: "unavailable" }
+  | { kind: "error" }
+  | { kind: "ok"; caseFile: CoreCase }
+> {
+  const response = await fetch(
+    `${config.coreBaseUrl}/api/v1/tenants/${encodeURIComponent(tenantId)}/cases/${encodeURIComponent(caseId)}`,
+    { headers: readHeaders(accessToken, readOptions), cache: "no-store" },
+  );
+  if (response.status === 401) return { kind: "unauthenticated" };
+  if (response.status === 403 || response.status === 404) return { kind: "unavailable" };
+  if (!response.ok) return { kind: "error" };
+  return { kind: "ok", caseFile: await response.json() as CoreCase };
+}
+
 async function postCoreAction<T>(
   path: string,
   accessToken: string,
@@ -1180,7 +1203,7 @@ export function transitionCase(
   tenantId: string,
   caseId: string,
   accessToken: string,
-  body: { target: CoreCase["status"]; reason: string },
+  body: { target: CoreCase["status"]; reason: string; confirmation: boolean },
 ) {
   return postCoreAction<CoreCase>(
     `/api/v1/tenants/${encodeURIComponent(tenantId)}/cases/${encodeURIComponent(caseId)}/transitions`,
@@ -1206,7 +1229,7 @@ export function resolveCase(
   tenantId: string,
   caseId: string,
   accessToken: string,
-  body: { resolution: string; note: string },
+  body: { resolution: string; note: string; confirmation: boolean },
 ) {
   return postCoreAction<CoreCase>(
     `/api/v1/tenants/${encodeURIComponent(tenantId)}/cases/${encodeURIComponent(caseId)}/resolution`,
@@ -1219,10 +1242,28 @@ export function closeCase(
   tenantId: string,
   caseId: string,
   accessToken: string,
-  body: { reason: string },
+  body: { reason: string; confirmation: boolean },
 ) {
   return postCoreAction<CoreCase>(
     `/api/v1/tenants/${encodeURIComponent(tenantId)}/cases/${encodeURIComponent(caseId)}/close`,
+    accessToken,
+    body,
+  );
+}
+
+export function requestCaseCorrection(
+  tenantId: string,
+  caseId: string,
+  accessToken: string,
+  body: {
+    settlementPostingId: string;
+    originalLedgerTransactionId: string;
+    reason: string;
+    confirmation: boolean;
+  },
+) {
+  return postCoreAction<unknown>(
+    `/api/v1/tenants/${encodeURIComponent(tenantId)}/cases/${encodeURIComponent(caseId)}/correction`,
     accessToken,
     body,
   );

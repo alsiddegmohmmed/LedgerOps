@@ -210,6 +210,10 @@ public record AuthorizedRequestContext(
         return hasPermission(Permission.CASE_CLOSE);
     }
 
+    public boolean canRequestCorrection() {
+        return hasPermission(Permission.CORRECTION_REQUEST);
+    }
+
     public boolean isSupportSession() {
         return supportSessionId != null;
     }

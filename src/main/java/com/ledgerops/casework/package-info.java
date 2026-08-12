@@ -4,7 +4,9 @@
                 "identity::api",
                 "payment::api",
                 "audit::api",
-                "messaging::api"
+                "messaging::api",
+                "reconciliation::api",
+                "ledger::api"
         }
 )
 package com.ledgerops.casework;

@@ -1,6 +1,7 @@
 package com.ledgerops.casework.api;
 
 import com.ledgerops.casework.application.CaseApplicationService;
+import com.ledgerops.casework.application.CorrectionApplicationService;
 import com.ledgerops.casework.domain.CaseResolution;
 import com.ledgerops.casework.domain.CaseStatus;
 import com.ledgerops.identity.api.AuthorizedRequestContextRequest;
@@ -24,10 +25,14 @@ import java.util.UUID;
 @RequestMapping("/api/v1/tenants/{tenantId}/cases")
 class CaseworkController {
     private final CaseApplicationService cases;
+    private final CorrectionApplicationService corrections;
     private final PaymentDetailsQuery paymentDetails;
 
-    CaseworkController(CaseApplicationService cases, PaymentDetailsQuery paymentDetails) {
+    CaseworkController(CaseApplicationService cases,
+                       CorrectionApplicationService corrections,
+                       PaymentDetailsQuery paymentDetails) {
         this.cases = cases;
+        this.corrections = corrections;
         this.paymentDetails = paymentDetails;
     }
 
@@ -39,6 +44,17 @@ class CaseworkController {
         return context.isTenantWide()
                 ? cases.queue(tenantId)
                 : cases.queue(tenantId, context.merchantIds());
+    }
+
+    @GetMapping("/{caseId}")
+    CaseSnapshot find(@PathVariable UUID tenantId, @PathVariable UUID caseId,
+                      HttpServletRequest request) {
+        var context = AuthorizedRequestContextRequest.required(request);
+        checkTenant(context.tenantId(), tenantId);
+        check(context.canReadCases(), "case:read");
+        requireCaseScope(tenantId, caseId, context);
+        return cases.findByTenantAndId(tenantId, caseId)
+                .orElseThrow(AuthorizationResourceNotFoundException::new);
     }
 
     @PostMapping("/{caseId}/assignment")
@@ -57,10 +73,13 @@ class CaseworkController {
                             @Valid @RequestBody TransitionBody body, HttpServletRequest request) {
         var context = AuthorizedRequestContextRequest.required(request);
         checkTenant(context.tenantId(), tenantId); check(context.canUpdateCases(), "case:update");
+        if (body.target() == CaseStatus.REOPENED) {
+            check(body.confirmation(), "case:reopen-confirmation");
+        }
         requireCaseScope(tenantId, caseId, context);
         UUID actor = actor(context.applicationUserId());
         return cases.transition(new CaseTransitionRequest(tenantId, caseId, body.target(), actor,
-                body.reason(), correlation(context.correlationId())));
+                body.reason(), correlation(context.correlationId()), body.confirmation()));
     }
 
     @PostMapping("/{caseId}/notes")
@@ -79,10 +98,13 @@ class CaseworkController {
                          @Valid @RequestBody ResolutionBody body, HttpServletRequest request) {
         var context = AuthorizedRequestContextRequest.required(request);
         checkTenant(context.tenantId(), tenantId); check(context.canResolveCases(), "case:resolve");
+        if (body.resolution() == CaseResolution.APPROVED_CORRECTION) {
+            check(context.canRequestCorrection(), "correction:request");
+        }
         requireCaseScope(tenantId, caseId, context);
         UUID actor = actor(context.applicationUserId());
         return cases.resolve(new CaseResolutionRequest(tenantId, caseId, body.resolution(), actor,
-                body.note(), correlation(context.correlationId()), caseId));
+                body.note(), correlation(context.correlationId()), caseId, body.confirmation()));
     }
 
     @PostMapping("/{caseId}/close")
@@ -93,7 +115,36 @@ class CaseworkController {
         requireCaseScope(tenantId, caseId, context);
         UUID actor = actor(context.applicationUserId());
         return cases.close(new CaseCloseRequest(tenantId, caseId, actor, body.reason(),
-                correlation(context.correlationId())));
+                correlation(context.correlationId()), body.confirmation()));
+    }
+
+    @PostMapping("/{caseId}/correction")
+    CorrectionRequestSnapshot requestCorrection(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID caseId,
+            @Valid @RequestBody CorrectionBody body,
+            HttpServletRequest request
+    ) {
+        var context = AuthorizedRequestContextRequest.required(request);
+        checkTenant(context.tenantId(), tenantId);
+        check(context.canRequestCorrection(), "correction:request");
+        if (!context.isTenantWide()) {
+            throw new SecurityException("Correction requests require Tenant-wide scope");
+        }
+        UUID actor = actor(context.applicationUserId());
+        CaseSnapshot current = cases.findByTenantAndId(tenantId, caseId)
+                .orElseThrow(AuthorizationResourceNotFoundException::new);
+        return corrections.request(new CorrectionRequestCommand(
+                tenantId,
+                caseId,
+                current.sourceId(),
+                body.settlementPostingId(),
+                body.originalLedgerTransactionId(),
+                actor,
+                body.reason(),
+                correlation(context.correlationId()),
+                body.confirmation()
+        ));
     }
 
     private static void checkTenant(UUID actual, UUID expected) {
@@ -120,8 +171,16 @@ class CaseworkController {
     private static UUID correlation(String value) { return UUID.fromString(value); }
 
     record AssignmentBody(@NotNull UUID ownerId, @NotBlank String reason) { }
-    record TransitionBody(@NotNull CaseStatus target, @NotBlank String reason) { }
+    record TransitionBody(@NotNull CaseStatus target, @NotBlank String reason,
+                          boolean confirmation) { }
     record NoteBody(@NotBlank String note) { }
-    record ResolutionBody(@NotNull CaseResolution resolution, @NotBlank String note) { }
-    record CloseBody(@NotBlank String reason) { }
+    record ResolutionBody(@NotNull CaseResolution resolution, @NotBlank String note,
+                          boolean confirmation) { }
+    record CloseBody(@NotBlank String reason, boolean confirmation) { }
+    record CorrectionBody(
+            @NotNull UUID settlementPostingId,
+            @NotNull UUID originalLedgerTransactionId,
+            @NotBlank String reason,
+            boolean confirmation
+    ) { }
 }

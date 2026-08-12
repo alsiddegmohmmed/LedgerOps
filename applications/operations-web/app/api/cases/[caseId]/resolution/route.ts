@@ -28,9 +28,12 @@ export async function POST(
   const body = await readCredentialActionBody(request);
   const resolution = typeof body?.resolution === "string" ? body.resolution : "";
   const note = requiredText(body?.note, 4000);
-  if (!body || !requiredUuid(caseId) || !note || !RESOLUTIONS.has(resolution)) return invalidCredentialActionRequest();
+  const confirmation = body?.confirmation === true;
+  if (!body || !requiredUuid(caseId) || !note || !RESOLUTIONS.has(resolution)
+      || !confirmation) return invalidCredentialActionRequest();
   const result = await resolveCase(
-    access.session.selectedTenantId!, caseId, access.session.accessToken, { resolution, note },
+    access.session.selectedTenantId!, caseId, access.session.accessToken,
+    { resolution, note, confirmation },
   );
   return mapCredentialActionResponse(result, 200, "case_resolution_failed");
 }

@@ -25,6 +25,8 @@ public record CaseSnapshot(
         UUID ownerId,
         CaseResolution resolution,
         String resolutionNote,
+        boolean correctiveActionRequired,
+        boolean correctiveActionCompleted,
         List<CaseHistoryEntry> history,
         List<CaseNote> notes
 ) {
@@ -44,5 +46,15 @@ public record CaseSnapshot(
     public boolean overdueAt(Instant now) {
         return !Objects.requireNonNull(now, "Current time must not be null").isBefore(dueAt)
                 && status != CaseStatus.CLOSED;
+    }
+
+    /** Stable API values for consumers that must not depend on Case domain types. */
+    public String statusCode() {
+        return status.name();
+    }
+
+    /** Stable API values for consumers that must not depend on Case domain types. */
+    public String severityCode() {
+        return severity.name();
     }
 }

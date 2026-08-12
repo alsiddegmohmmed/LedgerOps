@@ -39,11 +39,13 @@ public class CaseApplicationService implements CaseworkPort {
     private final AuditAppendPort audit;
     private final ConsumerMessageStore messages;
     private final Clock clock;
+    private final CorrectionRequestStore corrections;
 
     public CaseApplicationService(CaseStore store, PaymentCaseResolutionPort payment,
                                   PaymentDetailsQuery paymentDetails,
                                   MessageOutbox outbox, AuditAppendPort audit,
-                                  ConsumerMessageStore messages, Clock clock) {
+                                  ConsumerMessageStore messages, Clock clock,
+                                  CorrectionRequestStore corrections) {
         this.store = store;
         this.payment = payment;
         this.paymentDetails = paymentDetails;
@@ -51,6 +53,7 @@ public class CaseApplicationService implements CaseworkPort {
         this.audit = audit;
         this.messages = messages;
         this.clock = clock;
+        this.corrections = corrections;
     }
 
     @Transactional
@@ -114,6 +117,11 @@ public class CaseApplicationService implements CaseworkPort {
     @Override
     @Transactional
     public CaseSnapshot transition(CaseTransitionRequest request) {
+        if (request.target() == com.ledgerops.casework.domain.CaseStatus.REOPENED
+                && !request.confirmation()) {
+            throw new CaseResolutionConsistencyException(
+                    "Case reopening requires explicit confirmation");
+        }
         CaseFile current = lock(request.tenantId(), request.caseId());
         CaseFile updated = current.transition(request.target(), request.actorId(), request.reason(), clock.instant());
         store.save(updated);
@@ -141,6 +149,10 @@ public class CaseApplicationService implements CaseworkPort {
     @Override
     @Transactional
     public CaseSnapshot resolve(CaseResolutionRequest request) {
+        if (!request.confirmation()) {
+            throw new CaseResolutionConsistencyException(
+                    "Case resolution requires explicit confirmation");
+        }
         CaseFile current = lock(request.tenantId(), request.caseId());
         if (current.status() == com.ledgerops.casework.domain.CaseStatus.RESOLVED
                 || current.status() == com.ledgerops.casework.domain.CaseStatus.CLOSED) {
@@ -148,6 +160,12 @@ public class CaseApplicationService implements CaseworkPort {
                     || !request.note().equals(current.resolutionNote())) {
                 throw new CaseResolutionConsistencyException(
                         "Case already has a different final resolution");
+            }
+            if (request.resolution() == CaseResolution.APPROVED_CORRECTION
+                    && corrections.findCompletedForCase(
+                    request.tenantId(), request.caseId(), current.sourceId()).isEmpty()) {
+                throw new CaseResolutionConsistencyException(
+                        "Approved correction has no completed CorrectionRequest");
             }
             if (current.sourceCategory() == CaseSourceCategory.RISK_REVIEW) {
                 if (current.relatedPaymentId() == null) {
@@ -162,6 +180,7 @@ public class CaseApplicationService implements CaseworkPort {
             return snapshot(current);
         }
         boolean effectApplied = false;
+        boolean correctionEffectApplied = false;
         if (current.sourceCategory() == CaseSourceCategory.RISK_REVIEW) {
             if (current.relatedPaymentId() == null) {
                 throw new CaseResolutionConsistencyException("Risk Case has no related Payment");
@@ -174,8 +193,12 @@ public class CaseApplicationService implements CaseworkPort {
                     request.correlationId(), request.causationId()));
             effectApplied = true;
         }
+        if (request.resolution() == CaseResolution.APPROVED_CORRECTION) {
+            correctionEffectApplied = corrections.findCompletedForCase(
+                    request.tenantId(), request.caseId(), current.sourceId()).isPresent();
+        }
         CaseFile updated = current.resolve(request.resolution(), request.note(), effectApplied,
-                request.actorId(), clock.instant());
+                correctionEffectApplied, request.actorId(), clock.instant());
         store.save(updated);
         appendEvent(updated, "RESOLVED", clock.instant(), request.causationId());
         audit.appendAction("application-user", request.actorId().toString(), "HUMAN",
@@ -188,6 +211,10 @@ public class CaseApplicationService implements CaseworkPort {
     @Override
     @Transactional
     public CaseSnapshot close(CaseCloseRequest request) {
+        if (!request.confirmation()) {
+            throw new CaseResolutionConsistencyException(
+                    "Case closure requires explicit confirmation");
+        }
         CaseFile current = lock(request.tenantId(), request.caseId());
         CaseFile updated = current.close(request.actorId(), request.reason(), clock.instant());
         store.save(updated);
@@ -214,6 +241,7 @@ public class CaseApplicationService implements CaseworkPort {
         return new CaseSnapshot(file.caseId(), file.tenantId(), file.sourceCategory(),
                 file.sourceId(), file.relatedPaymentId(), file.severity(), file.createdAt(),
                 file.dueAt(), file.status(), file.ownerId(), file.resolution(), file.resolutionNote(),
+                file.correctiveActionRequired(), file.correctiveActionCompleted(),
                 file.history(), file.notes());
     }
 }

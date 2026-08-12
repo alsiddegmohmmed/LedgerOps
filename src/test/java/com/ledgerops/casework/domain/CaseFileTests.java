@@ -58,4 +58,38 @@ class CaseFileTests {
         assertFalse(CaseResolution.RISK_APPROVE.allowedFor(CaseSourceCategory.RECONCILIATION_DISCREPANCY));
         assertFalse(CaseResolution.APPROVED_CORRECTION.allowedFor(CaseSourceCategory.RISK_REVIEW));
     }
+
+    @Test
+    void approvedCorrectionRequiresCompletedCorrectiveAction() {
+        CaseFile file = CaseFile.open(UUID.randomUUID(), TENANT,
+                        CaseSourceCategory.RECONCILIATION_DISCREPANCY, SOURCE,
+                        CaseSeverity.HIGH, NOW.plusSeconds(3600))
+                .transition(CaseStatus.INVESTIGATING, ACTOR, "Investigate discrepancy", NOW);
+
+        assertThrows(CaseResolutionException.class,
+                () -> file.resolve(CaseResolution.APPROVED_CORRECTION,
+                        "Exact compensation posted", false, false, ACTOR, NOW));
+
+        CaseFile completed = file
+                .requireCorrectiveAction(ACTOR, "Correction is required", NOW)
+                .completeCorrectiveAction(ACTOR, "Exact compensation posted", NOW)
+                .resolve(CaseResolution.APPROVED_CORRECTION,
+                        "Exact compensation posted", false, true, ACTOR, NOW)
+                .close(ACTOR, "Close corrected discrepancy", NOW);
+
+        assertEquals(CaseStatus.CLOSED, completed.status());
+        assertTrue(completed.correctiveActionRequired());
+        assertTrue(completed.correctiveActionCompleted());
+        assertEquals("CORRECTION_COMPLETED", completed.history().get(2).eventType());
+    }
+
+    @Test
+    void correctionRequestMustStartFromAnInvestigatingReconciliationCase() {
+        CaseFile open = CaseFile.open(UUID.randomUUID(), TENANT,
+                CaseSourceCategory.RECONCILIATION_DISCREPANCY, SOURCE,
+                CaseSeverity.HIGH, NOW.plusSeconds(3600));
+
+        assertThrows(CaseStateException.class,
+                () -> open.requireCorrectiveAction(ACTOR, "Reason", NOW));
+    }
 }

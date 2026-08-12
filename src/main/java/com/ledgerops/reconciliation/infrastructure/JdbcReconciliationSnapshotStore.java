@@ -1,6 +1,7 @@
 package com.ledgerops.reconciliation.infrastructure;
 
 import com.ledgerops.ledger.api.LedgerSettlementEvidence;
+import com.ledgerops.ledger.api.SettlementCorrectionLedger;
 import com.ledgerops.payment.api.PaymentReconciliationSubject;
 import com.ledgerops.provider.api.ProviderEvidence;
 import com.ledgerops.reconciliation.application.ReconciliationResultDraft;
@@ -32,10 +33,16 @@ class JdbcReconciliationSnapshotStore implements ReconciliationSnapshotStore {
     private static final JsonMapper JSON = JsonMapper.builder().build();
     private final JdbcTemplate jdbc;
     private final MessageOutbox outbox;
+    private final SettlementCorrectionLedger correctionLedger;
 
-    JdbcReconciliationSnapshotStore(JdbcTemplate jdbc, MessageOutbox outbox) {
+    JdbcReconciliationSnapshotStore(
+            JdbcTemplate jdbc,
+            MessageOutbox outbox,
+            SettlementCorrectionLedger correctionLedger
+    ) {
         this.jdbc = jdbc;
         this.outbox = outbox;
+        this.correctionLedger = correctionLedger;
     }
 
     @Override
@@ -414,8 +421,8 @@ class JdbcReconciliationSnapshotStore implements ReconciliationSnapshotStore {
                 """, rs -> rs.next() ? rs.getObject(1, UUID.class) : null,
                 tenantId, batchFamilyId);
         if (currentRunId != null && !currentRunId.equals(runId)) {
-            Integer invalidated = jdbc.queryForObject("""
-                    SELECT COUNT(*)
+            List<UUID> invalidated = jdbc.query("""
+                    SELECT a.ledger_transaction_id
                       FROM reconciliation.settlement_posting_applications a
                       JOIN reconciliation.settlement_posting_instructions i
                         ON i.settlement_posting_id = a.settlement_posting_id
@@ -428,8 +435,11 @@ class JdbcReconciliationSnapshotStore implements ReconciliationSnapshotStore {
                               AND r.subject_type = i.subject_type
                               AND r.subject_id = i.subject_id
                        )
-                    """, Integer.class, tenantId, currentRunId, runId);
-            if (invalidated != null && invalidated > 0) {
+                    """, (rs, row) -> rs.getObject("ledger_transaction_id", UUID.class),
+                    tenantId, currentRunId, runId);
+            boolean uncompensated = invalidated.stream().anyMatch(transactionId ->
+                    correctionLedger.findCompensationForTarget(tenantId, transactionId).isEmpty());
+            if (uncompensated) {
                 throw new IllegalStateException(
                         "Promotion would invalidate an uncompensated settlement posting");
             }

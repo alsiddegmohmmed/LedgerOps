@@ -182,6 +182,38 @@ class RequestContextAuthenticationFilterTests {
     }
 
     @Test
+    void attachesRequestContextForCaseRoutes() throws Exception {
+        UUID tenantId = UUID.randomUUID();
+        RequestContextAuthenticationFilter filter = filter(
+                ApplicationUser.create(ApplicationUserId.newId(),
+                        new KeycloakIdentity(ISSUER, "subject-1")),
+                tenantId
+        );
+
+        for (String methodAndPath : new String[] {
+                "GET /api/v1/tenants/" + tenantId + "/cases",
+                "GET /api/v1/tenants/" + tenantId + "/cases/" + UUID.randomUUID(),
+                "POST /api/v1/tenants/" + tenantId + "/cases/" + UUID.randomUUID()
+                        + "/correction"
+        }) {
+            String[] parts = methodAndPath.split(" ", 2);
+            MockHttpServletRequest request = new MockHttpServletRequest(parts[0], parts[1]);
+            request.addHeader(HttpHeaders.AUTHORIZATION, "Bearer valid");
+            request.setAttribute(RequestCorrelationFilter.CORRELATION_ID, "case-correlation");
+            MockHttpServletResponse response = new MockHttpServletResponse();
+            AtomicBoolean continued = new AtomicBoolean();
+
+            filter.doFilter(request, response,
+                    (ignoredRequest, ignoredResponse) -> continued.set(true));
+
+            assertThat(response.getStatus()).isEqualTo(HttpStatus.OK.value());
+            assertThat(continued).isTrue();
+            assertThat(request.getAttribute(RequestContextAuthenticationFilter.CONTEXT_ATTRIBUTE))
+                    .isInstanceOf(AuthorizedRequestContext.class);
+        }
+    }
+
+    @Test
     void createsReadOnlyContextForValidSupportSessionAndRejectsWrites() throws Exception {
         UUID tenantId = UUID.randomUUID();
         UUID supportSessionId = UUID.randomUUID();

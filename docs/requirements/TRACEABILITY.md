@@ -33,17 +33,17 @@ Authority: Product Definition v1.7, Technical Specification v1.7, ADR-022 throug
 | LED-01 | Preserved + Slices 6/8/9 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Slice 6 exact inverse compensation verified; later settlement/correction evidence remains |
 | LED-02 | Preserved + ADR-023/024 clarification | Existing executable evidence remains required. | Implemented |
 | LED-03 | Slices 3/6/8/9 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Slice 6 compensation source/link and atomic completion verified; later correction/reconciliation evidence remains |
-| LED-04 | Slice 9 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Planned |
+| LED-04 | Slice 9 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Verified in isolated Slice 9 extraction; integration pending |
 | LED-05 | Slice 3 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Planned |
 | REC-01 | Slice 7 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Implemented; V36 PostgreSQL/Testcontainers constraints, content-addressed storage, duplicate/correction identity, streaming validation, Spring Batch canonicalization, protected API, audit/outbox, and Operations Web evidence verified |
 | REC-02 | Slice 8 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Planned |
 | REC-03 | Slice 8 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Planned |
 | REC-04 | Slice 8 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Planned |
-| REC-05 | Slices 8/9 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Planned |
+| REC-05 | Slices 8/9 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Slice 9 isolated evidence verified; release-wide integration pending |
 | CAS-01 | Slices 4/8 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Planned |
 | CAS-02 | Slice 4 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Planned |
-| CAS-03 | Slices 4/9 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Planned |
-| CAS-04 | Slices 4/9 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Planned |
+| CAS-03 | Slices 4/9 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Slice 9 isolated evidence verified; release-wide integration pending |
+| CAS-04 | Slices 4/9 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Slice 9 isolated evidence verified; release-wide integration pending |
 | CAS-05 | Slice 4 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Planned |
 | OPS-01 | Slice 10 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Planned |
 | OPS-02 | Slice 10 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Planned |
@@ -70,7 +70,7 @@ Authority: Product Definition v1.7, Technical Specification v1.7, ADR-022 throug
 |---|---|---|
 | BR-01 | Tenant ownership and platform-wide exceptions across Slices 1-11. | Implemented for Slice 1 protected paths; regression required |
 | BR-02 | Existing Money evidence plus Reversal/settlement/correction precision in Slices 6-9. | Planned regression |
-| BR-03 | Existing immutability plus exact Reversal/correction compensation in Slices 6/9. | Slice 6 exact Reversal compensation verified; Slice 9 correction regression remains |
+| BR-03 | Existing immutability plus exact Reversal/correction compensation in Slices 6/9. | Slice 6 exact Reversal compensation and Slice 9 isolated correction evidence verified; release-wide integration pending |
 | BR-04 | Existing tenant-wide Payment idempotency plus authenticated context in Slice 2. | Implemented; regression required |
 | BR-05 | Existing Provider/result duplicate safety plus Reversal result tests in Slice 6. | Slice 6 duplicate/conflict evidence and root check verified; release-wide regression remains |
 | BR-06 | Existing retry safety plus manual Payment/Reversal controls in Slices 5/6. | Payment and Reversal retry controls verified in Slices 5/6; release-wide regression remains |
@@ -85,7 +85,7 @@ Authority: Product Definition v1.7, Technical Specification v1.7, ADR-022 throug
 | BR-15 | Immutable reruns and one locked current pointer in Slice 8. | Planned |
 | BR-16 | Platform/support authority boundary in Slices 1/2. | Implemented for Slice 1 authorization boundary; administration/support coverage remains in Slice 2 |
 | BR-17 | Stable settlement instruction/application and exact templates in Slice 8. | Planned |
-| BR-18 | Narrow settlement-adjustment correction in Slice 9. | Planned |
+| BR-18 | Narrow settlement-adjustment correction in Slice 9. | Verified in isolated Slice 9 extraction; integration pending |
 
 ## Cross-cutting closure evidence
 

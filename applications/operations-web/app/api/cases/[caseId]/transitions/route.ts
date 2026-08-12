@@ -25,10 +25,12 @@ export async function POST(
   const body = await readCredentialActionBody(request);
   const target = typeof body?.target === "string" ? body.target : "";
   const reason = requiredText(body?.reason, 512);
-  if (!body || !requiredUuid(caseId) || !reason || !STATUSES.has(target)) return invalidCredentialActionRequest();
+  const confirmation = body?.confirmation === true;
+  if (!body || !requiredUuid(caseId) || !reason || !STATUSES.has(target)
+      || (target === "REOPENED" && !confirmation)) return invalidCredentialActionRequest();
   const result = await transitionCase(
     access.session.selectedTenantId!, caseId, access.session.accessToken,
-    { target: target as "INVESTIGATING" | "AWAITING_INFORMATION" | "RESOLVED" | "REOPENED", reason },
+    { target: target as "INVESTIGATING" | "AWAITING_INFORMATION" | "RESOLVED" | "REOPENED", reason, confirmation },
   );
   return mapCredentialActionResponse(result, 200, "case_transition_failed");
 }

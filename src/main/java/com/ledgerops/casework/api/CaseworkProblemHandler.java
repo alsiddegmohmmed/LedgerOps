@@ -3,12 +3,15 @@ package com.ledgerops.casework.api;
 import com.ledgerops.ApiProblemFactory;
 import com.ledgerops.casework.application.CaseNotFoundException;
 import com.ledgerops.casework.application.CaseResolutionConsistencyException;
+import com.ledgerops.casework.application.CorrectionRequestApplicationException;
 import com.ledgerops.casework.domain.CaseResolutionException;
 import com.ledgerops.casework.domain.CaseStateException;
 import com.ledgerops.identity.api.AuthorizationPermissionDeniedException;
 import com.ledgerops.identity.api.AuthorizationResourceNotFoundException;
+import com.ledgerops.ledger.api.SettlementCorrectionLedgerException;
 import com.ledgerops.payment.api.PaymentOperationConflictException;
 import com.ledgerops.payment.api.PaymentOperationNotFoundException;
+import com.ledgerops.reconciliation.api.ReconciliationCorrectionException;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpStatus;
@@ -42,6 +45,9 @@ class CaseworkProblemHandler {
 
     @ExceptionHandler({
             CaseResolutionConsistencyException.class,
+            CorrectionRequestApplicationException.class,
+            ReconciliationCorrectionException.class,
+            SettlementCorrectionLedgerException.class,
             CaseResolutionException.class,
             CaseStateException.class,
             PaymentOperationConflictException.class

@@ -120,6 +120,12 @@ public final class CaseFile {
 
     public CaseFile resolve(CaseResolution nextResolution, String note,
                             boolean paymentEffectApplied, UUID actorId, Instant now) {
+        return resolve(nextResolution, note, paymentEffectApplied, false, actorId, now);
+    }
+
+    public CaseFile resolve(CaseResolution nextResolution, String note,
+                            boolean paymentEffectApplied, boolean correctionEffectApplied,
+                            UUID actorId, Instant now) {
         if (status != CaseStatus.INVESTIGATING) {
             throw new CaseStateException("Only an investigating Case may be resolved");
         }
@@ -132,7 +138,18 @@ public final class CaseFile {
             throw new CaseResolutionException("Risk Case cannot resolve before Payment transition");
         }
         if (nextResolution == CaseResolution.APPROVED_CORRECTION) {
-            throw new CaseResolutionException("Approved correction is unavailable before Slice 9");
+            if (sourceCategory != CaseSourceCategory.RECONCILIATION_DISCREPANCY) {
+                throw new CaseResolutionException(
+                        "Approved correction is only valid for Reconciliation discrepancies");
+            }
+            if (!correctionEffectApplied) {
+                throw new CaseResolutionException(
+                        "Approved correction requires a completed exact compensation");
+            }
+        }
+        if (correctiveActionRequired && !correctiveActionCompleted
+                && !correctionEffectApplied) {
+            throw new CaseResolutionException("Required corrective action is incomplete");
         }
         List<CaseHistoryEntry> next = new ArrayList<>(history);
         next.add(historyEvent("RESOLVED", actorId, note, now, CaseStatus.RESOLVED));
@@ -140,7 +157,42 @@ public final class CaseFile {
                 createdAt, dueAt,
                 CaseStatus.RESOLVED, ownerId, nextResolution, note,
                 nextResolution == CaseResolution.APPROVED_CORRECTION,
-                paymentEffectApplied, next, notes);
+                nextResolution == CaseResolution.APPROVED_CORRECTION
+                        ? correctionEffectApplied : correctiveActionCompleted,
+                next, notes);
+    }
+
+    public CaseFile requireCorrectiveAction(UUID actorId, String reason, Instant now) {
+        if (sourceCategory != CaseSourceCategory.RECONCILIATION_DISCREPANCY) {
+            throw new CaseResolutionException(
+                    "Only a Reconciliation discrepancy Case may require correction");
+        }
+        if (status != CaseStatus.INVESTIGATING) {
+            throw new CaseStateException(
+                    "Correction requires an investigating Reconciliation Case");
+        }
+        if (correctiveActionRequired) {
+            return this;
+        }
+        List<CaseHistoryEntry> next = new ArrayList<>(history);
+        next.add(historyEvent("CORRECTION_REQUESTED", actorId, reason, now));
+        return new CaseFile(caseId, tenantId, sourceCategory, sourceId, relatedPaymentId, severity,
+                createdAt, dueAt, status, ownerId, resolution, resolutionNote,
+                true, false, next, notes);
+    }
+
+    public CaseFile completeCorrectiveAction(UUID actorId, String reason, Instant now) {
+        if (!correctiveActionRequired) {
+            throw new CaseResolutionException("No corrective action is required for this Case");
+        }
+        if (correctiveActionCompleted) {
+            return this;
+        }
+        List<CaseHistoryEntry> next = new ArrayList<>(history);
+        next.add(historyEvent("CORRECTION_COMPLETED", actorId, reason, now));
+        return new CaseFile(caseId, tenantId, sourceCategory, sourceId, relatedPaymentId, severity,
+                createdAt, dueAt, status, ownerId, resolution, resolutionNote,
+                true, true, next, notes);
     }
 
     public CaseFile close(UUID actorId, String reason, Instant now) {
