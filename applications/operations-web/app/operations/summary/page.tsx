@@ -56,10 +56,14 @@ export default async function OperationalSummaryPage({ searchParams }: { searchP
   return (
     <main>
       <section className="shell">
-        <Link href="/operations">← Operations</Link>
-        <div className="eyebrow">Reporting / Operational summary</div>
-        <h1>{tenantResult.tenant.name}</h1>
-        <p>Read-only Reporting projection. The selected period uses absolute UTC instants.</p>
+        <header className="page-header">
+          <div>
+            <div className="eyebrow">Reporting / Operational summary</div>
+            <h1>Operational summary</h1>
+            <p>{tenantResult.tenant.name}. Read-only Reporting projection using absolute UTC instants.</p>
+          </div>
+          <div className="page-actions"><Link className="button secondary" href="/operations">← Overview</Link></div>
+        </header>
         {supportActive && <div className="panel status">Support mode is active. This view is read-only and audited.</div>}
         <SummaryFilters from={from} to={to} merchantIds={merchantIds} />
         {result.kind === "unavailable" && <div className="panel status error">You cannot read this operational summary for the selected Tenant or Merchant scope.</div>}
@@ -73,7 +77,7 @@ export default async function OperationalSummaryPage({ searchParams }: { searchP
 function SummaryFilters({ from, to, merchantIds }: { from: string; to: string; merchantIds: string[] }) {
   const merchantFields = [...merchantIds, ""];
   return (
-    <form className="panel form-grid" method="get">
+    <form className="panel form-grid filter-panel" method="get">
       <label>From (inclusive ISO instant)<input name="from" defaultValue={from} required /></label>
       <label>To (exclusive ISO instant)<input name="to" defaultValue={to} required /></label>
       <fieldset>
@@ -89,21 +93,21 @@ function SummaryView({ summary, locale, timezone, tenantId, merchantIds }: { sum
   const { metrics } = summary;
   return (
     <>
-      <section className="panel status">
+      <section className="panel status snapshot-panel">
         <strong>Projection snapshot</strong>
         <span className="table-secondary">As of {formatOperationsDateTime(summary.asOf, locale, timezone)} · generation {summary.projection.generation} · cursor {summary.projection.cursor}</span>
         <LiveSummaryStatus tenantId={tenantId} cursor={summary.projection.cursor} merchantIds={merchantIds} />
       </section>
-      <section className="panel">
+      <section className="panel summary-volume-panel">
         <div className="eyebrow">Payment volume</div>
         <h2>{metrics.paymentVolume.paymentCount.toLocaleString(locale)} Payments</h2>
         <div className="data-list">{metrics.paymentVolume.amountByCurrency.map((item) => <span key={item.currency}>{formatAmount(item.amount, item.currency, locale)} <Link href={operationsRecordsHref(metrics.paymentVolume.source.href)}>View records</Link></span>)}</div>
       </section>
-      <section className="panel grid-2">
+      <section className="panel grid-2 summary-rate-panel">
         <RateCard title="Payment success" metric={metrics.paymentSuccessRate} locale={locale} />
         <RateCard title="Payment failure" metric={metrics.paymentFailureRate} locale={locale} />
       </section>
-      <section className="panel grid-2">
+      <section className="panel grid-2 summary-count-panel">
         <CountCard title="Manual reviews" metric={metrics.manualReviewCount} />
         <CountCard title="Open discrepancies" metric={metrics.openDiscrepancyCount} />
         <CountCard title="Unresolved Cases" metric={metrics.unresolvedCaseCount} />

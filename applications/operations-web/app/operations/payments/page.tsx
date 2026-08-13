@@ -1,7 +1,8 @@
 import { cookies } from "next/headers";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { getPaymentPage, getTenant, type CorePaymentPage } from "../../../lib/core";
+import { getPaymentPage, getTenant, getTenantConfiguration, type CorePaymentPage } from "../../../lib/core";
+import { DEFAULT_OPERATIONS_TIMEZONE, formatOperationsDateTime } from "../../../lib/formatting";
 import { redis } from "../../../lib/redis";
 import { isSessionExpired, isSupportSessionActive, readSession, SESSION_COOKIE } from "../../../lib/session";
 
@@ -23,6 +24,14 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Sea
   const tenantResult = await getTenant(tenantId, session.accessToken, readOptions);
   if (tenantResult.kind === "unauthenticated") redirect("/api/auth/login?reason=session");
   if (tenantResult.kind !== "ok") return <Unavailable />;
+  const configurationResult = await getTenantConfiguration(tenantId, session.accessToken, readOptions);
+  if (configurationResult.kind === "unauthenticated") redirect("/api/auth/login?reason=session");
+  const displayLocale = configurationResult.kind === "ok"
+    ? configurationResult.configuration.defaultLocale
+    : tenantResult.tenant.defaultLocale;
+  const displayTimezone = configurationResult.kind === "ok"
+    ? configurationResult.configuration.timezone
+    : DEFAULT_OPERATIONS_TIMEZONE;
 
   const values = await searchParams;
   const filters = {
@@ -45,15 +54,19 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Sea
   return (
     <main>
       <section className="shell">
-        <Link href="/operations">← Operations</Link>
-        <div className="eyebrow">Payment operations</div>
-        <h1>Payments</h1>
-        <p>{tenantResult.tenant.name}. Results are filtered by the Core authorization context.</p>
+        <header className="page-header">
+          <div>
+            <div className="eyebrow">Payment operations</div>
+            <h1>Payments</h1>
+            <p>{tenantResult.tenant.name}. Results are filtered by the Core authorization context.</p>
+          </div>
+          <div className="page-actions"><Link className="button secondary" href="/operations">← Overview</Link></div>
+        </header>
         {supportActive && <div className="panel status">Support mode is active. This view is read-only and audited.</div>}
         <PaymentSearchForm filters={filters} />
         {result.kind === "unavailable" && <div className="panel status error">You cannot read Payments for this Tenant.</div>}
         {result.kind === "error" && <div className="panel status error">Core could not load Payments right now.</div>}
-        {result.kind === "ok" && <PaymentTable page={result.page} filters={filters} />}
+        {result.kind === "ok" && <PaymentTable page={result.page} filters={filters} displayLocale={displayLocale} displayTimezone={displayTimezone} />}
       </section>
     </main>
   );
@@ -80,7 +93,7 @@ function PaymentSearchForm({ filters }: { filters: Record<string, string | undef
   );
 }
 
-function PaymentTable({ page, filters }: { page: CorePaymentPage; filters: Record<string, string | undefined> }) {
+function PaymentTable({ page, filters, displayLocale, displayTimezone }: { page: CorePaymentPage; filters: Record<string, string | undefined>; displayLocale: string; displayTimezone: string }) {
   const nextQuery = new URLSearchParams();
   for (const [key, value] of Object.entries(filters)) {
     if (key !== "cursor" && value) nextQuery.set(key, value);
@@ -98,7 +111,7 @@ function PaymentTable({ page, filters }: { page: CorePaymentPage; filters: Recor
               <td><span className="status-badge">{payment.state}</span></td>
               <td>{payment.riskDecision ?? "—"}</td>
               <td>{payment.reconciliationStatus ?? "—"}</td>
-              <td>{formatDate(payment.createdAt)}</td>
+              <td>{formatOperationsDateTime(payment.createdAt, displayLocale, displayTimezone)}</td>
             </tr>
           ))}</tbody>
         </table></div>
@@ -110,10 +123,6 @@ function PaymentTable({ page, filters }: { page: CorePaymentPage; filters: Recor
 
 function first(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value;
-}
-
-function formatDate(value: string) {
-  return new Date(value).toLocaleString();
 }
 
 function MissingTenant() {

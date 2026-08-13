@@ -1,6 +1,8 @@
 import { cookies } from "next/headers";
+import Link from "next/link";
 import { redirect } from "next/navigation";
-import { getRiskReviewQueue, getTenant, type CoreRiskReview } from "../../../lib/core";
+import { getRiskReviewQueue, getTenant, getTenantConfiguration, type CoreRiskReview } from "../../../lib/core";
+import { DEFAULT_OPERATIONS_TIMEZONE, formatOperationsDateTime } from "../../../lib/formatting";
 import { redis } from "../../../lib/redis";
 import { isSessionExpired, isSupportSessionActive, readSession, SESSION_COOKIE } from "../../../lib/session";
 import { RiskReviewActions } from "./risk-review-actions";
@@ -21,6 +23,14 @@ export default async function RiskReviewsPage() {
   const tenantResult = await getTenant(tenantId, session.accessToken, readOptions);
   if (tenantResult.kind === "unauthenticated") redirect("/api/auth/login?reason=session");
   if (tenantResult.kind !== "ok") return <Message title="Risk reviews" text="This Tenant is unavailable right now." />;
+  const configurationResult = await getTenantConfiguration(tenantId, session.accessToken, readOptions);
+  if (configurationResult.kind === "unauthenticated") redirect("/api/auth/login?reason=session");
+  const displayLocale = configurationResult.kind === "ok"
+    ? configurationResult.configuration.defaultLocale
+    : tenantResult.tenant.defaultLocale;
+  const displayTimezone = configurationResult.kind === "ok"
+    ? configurationResult.configuration.timezone
+    : DEFAULT_OPERATIONS_TIMEZONE;
 
   const result = await getRiskReviewQueue(tenantId, session.accessToken, readOptions);
   if (result.kind === "unauthenticated") redirect("/api/auth/login?reason=session");
@@ -29,15 +39,21 @@ export default async function RiskReviewsPage() {
   return (
     <main>
       <section className="shell">
-        <a href="/operations">← Operations</a>
-        <div className="eyebrow">Risk operations</div>
-        <h1>Manual risk reviews</h1>
-        <p>{tenantResult.tenant.name}. Review age, priority, score, ownership, and decision state.</p>
+        <header className="page-header">
+          <div>
+            <div className="eyebrow">Risk operations</div>
+            <h1>Manual risk reviews</h1>
+            <p>{tenantResult.tenant.name}. Review age, priority, score, ownership, and decision state.</p>
+          </div>
+          <div className="page-actions"><Link className="button secondary" href="/operations">← Overview</Link></div>
+        </header>
         {supportActive && <div className="panel status">Support mode is active. This queue is read-only.</div>}
         <RiskReviewTable
           reviews={result.reviews}
           csrfToken={session.csrfToken}
           readOnly={supportActive}
+          displayLocale={displayLocale}
+          displayTimezone={displayTimezone}
         />
       </section>
     </main>
@@ -48,10 +64,14 @@ function RiskReviewTable({
   reviews,
   csrfToken,
   readOnly,
+  displayLocale,
+  displayTimezone,
 }: {
   reviews: CoreRiskReview[];
   csrfToken: string;
   readOnly: boolean;
+  displayLocale: string;
+  displayTimezone: string;
 }) {
   return (
     <div className="panel">
@@ -67,7 +87,7 @@ function RiskReviewTable({
               <th scope="row" className="monospace">{review.reviewId}<span className="table-secondary">Merchant: {review.merchantId ?? "Tenant-wide"}</span></th>
               <td><span className="status-badge">{review.status}</span><span className="table-secondary">Analyst: {review.assignedAnalystId ?? "Unassigned"}</span></td>
               <td>{review.priority}</td>
-              <td>{formatDate(review.dueAt)}<span className="table-secondary">{overdueText(review.dueAt)}</span></td>
+              <td>{formatOperationsDateTime(review.dueAt, displayLocale, displayTimezone)}<span className="table-secondary">{overdueText(review.dueAt)}</span></td>
               <td className="monospace">{review.paymentId}</td>
               <td>{review.decision ?? "—"}<span className="table-secondary">{review.caseId ? `Case ${review.caseId}` : ""}</span></td>
               <td><RiskReviewActions review={review} csrfToken={csrfToken} readOnly={readOnly} /></td>
@@ -79,7 +99,6 @@ function RiskReviewTable({
   );
 }
 
-function formatDate(value: string) { return new Date(value).toLocaleString(); }
 function overdueText(value: string) { return new Date(value).getTime() <= Date.now() ? "Overdue" : "Within target"; }
 
 function Message({ title, text }: { title: string; text: string }) {
