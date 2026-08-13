@@ -578,6 +578,94 @@ export type CoreTenantConfiguration = {
   createdAt: string;
 };
 
+export type CoreOperationalSummarySource = {
+  href: string;
+};
+
+export type CoreOperationalSummaryAmount = {
+  currency: string;
+  amount: number | string;
+};
+
+export type CoreOperationalSummary = {
+  tenantId: string;
+  period: {
+    from: string;
+    to: string;
+  };
+  scope: {
+    mode: "TENANT_WIDE" | "MERCHANT_SET";
+    merchantIds: string[];
+  };
+  asOf: string;
+  projection: {
+    generation: number;
+    cursor: number;
+  };
+  metrics: {
+    paymentVolume: {
+      paymentCount: number;
+      amountByCurrency: CoreOperationalSummaryAmount[];
+      source: CoreOperationalSummarySource;
+    };
+    paymentSuccessRate: {
+      numerator: number;
+      denominator: number;
+      rate: number | string | null;
+      numeratorSource: CoreOperationalSummarySource;
+      denominatorSource: CoreOperationalSummarySource;
+    };
+    paymentFailureRate: {
+      numerator: number;
+      denominator: number;
+      rate: number | string | null;
+      numeratorSource: CoreOperationalSummarySource;
+      denominatorSource: CoreOperationalSummarySource;
+    };
+    manualReviewCount: {
+      count: number;
+      source: CoreOperationalSummarySource;
+    };
+    openDiscrepancyCount: {
+      count: number;
+      source: CoreOperationalSummarySource;
+    };
+    unresolvedCaseCount: {
+      count: number;
+      source: CoreOperationalSummarySource;
+    };
+    providerHealth: {
+      currentState: "UNKNOWN" | "HEALTHY" | "DEGRADED" | "UNAVAILABLE";
+      worstState: "UNKNOWN" | "HEALTHY" | "DEGRADED" | "UNAVAILABLE";
+      mostRecentEvaluationAt: string;
+      source: CoreOperationalSummarySource;
+    };
+  };
+};
+
+export type CoreOperationalSummaryMetricCode =
+  | "PAYMENT_VOLUME"
+  | "PAYMENT_SUCCESS"
+  | "PAYMENT_FAILURE"
+  | "PAYMENT_PROVIDER_TERMINAL"
+  | "MANUAL_REVIEW"
+  | "OPEN_DISCREPANCY"
+  | "UNRESOLVED_CASE"
+  | "PROVIDER_HEALTH_EVALUATION";
+
+export type CoreOperationalSummaryRecord = {
+  sourceType: string;
+  sourceId: string;
+  merchantId: string | null;
+  occurredAt: string;
+  sourceDetailHref: string | null;
+};
+
+export type CoreOperationalSummaryRecordPage = {
+  items: CoreOperationalSummaryRecord[];
+  nextAfter: string | null;
+};
+
 export type CoreOperationalContact = {
   tenantId: string;
   contactId: string;
@@ -1394,11 +1482,15 @@ export async function getAuditPage(
   return { kind: "ok" as const, page: await response.json() as CoreAuditPage };
 }
 
-export async function getTenantConfiguration(tenantId: string, accessToken: string) {
+export async function getTenantConfiguration(
+  tenantId: string,
+  accessToken: string,
+  readOptions: CoreReadOptions = {},
+) {
   const response = await fetch(
     `${config.coreBaseUrl}/api/v1/tenants/${encodeURIComponent(tenantId)}/configuration`,
     {
-      headers: { authorization: `Bearer ${accessToken}` },
+      headers: readHeaders(accessToken, readOptions),
       cache: "no-store",
     },
   );
@@ -1407,6 +1499,89 @@ export async function getTenantConfiguration(tenantId: string, accessToken: stri
   if (response.status === 404) return { kind: "missing" as const };
   if (!response.ok) return { kind: "error" as const };
   return { kind: "ok" as const, configuration: (await response.json()) as CoreTenantConfiguration };
+}
+
+export async function getOperationalSummary(
+  tenantId: string,
+  accessToken: string,
+  options: { from: string; to: string; merchantIds?: string[] },
+  readOptions: CoreReadOptions = {},
+): Promise<
+  | { kind: "unauthenticated" }
+  | { kind: "unavailable" }
+  | { kind: "error"; status: number; code?: string }
+  | { kind: "ok"; summary: CoreOperationalSummary }
+> {
+  const params = new URLSearchParams({ from: options.from, to: options.to });
+  for (const merchantId of options.merchantIds ?? []) {
+    params.append("merchantId", merchantId);
+  }
+  const response = await fetch(
+    `${config.coreBaseUrl}/api/v1/tenants/${encodeURIComponent(tenantId)}/reports/operational-summary?${params.toString()}`,
+    { headers: readHeaders(accessToken, readOptions), cache: "no-store" },
+  );
+  if (response.status === 401) return { kind: "unauthenticated" };
+  if (response.status === 403 || response.status === 404) return { kind: "unavailable" };
+  if (!response.ok) {
+    let code: string | undefined;
+    try {
+      const problem = await response.json() as { type?: unknown; code?: unknown };
+      if (typeof problem.type === "string") code = problem.type;
+      if (typeof problem.code === "string") code = problem.code;
+    } catch {
+      // Keep the response classification useful when Core returned no JSON body.
+    }
+    return { kind: "error", status: response.status, code };
+  }
+  return { kind: "ok", summary: await response.json() as CoreOperationalSummary };
+}
+
+export async function getOperationalSummaryRecords(
+  tenantId: string,
+  accessToken: string,
+  options: {
+    metric: CoreOperationalSummaryMetricCode;
+    from: string;
+    to: string;
+    merchantIds?: string[];
+    after?: string;
+    limit?: number;
+  },
+  readOptions: CoreReadOptions = {},
+): Promise<
+  | { kind: "unauthenticated" }
+  | { kind: "unavailable" }
+  | { kind: "error"; status: number; code?: string }
+  | { kind: "ok"; page: CoreOperationalSummaryRecordPage }
+> {
+  const params = new URLSearchParams({
+    metric: options.metric,
+    from: options.from,
+    to: options.to,
+  });
+  for (const merchantId of options.merchantIds ?? []) {
+    params.append("merchantId", merchantId);
+  }
+  if (options.after) params.set("after", options.after);
+  if (options.limit !== undefined) params.set("limit", String(options.limit));
+  const response = await fetch(
+    `${config.coreBaseUrl}/api/v1/tenants/${encodeURIComponent(tenantId)}/reports/operational-summary/records?${params.toString()}`,
+    { headers: readHeaders(accessToken, readOptions), cache: "no-store" },
+  );
+  if (response.status === 401) return { kind: "unauthenticated" };
+  if (response.status === 403 || response.status === 404) return { kind: "unavailable" };
+  if (!response.ok) {
+    let code: string | undefined;
+    try {
+      const problem = await response.json() as { type?: unknown; code?: unknown };
+      if (typeof problem.type === "string") code = problem.type;
+      if (typeof problem.code === "string") code = problem.code;
+    } catch {
+      // Keep the response classification useful when Core returned no JSON body.
+    }
+    return { kind: "error", status: response.status, code };
+  }
+  return { kind: "ok", page: await response.json() as CoreOperationalSummaryRecordPage };
 }
 
 export async function updateTenantConfiguration(

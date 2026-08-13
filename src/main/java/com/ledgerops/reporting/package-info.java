@@ -6,7 +6,9 @@
             "ledger::api",
             "payment::api",
             "provider::api",
-            "risk::api"
+            "risk::api",
+            "casework::api",
+            "reconciliation::api"
         }
 )
 package com.ledgerops.reporting;

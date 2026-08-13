@@ -31,6 +31,248 @@
 
 The exact resources are introduced only by their slice.
 
+## Slice 10 operational summary contract
+
+Slice 10 publishes the Reporting-owned operational summary and its
+source-record drill-down. “Dashboard” is a user-interface term; the HTTP
+resource is `operational-summary`.
+
+### Summary
+
+```text
+GET /api/v1/tenants/{tenantId}/reports/operational-summary
+```
+
+The request requires `from` and `to` RFC 3339 timestamps with an explicit
+timezone offset or `Z`. The timestamps represent absolute instants. `from`
+is inclusive and `to` is exclusive. Core normalizes both values to UTC. A
+date without a timezone, such as `2026-08-13`, is invalid. The request may
+repeat `merchantId` to select one or more Merchants.
+
+The UI may calculate presets such as “Today” or “7 days” using the Tenant or
+user timezone, but it sends the resulting absolute instants to Core.
+
+The response represents one Reporting snapshot:
+
+```json
+{
+  "tenantId": "uuid",
+  "period": {
+    "from": "2026-08-01T00:00:00Z",
+    "to": "2026-08-08T00:00:00Z"
+  },
+  "scope": {
+    "mode": "MERCHANT_SET",
+    "merchantIds": ["uuid"]
+  },
+  "asOf": "2026-08-08T10:15:00Z",
+  "projection": {
+    "generation": 3,
+    "cursor": 18427
+  },
+  "metrics": {
+    "paymentVolume": {
+      "paymentCount": 1250,
+      "amountByCurrency": [
+        {"currency": "SAR", "amount": 382140.50}
+      ],
+      "source": {}
+    },
+    "paymentSuccessRate": {
+      "numerator": 1100,
+      "denominator": 1175,
+      "rate": 0.9362,
+      "numeratorSource": {},
+      "denominatorSource": {}
+    },
+    "paymentFailureRate": {
+      "numerator": 75,
+      "denominator": 1175,
+      "rate": 0.0638,
+      "numeratorSource": {},
+      "denominatorSource": {}
+    },
+    "manualReviewCount": {},
+    "openDiscrepancyCount": {},
+    "unresolvedCaseCount": {},
+    "providerHealth": {}
+  }
+}
+```
+
+`paymentVolume` counts logical Payments whose `createdAt` is in the selected
+period and returns monetary totals grouped by currency. It never combines
+different currencies. `paymentSuccessRate` and `paymentFailureRate` use
+definitive Provider outcomes applied in the period. Their shared denominator
+is successful definitive outcomes plus failed definitive outcomes. Risk
+`REJECTED` Payments and non-final `PROCESSING` Payments are excluded. A
+successful Payment that is later reversed remains a successful Provider
+outcome. When the denominator is zero, `rate` is `null`.
+
+`manualReviewCount` counts RiskReviews created in the period. It does not
+count Payments currently in `RISK_REVIEW`. `openDiscrepancyCount` counts
+discrepancies detected in the period that belong to the current
+Reconciliation run and do not have a `CLOSED` Case. A discrepancy without a
+Case is open. `unresolvedCaseCount` counts Cases created in the period whose
+current status is `OPEN`, `INVESTIGATING`, `AWAITING_INFORMATION`, or
+`REOPENED`. `RESOLVED` and `CLOSED` Cases are excluded.
+
+`providerHealth` contains the current approved `ProviderHealthState` at
+`asOf`, the worst health state observed in the selected period, and the most
+recent evaluation time.
+
+Reporting remains derived and rebuildable. It uses published read APIs and
+events and never reads Payment, Risk, Reconciliation, Casework, or Ledger
+tables directly. Source-module PostgreSQL records remain authoritative.
+
+The initial rebuild implementation consumes published, source-owned read
+boundaries for Payment volume and applied definitive Provider outcomes, Risk
+Reviews, Cases, Reconciliation discrepancies, and Provider health
+evaluations. It composes the complete fact set before invoking the Reporting
+generation writer. Source reads and generation replacement are therefore
+separate operations: a failed source read cannot switch a partial generation.
+The generation writer appends a persisted Tenant projection event in the same
+transaction and stores its generated event ID as the snapshot cursor. The
+rebuild input cursor, where present, is source-boundary metadata and is not
+the public SSE cursor. Release 0.3 supports the documented
+`SIMULATOR` Provider only; no Provider routing or external Provider call is
+introduced by the rebuild.
+
+Cases and reconciliation results without a resolvable Merchant association
+remain visible to Tenant-wide Reporting but cannot be included in a
+Merchant-set filter. A Reconciliation discrepancy is counted as open only
+when it belongs to the current run and has no `CLOSED` Case.
+
+### Drill-down
+
+```text
+GET /api/v1/tenants/{tenantId}/reports/operational-summary/records
+```
+
+The request requires `metric`, `from`, and `to`, and accepts repeated
+`merchantId`, an opaque keyset cursor in `after`, and `limit`. `from` and
+`to` use the same `[from,to)` absolute-instant semantics as the summary.
+The closed metric values are:
+
+```text
+PAYMENT_VOLUME
+PAYMENT_SUCCESS
+PAYMENT_FAILURE
+PAYMENT_PROVIDER_TERMINAL
+MANUAL_REVIEW
+OPEN_DISCREPANCY
+UNRESOLVED_CASE
+PROVIDER_HEALTH_EVALUATION
+```
+
+The response is keyset-paginated and returns safe projection information,
+including source type, source ID, Merchant ID where applicable, and
+occurrence time. It may include a source-detail link when the caller is
+authorized for that source. The summary uses one source link for a count
+metric. A rate uses separate `numeratorSource` and `denominatorSource`
+links.
+
+`limit` defaults to `25` and must be between `1` and `100`, following the
+existing bounded keyset-page convention used by the Release 0.3 read APIs.
+The cursor is bound to the metric, period, and Merchant filter; it is not a
+snapshot-consistency token.
+
+The summary and drill-down use the same filtering specification. Verification
+must demonstrate:
+
+```text
+dashboard metric = drill-down record count = authoritative source-query result
+```
+
+### Scope, freshness, and errors
+
+Both resources require `report:read`. Tenant-wide callers may request all
+Merchants or an explicit subset. Merchant-scoped callers default to their
+complete authorized Merchant set; explicit Merchant IDs must be a subset of
+that authority. An unavailable or out-of-scope explicitly requested Merchant
+returns the normal non-disclosing `404`; the server does not silently remove
+it from the request.
+
+`asOf` is the time at which the summary snapshot was composed. `generation`
+identifies the complete Reporting projection generation, and `cursor` is the
+latest persisted Tenant projection-event ID represented by the snapshot. A
+rebuild creates a new generation and switches to it only after completion.
+The service never serves a partially rebuilt generation. If no complete
+generation exists, it returns RFC 7807 `503 REPORTING_NOT_READY`.
+
+The Reporting summary does not add a second HTTP `LIVE`/`STALE` calculation.
+ADR-027 defines `LIVE`, `RECONNECTING`, and `STALE` for the SSE/browser
+live-update state.
+
+### Reporting live-update stream
+
+Reporting exposes the Tenant-scoped live-update stream at:
+
+```text
+GET /api/v1/tenants/{tenantId}/reports/events
+Accept: text/event-stream
+Authorization: Bearer ...
+Last-Event-ID: 18427
+```
+
+The request may repeat `merchantId`. The stream uses the same `report:read`,
+Tenant, and Merchant-scope rules as the operational summary. An explicitly
+requested Merchant outside the caller's authority returns the normal
+non-disclosing `404`; the server does not silently reduce the requested
+scope.
+
+The stream carries invalidation signals, not complete business records. A
+normal event has this shape:
+
+```text
+id: 18428
+event: projection-updated
+data: {"generation":3,"affected":["OPERATIONAL_SUMMARY"],"occurredAt":"2026-08-13T03:25:10Z"}
+```
+
+`affected` is a closed set of read experiences implemented and published by
+the current release. The current implementation emits only:
+
+```text
+OPERATIONAL_SUMMARY
+```
+
+No other affected value is added until its Reporting publisher and read
+experience are implemented and verified.
+
+The stream must not send complete Payment, Case, dashboard, or notification
+records. The client refetches the affected Reporting snapshot or query using
+its normal authenticated API. SSE and Reporting projections remain derived
+experience and never become transactional truth.
+
+The summary response's `projection.cursor` is the starting cursor for the
+stream. The client loads the summary first, then opens the stream with
+`Last-Event-ID` set to that cursor. This prevents a change between snapshot
+loading and stream connection from being missed.
+
+If the requested cursor is no longer retained, Reporting sends:
+
+```text
+event: resync-required
+data: {"reason":"CURSOR_UNAVAILABLE"}
+```
+
+The client discards derived state, reloads the snapshot, obtains its new
+cursor, and reconnects. It does not reconstruct missing state in the browser.
+
+The server sends the comment heartbeat `: keepalive` every 15 seconds and
+advertises `retry: 3000` for a three-second reconnect delay. Heartbeats carry
+no business data and no event ID. The UI state is `LIVE` after connection,
+`RECONNECTING` while retrying, and `STALE` after resync is required or a
+prolonged failure. The UI keeps `STALE` visible until a fresh snapshot loads.
+
+The Operations Web keeps the Core bearer token server-side. Its same-origin
+BFF streaming route obtains the authenticated token, forwards the selected
+Tenant, Merchant filters, and `Last-Event-ID` to Core, and streams the Core
+response to the browser. Browser JavaScript never receives the Core bearer
+token. Changing Tenant or Merchant filters closes the old stream, clears
+derived state, loads the new snapshot, and opens a new stream.
+
 The first published credential API contract is
 [`release-0.3-credential-actions.yaml`](release-0.3-credential-actions.yaml).
 It covers non-secret metadata reads, keyset-paginated collection, and the
@@ -366,11 +608,6 @@ Separate from Provider webhooks. Document:
 ## Provider Simulator v2
 
 Payment and Reversal submission bodies include the pinned ADR-027 scenario profile ID, version, and canonical snapshot. HMAC canonicalization remains the ADR-021 body-hash contract. Status query remains stable-key based. The Simulator stores the scenario snapshot and uses it for responses, webhooks, and settlement generation.
-
-## SSE contract
-
-Tenant-scoped SSE uses persisted projection event IDs and supports `Last-Event-ID`. An unavailable cursor returns an explicit resync event; Tenant change closes the old stream before the new snapshot/stream opens.
-
 
 ## Provider settlement file contract
 

@@ -7,6 +7,8 @@ import {
   getMerchants,
   getOperationalContacts,
   getTenantConfiguration,
+  getOperationalSummary,
+  getOperationalSummaryRecords,
   updateOperationalContact,
   provisionCredential,
   updateTenantConfiguration,
@@ -385,5 +387,74 @@ describe("Core credential metadata client", () => {
       authorization: "Bearer server-only-token",
       "content-type": "application/json",
     });
+  });
+});
+
+describe("Core operational-summary client", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("sends exact instants and repeatable Merchant filters server-side", async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({
+      tenantId: "tenant-id",
+      period: { from: "2026-08-01T00:00:00Z", to: "2026-08-08T00:00:00Z" },
+      scope: { mode: "MERCHANT_SET", merchantIds: ["merchant-a"] },
+      asOf: "2026-08-08T10:15:00Z",
+      projection: { generation: 3, cursor: 18427 },
+      metrics: {},
+    }), { status: 200, headers: { "content-type": "application/json" } }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(getOperationalSummary("tenant id/encoded", "server-only-token", {
+      from: "2026-08-01T00:00:00Z",
+      to: "2026-08-08T00:00:00Z",
+      merchantIds: ["merchant-a", "merchant-b"],
+    }, { supportSessionId: "support-session" })).resolves.toMatchObject({ kind: "ok" });
+
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    const requestUrl = new URL(url);
+    expect(requestUrl.pathname).toBe("/api/v1/tenants/tenant%20id%2Fencoded/reports/operational-summary");
+    expect(requestUrl.searchParams.get("from")).toBe("2026-08-01T00:00:00Z");
+    expect(requestUrl.searchParams.get("to")).toBe("2026-08-08T00:00:00Z");
+    expect(requestUrl.searchParams.getAll("merchantId")).toEqual(["merchant-a", "merchant-b"]);
+    expect(init.headers).toEqual({
+      authorization: "Bearer server-only-token",
+      "x-support-session-id": "support-session",
+    });
+  });
+
+  it("preserves the reporting-not-ready problem code", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({
+      type: "REPORTING_NOT_READY",
+    }), { status: 503 })));
+
+    await expect(getOperationalSummary("tenant-id", "token", {
+      from: "2026-08-01T00:00:00Z",
+      to: "2026-08-08T00:00:00Z",
+    })).resolves.toEqual({ kind: "error", status: 503, code: "REPORTING_NOT_READY" });
+  });
+
+  it("builds a matching keyset drill-down request", async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({
+      items: [],
+      nextAfter: null,
+    }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(getOperationalSummaryRecords("tenant-id", "token", {
+      metric: "PAYMENT_SUCCESS",
+      from: "2026-08-01T00:00:00Z",
+      to: "2026-08-08T00:00:00Z",
+      merchantIds: ["merchant-a", "merchant-b"],
+      after: "opaque-cursor",
+      limit: 25,
+    })).resolves.toEqual({ kind: "ok", page: { items: [], nextAfter: null } });
+
+    const [url] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    const requestUrl = new URL(url);
+    expect(requestUrl.pathname).toContain("/reports/operational-summary/records");
+    expect(requestUrl.searchParams.get("metric")).toBe("PAYMENT_SUCCESS");
+    expect(requestUrl.searchParams.getAll("merchantId")).toEqual(["merchant-a", "merchant-b"]);
+    expect(requestUrl.searchParams.get("after")).toBe("opaque-cursor");
+    expect(requestUrl.searchParams.get("limit")).toBe("25");
   });
 });

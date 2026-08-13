@@ -166,6 +166,10 @@ public record AuthorizedRequestContext(
         return hasPermission(Permission.NOTIFICATION_READ);
     }
 
+    public boolean canReadReports() {
+        return hasPermission(Permission.REPORT_READ);
+    }
+
     public boolean canUploadSettlements() {
         return hasPermission(Permission.SETTLEMENT_UPLOAD);
     }
