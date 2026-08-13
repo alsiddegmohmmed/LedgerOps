@@ -52,6 +52,9 @@ export default async function OperationalSummaryRecordsPage({ searchParams }: { 
   if (result.kind === "unauthenticated") redirect("/api/auth/login?reason=session");
   const nextQuery = new URLSearchParams({ metric, from, to, limit: String(limit) });
   for (const merchantId of merchantIds) nextQuery.append("merchantId", merchantId);
+  const exportQuery = new URLSearchParams(nextQuery);
+  exportQuery.set("tenantId", tenantId);
+  if (after) exportQuery.set("after", after);
 
   return (
     <main>
@@ -63,14 +66,14 @@ export default async function OperationalSummaryRecordsPage({ searchParams }: { 
         {supportActive && <div className="panel status">Support mode is active. This view is read-only and audited.</div>}
         {result.kind === "unavailable" && <div className="panel status error">You cannot read these records for the selected Tenant or Merchant scope.</div>}
         {result.kind === "error" && <div className="panel status error">Reporting could not load these records ({result.code ?? result.status}).</div>}
-        {result.kind === "ok" && <RecordTable page={result.page} locale={locale} timezone={timezone} nextQuery={nextQuery} />}
+        {result.kind === "ok" && <RecordTable page={result.page} locale={locale} timezone={timezone} nextQuery={nextQuery} exportQuery={exportQuery} />}
       </section>
     </main>
   );
 }
 
-function RecordTable({ page, locale, timezone, nextQuery }: { page: { items: { sourceType: string; sourceId: string; merchantId: string | null; occurredAt: string; sourceDetailHref: string | null }[]; nextAfter: string | null }; locale: string; timezone: string; nextQuery: URLSearchParams }) {
-  return <section className="panel">{page.items.length === 0 ? <p>No matching records were found.</p> : <div className="table-wrap"><table><caption className="sr-only">Operational summary source records</caption><thead><tr><th scope="col">Occurred</th><th scope="col">Source</th><th scope="col">Source ID</th><th scope="col">Merchant</th></tr></thead><tbody>{page.items.map((item) => <tr key={`${item.sourceType}-${item.sourceId}`}><td>{formatOperationsDateTime(item.occurredAt, locale, timezone)}</td><td>{item.sourceType}</td><td className="monospace">{item.sourceId}</td><td className="monospace">{item.merchantId ?? "Tenant-wide"}</td></tr>)}</tbody></table></div>}{page.nextAfter && <Link className="button" href={`/operations/summary/records?${nextQuery.toString()}&after=${encodeURIComponent(page.nextAfter)}`}>Next page</Link>}</section>;
+function RecordTable({ page, locale, timezone, nextQuery, exportQuery }: { page: { items: { sourceType: string; sourceId: string; merchantId: string | null; occurredAt: string; sourceDetailHref: string | null }[]; nextAfter: string | null }; locale: string; timezone: string; nextQuery: URLSearchParams; exportQuery: URLSearchParams }) {
+  return <section className="panel">{page.items.length === 0 ? <p>No matching records were found.</p> : <div className="table-wrap"><table><caption className="sr-only">Operational summary source records</caption><thead><tr><th scope="col">Occurred</th><th scope="col">Source</th><th scope="col">Source ID</th><th scope="col">Merchant</th></tr></thead><tbody>{page.items.map((item) => <tr key={`${item.sourceType}-${item.sourceId}`}><td>{formatOperationsDateTime(item.occurredAt, locale, timezone)}</td><td>{item.sourceType}</td><td className="monospace">{item.sourceId}</td><td className="monospace">{item.merchantId ?? "Tenant-wide"}</td></tr>)}</tbody></table></div>}<div className="actions">{<a className="button" href={`/api/reports/operational-summary/records?${exportQuery.toString()}`}>Download CSV</a>}{page.nextAfter && <Link className="button" href={`/operations/summary/records?${nextQuery.toString()}&after=${encodeURIComponent(page.nextAfter)}`}>Next page</Link>}</div></section>;
 }
 
 function parseMetric(value: string | undefined): CoreOperationalSummaryMetricCode | null {

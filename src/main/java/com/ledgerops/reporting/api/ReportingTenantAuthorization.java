@@ -4,6 +4,7 @@ import com.ledgerops.identity.api.AuthorizedRequestContext;
 import com.ledgerops.identity.api.AuthorizedRequestContextRequest;
 import com.ledgerops.identity.api.AuthorizationPermissionDeniedException;
 import com.ledgerops.identity.api.AuthorizationResourceNotFoundException;
+import com.ledgerops.identity.domain.Permission;
 import jakarta.servlet.http.HttpServletRequest;
 
 import java.util.List;
@@ -32,6 +33,18 @@ final class ReportingTenantAuthorization {
         Set<UUID> requested = parseMerchantIds(requestedMerchantIds);
         if (!authorization.isTenantWide() && !authorization.merchantIds().containsAll(requested)) {
             throw new AuthorizationResourceNotFoundException();
+        }
+        return authorization;
+    }
+
+    static AuthorizedRequestContext requiredExport(
+            UUID tenantId,
+            List<String> requestedMerchantIds,
+            HttpServletRequest request
+    ) {
+        AuthorizedRequestContext authorization = required(tenantId, requestedMerchantIds, request);
+        if (!authorization.hasPermission(Permission.REPORT_EXPORT)) {
+            throw new AuthorizationPermissionDeniedException("report:export");
         }
         return authorization;
     }

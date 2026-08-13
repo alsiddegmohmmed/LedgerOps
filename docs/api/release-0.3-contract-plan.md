@@ -184,6 +184,46 @@ must demonstrate:
 dashboard metric = drill-down record count = authoritative source-query result
 ```
 
+### CSV export
+
+The drill-down resource also supports a bounded CSV representation. The
+client requests the same resource with `Accept: text/csv`:
+
+```text
+GET /api/v1/tenants/{tenantId}/reports/operational-summary/records
+    ?metric=PAYMENT_VOLUME
+    &from=2026-08-01T00:00:00Z
+    &to=2026-08-08T00:00:00Z
+    &limit=25
+Accept: text/csv
+```
+
+The CSV request uses the same `metric`, period, repeated `merchantId`,
+`after`, and `limit` parameters as the JSON drill-down. It exports only the
+current keyset page. `limit` defaults to `25` and must be between `1` and
+`100`.
+
+The export requires both `report:read` and `report:export`. It applies the
+same Tenant and Merchant-scope rules as the JSON resource. An explicitly
+requested Merchant outside the caller's authority returns the normal
+non-disclosing `404`; the export does not silently reduce the requested
+scope.
+
+The response is an attachment with `Content-Type: text/csv` and these safe
+projection columns:
+
+```text
+metric,sourceType,sourceId,merchantId,occurredAt,sourceDetailHref
+```
+
+The export never includes client secrets, bearer tokens, invitation token
+hashes, or other secret material. Spreadsheet formula prefixes are neutralized
+before values are written. The server audits each successful export with the
+`report.operational-summary.exported` action, including the selected metric,
+period, scope, page cursor presence, limit, and returned row count. The
+Reporting projection remains the only query source; the export never reads
+Payment, Risk, Reconciliation, Casework, or Ledger tables directly.
+
 ### Scope, freshness, and errors
 
 Both resources require `report:read`. Tenant-wide callers may request all
