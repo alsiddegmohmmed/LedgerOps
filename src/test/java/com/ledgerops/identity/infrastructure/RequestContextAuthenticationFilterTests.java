@@ -155,6 +155,41 @@ class RequestContextAuthenticationFilterTests {
     }
 
     @Test
+    void attachesRequestContextForAllNewerTenantScopedReadRoutes() throws Exception {
+        UUID tenantId = UUID.randomUUID();
+        RequestContextAuthenticationFilter filter = filter(
+                ApplicationUser.create(ApplicationUserId.newId(),
+                        new KeycloakIdentity(ISSUER, "subject-1")),
+                tenantId
+        );
+
+        for (String path : new String[] {
+                "/api/v1/tenants/" + tenantId + "/audit",
+                "/api/v1/tenants/" + tenantId + "/reports/operational-summary",
+                "/api/v1/tenants/" + tenantId + "/reports/events",
+                "/api/v1/tenants/" + tenantId + "/risk-reviews",
+                "/api/v1/tenants/" + tenantId + "/risk/configuration",
+                "/api/v1/tenants/" + tenantId + "/reconciliation-runs",
+                "/api/v1/tenants/" + tenantId + "/ledger/accounts/" + UUID.randomUUID() + "/balance",
+                "/api/v1/tenants/" + tenantId + "/merchants/" + UUID.randomUUID() + "/webhooks"
+        }) {
+            MockHttpServletRequest request = new MockHttpServletRequest("GET", path);
+            request.addHeader(HttpHeaders.AUTHORIZATION, "Bearer valid");
+            request.setAttribute(RequestCorrelationFilter.CORRELATION_ID, "tenant-route-correlation");
+            MockHttpServletResponse response = new MockHttpServletResponse();
+            AtomicBoolean continued = new AtomicBoolean();
+
+            filter.doFilter(request, response,
+                    (ignoredRequest, ignoredResponse) -> continued.set(true));
+
+            assertThat(response.getStatus()).isEqualTo(HttpStatus.OK.value());
+            assertThat(continued).isTrue();
+            assertThat(request.getAttribute(RequestContextAuthenticationFilter.CONTEXT_ATTRIBUTE))
+                    .isInstanceOf(AuthorizedRequestContext.class);
+        }
+    }
+
+    @Test
     void attachesPrincipalButDoesNotCreateTenantContextForPlatformActivation() throws Exception {
         UUID tenantId = UUID.randomUUID();
         RequestContextAuthenticationFilter filter = filter(

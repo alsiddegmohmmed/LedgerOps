@@ -22,7 +22,7 @@ vi.mock("../lib/redis", () => {
 });
 
 import { generateKeyPair, exportJWK, createLocalJWKSet, SignJWT } from "jose";
-import { authorizationUrl, codeChallenge, createOauthTransaction, validateIdToken } from "../lib/oauth";
+import { authorizationUrl, codeChallenge, createOauthTransaction, refreshAccessToken, validateIdToken } from "../lib/oauth";
 
 const ISSUER = "http://localhost:8180/realms/ledgerops";
 
@@ -106,6 +106,28 @@ describe("OIDC authorization code flow", () => {
     expect(response.headers.get("location")).toContain("/operations");
     expect(response.headers.get("set-cookie")).toContain("__Host-ledgerops_session=");
     expect([...redisState.values.keys()].some((key) => key.startsWith("operations-web:session:"))).toBe(true);
+  });
+
+  it("exchanges a refresh token without exposing it to the browser", async () => {
+    let requestBody: URLSearchParams | undefined;
+    vi.stubGlobal("fetch", vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      requestBody = new URLSearchParams(String(init?.body));
+      return new Response(JSON.stringify({
+        access_token: "refreshed-access",
+        refresh_token: "rotated-refresh",
+        expires_in: 300,
+      }), { status: 200, headers: { "content-type": "application/json" } });
+    }));
+
+    await expect(refreshAccessToken("server-side-refresh")).resolves.toEqual({
+      access_token: "refreshed-access",
+      refresh_token: "rotated-refresh",
+      id_token: undefined,
+      expires_in: 300,
+    });
+    expect(requestBody?.get("grant_type")).toBe("refresh_token");
+    expect(requestBody?.get("refresh_token")).toBe("server-side-refresh");
+    expect(requestBody?.get("client_id")).toBe("operations-web");
   });
 
   it("submits the altered verifier and reaches the token endpoint PKCE rejection", async () => {

@@ -58,6 +58,45 @@ export async function exchangeCode(code: string, codeVerifier: string) {
   };
 }
 
+export async function refreshAccessToken(refreshToken: string) {
+  const response = await fetch(oidcEndpoints.token, {
+    method: "POST",
+    headers: { "content-type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      grant_type: "refresh_token",
+      client_id: config.keycloakClientId,
+      refresh_token: refreshToken,
+    }),
+    cache: "no-store",
+  });
+  if (!response.ok) {
+    let detail = `status=${response.status}`;
+    try {
+      const errorBody = await response.json() as { error?: unknown };
+      if (typeof errorBody.error === "string") detail += ` error=${errorBody.error}`;
+    } catch {
+      // Keep the safe status-only diagnostic when Keycloak does not return JSON.
+    }
+    throw new Error(`OIDC refresh-token exchange failed (${detail})`);
+  }
+
+  const tokens = await response.json() as {
+    access_token?: unknown;
+    refresh_token?: unknown;
+    id_token?: unknown;
+    expires_in?: unknown;
+  };
+  if (typeof tokens.access_token !== "string" || typeof tokens.expires_in !== "number" || tokens.expires_in <= 0) {
+    throw new Error("OIDC refresh response was invalid");
+  }
+  return {
+    access_token: tokens.access_token,
+    refresh_token: typeof tokens.refresh_token === "string" ? tokens.refresh_token : undefined,
+    id_token: typeof tokens.id_token === "string" ? tokens.id_token : undefined,
+    expires_in: tokens.expires_in,
+  };
+}
+
 export async function validateIdToken(idToken: string, nonce: string) {
   const jwks = createRemoteJWKSet(new URL(oidcEndpoints.jwks));
   const { payload } = await jwtVerify(idToken, jwks, {

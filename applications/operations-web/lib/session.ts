@@ -1,5 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { config } from "./config";
+import { refreshAccessToken } from "./oauth";
 
 export const SESSION_COOKIE = "__Host-ledgerops_session";
 
@@ -20,6 +21,8 @@ export type SessionStore = {
   set(key: string, value: string, mode: "EX", ttl: number): Promise<unknown>;
   del(key: string): Promise<unknown>;
 };
+
+const refreshesInFlight = new Map<string, Promise<BffSession | null>>();
 
 export function isSessionExpired(session: BffSession) {
   return session.expiresAt <= Date.now();
@@ -53,15 +56,57 @@ export async function readSession(store: SessionStore, sessionId: string | undef
   const value = await store.get(key(sessionId));
   if (!value) return null;
   try {
-    return JSON.parse(value) as BffSession;
+    const session = JSON.parse(value) as BffSession;
+    if (!session.refreshToken || session.expiresAt > Date.now() + config.sessionRefreshLeewaySeconds * 1000) {
+      return session;
+    }
+
+    const existingRefresh = refreshesInFlight.get(sessionId);
+    if (existingRefresh) return existingRefresh;
+
+    const refresh = refreshSession(store, sessionId, session);
+    refreshesInFlight.set(sessionId, refresh);
+    try {
+      return await refresh;
+    } finally {
+      refreshesInFlight.delete(sessionId);
+    }
   } catch {
     return null;
   }
 }
 
+async function refreshSession(store: SessionStore, sessionId: string, session: BffSession) {
+  try {
+    const tokens = await refreshAccessToken(session.refreshToken!);
+    if (!tokens.access_token || !Number.isFinite(tokens.expires_in) || tokens.expires_in <= 0) {
+      return session;
+    }
+    const latestValue = await store.get(key(sessionId));
+    let latestSession = session;
+    if (latestValue) {
+      try {
+        latestSession = JSON.parse(latestValue) as BffSession;
+      } catch {
+        // Preserve the already validated session when the latest value is malformed.
+      }
+    }
+    const refreshed: BffSession = {
+      ...latestSession,
+      accessToken: tokens.access_token,
+      refreshToken: tokens.refresh_token ?? latestSession.refreshToken ?? session.refreshToken,
+      idToken: tokens.id_token ?? latestSession.idToken ?? session.idToken,
+      expiresAt: Date.now() + tokens.expires_in * 1000,
+    };
+    await store.set(key(sessionId), JSON.stringify(refreshed), "EX", config.sessionTtlSeconds);
+    return refreshed;
+  } catch {
+    return session;
+  }
+}
+
 export async function updateSession(store: SessionStore, sessionId: string, session: BffSession) {
-  const ttl = Math.max(1, Math.ceil((session.expiresAt - Date.now()) / 1000));
-  await store.set(key(sessionId), JSON.stringify(session), "EX", Math.min(ttl, config.sessionTtlSeconds));
+  await store.set(key(sessionId), JSON.stringify(session), "EX", config.sessionTtlSeconds);
 }
 
 export function sessionCookie(sessionId: string, maxAge = config.sessionTtlSeconds) {

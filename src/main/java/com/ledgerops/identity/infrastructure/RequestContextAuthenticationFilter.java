@@ -187,8 +187,7 @@ final class RequestContextAuthenticationFilter extends OncePerRequestFilter {
     }
 
     private boolean isProtectedPath(HttpServletRequest request) {
-        return ("GET".equals(request.getMethod())
-                && TENANT_READ_PATH.matcher(request.getRequestURI()).matches())
+        return TENANT_PATH.matcher(request.getRequestURI()).matches()
                 || TENANT_CREDENTIALS_PATH.matcher(request.getRequestURI()).matches()
                 || TENANT_CONFIGURATION_PATH.matcher(request.getRequestURI()).matches()
                 || TENANT_OPERATIONAL_CONTACTS_PATH.matcher(request.getRequestURI()).matches()

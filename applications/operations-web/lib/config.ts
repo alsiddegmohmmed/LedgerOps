@@ -6,6 +6,7 @@ export const config = {
   coreBaseUrl: process.env.CORE_BASE_URL ?? "http://localhost:8080",
   bffOrigin: process.env.BFF_ORIGIN ?? "http://localhost:3001",
   sessionTtlSeconds: Number(process.env.SESSION_TTL_SECONDS ?? "3600"),
+  sessionRefreshLeewaySeconds: Number(process.env.SESSION_REFRESH_LEEWAY_SECONDS ?? "30"),
 };
 
 export const oidcEndpoints = {
