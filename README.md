@@ -23,9 +23,9 @@ Every component must solve a documented business or failure problem. Technology 
 
 ## Current status
 
-**Latest completed milestone:** Release 0.3 Slice 7 — Settlement generation, upload, validation, and durable ingestion
+**Current branch status:** Release 0.3 Slices 0–9 are implemented for their approved scope; Slice 10 is implemented for the approved current scope; and the Slice 11 backend/frontend, scale, dependency, topology/demo, migration, contract, and browser gates pass. Manual accessibility review is explicitly deferred; final clean-scope/documentation closure remains pending.
 
-**Next planned milestone:** Release 0.3 Slice 8 — Reconciliation and settlement posting
+**Next milestone:** Reconcile the final scope and documentation, then produce a clean release snapshot. Release 1.0 remains blocked until then.
 
 Selected verified foundations:
 
@@ -47,7 +47,7 @@ ADR-016 reconciles the Payment lifecycle documentation. ADR-017 establishes the 
 
 Release 0.2 is complete under [accepted ADR-021](docs/adr/ADR-021-define-release-0.2-provider-and-messaging-semantics.md) and the [completed Release 0.2 implementation plan](docs/plans/release-0.2-distributed-processing.md). All seven implementation slices are complete. The repository now has immutable Payment Attempts; atomic Payment submission; at-least-once Kafka command and result delivery; fenced outbox, inbox, and Provider work; a separate Provider Simulator and database; signed submission, status-query, and webhook HTTP contracts; immutable Provider and webhook evidence; Payment-owned accepted-final evidence; exact Provider-result application; bounded status recovery; evidence-gated safe retries; OpenTelemetry trace propagation; Prometheus metrics; two Grafana dashboards; alerts; runbooks; and a reproducible local topology. `SUCCESS` still uses the unchanged ADR-020 completion boundary.
 
-Release 0.3 Slices 1 through 7 are complete for their approved scope. Slice 7 adds deterministic Provider settlement generation, immutable content-addressed raw-file storage, strict streaming validation, duplicate/correction version identity, quarantined row evidence, restartable Spring Batch canonicalization, authenticated settlement APIs, audit/outbox lifecycle facts, and Operations Web upload/validation/processing screens. Matching, current-run promotion, discrepancy handling, and Ledger posting remain the explicitly ordered Slice 8/9 work.
+Release 0.3 Slices 1 through 9 are implemented for their approved scope in the current branch. Slice 7 adds deterministic Provider settlement generation, immutable content-addressed raw-file storage, strict streaming validation, duplicate/correction version identity, quarantined row evidence, restartable Spring Batch canonicalization, authenticated settlement APIs, audit/outbox lifecycle facts, and Operations Web upload/validation/processing screens. Slices 8 and 9 add matching, current-run promotion, discrepancy handling, Ledger posting, controlled corrections, and Case resolution. Slice 10 adds the approved Reporting/Operations Web experience; notification read state and Arabic/RTL localization remain explicit deferrals. Release-wide closure remains the Slice 11 evidence task.
 
 The completed Release 0.1 baseline includes the immutable journal and account domains, V6/V7 persistence, atomic account validation, append-only postings, duplicate-source prevention, deferred database balance verification, tenant-scoped balance and statement queries, and the joined ADR-020 Payment-success transaction. Exact replay validation, inconsistency detection, forced-failure rollback, concurrency, tenant isolation, and Modulith boundary tests remain part of the Release 0.2 gate.
 
@@ -105,7 +105,7 @@ The [requirement traceability matrix](docs/requirements/TRACEABILITY.md) records
 |---|---|---|
 | 0.1 | Transactional core: tenancy, payments, idempotency, synchronous risk, ledger, and atomic completion | Completed |
 | 0.2 | Distributed processing with Kafka, transactional outbox, and idempotent consumers | Completed |
-| 0.3 | Identity, authorization, audit, tenant administration, reconciliation, corrections, and financial operations | Slices 0-7 completed; Slices 8-11 pending |
+| 0.3 | Identity, authorization, audit, tenant administration, reconciliation, corrections, and financial operations | Slices 0-10 approved scope implemented; Slice 11 automated evidence passed, clean-scope/documentation closure pending; manual accessibility review explicitly deferred |
 | 1.0 | Security hardening and release evidence: deployment controls, scanning, secrets, operational verification, documentation, observability, and portfolio release | Planned |
 | Post-1.0 | Advisory applied-AI capabilities outside critical financial decisions | Deferred |
 
@@ -113,7 +113,7 @@ Later-release technology remains excluded until the approved release sequence in
 
 ## Technology
 
-Current implemented stack through Release 0.3 Slice 7:
+Current implemented stack through the current Release 0.3 branch (Slices 0–10 approved scope):
 
 - Java 21
 - Spring Boot 4
@@ -135,13 +135,13 @@ Current implemented stack through Release 0.3 Slice 7:
 - S3-compatible MinIO object storage
 - Node.js 24.18.0 LTS
 - pnpm 11.4.0
-- Next.js 16.2.11 and React 19.2.0
+- Next.js 16.3.1 and React 19.2.0
 
 Local BFF development requires the approved Keycloak realm/client and Redis instance in addition to Core PostgreSQL. Tokens remain server-side; Redis is session storage only and PostgreSQL remains authorization truth.
 
 Use the [Release 0.3 local Operations Web guide](docs/demo/release-0.3-slice-2-local.md) to start the approved PostgreSQL, Kafka, Redis, and Keycloak dependencies, then run Core and Operations Web with matching issuer and port configuration.
 
-The approved technology baseline is documented in the [Technical Design and Architecture Specification](docs/architecture/LedgerOps_Technical_Design_and_Architecture_Specification_v1.7.docx). Technologies are introduced only by their implementation slice. Release 0.3 Slice 2 is active; its current completion evidence is recorded in the approved Slice 2 plan.
+The approved technology baseline is documented in the [Technical Design and Architecture Specification](docs/architecture/LedgerOps_Technical_Design_and_Architecture_Specification_v1.7.docx). Technologies are introduced only by their implementation slice. The current Release 0.3 completion evidence and remaining gate gaps are recorded in the active release plan and Slice 11 gate plan.
 
 ## Key repository paths
 

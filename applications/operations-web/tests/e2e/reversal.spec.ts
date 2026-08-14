@@ -12,10 +12,13 @@ async function signInAndSelectTenant(page: import("@playwright/test").Page) {
   await expect(page).toHaveURL(/\/operations$/);
 
   await page.getByLabel("Tenant ID").fill(AUTHORIZED_TENANT);
-  const tenantNavigation = page.waitForNavigation({ waitUntil: "domcontentloaded" });
+  const tenantSelection = page.waitForResponse((response) => {
+    const request = response.request();
+    return request.method() === "POST" && new URL(response.url()).pathname === "/api/tenant/select";
+  });
   await page.getByRole("button", { name: "Verify Tenant" }).click();
-  await tenantNavigation;
-  await expect(page.getByText("Playwright Tenant")).toBeVisible();
+  await tenantSelection;
+  await expect(page.getByRole("heading", { name: "Playwright Tenant", exact: true })).toBeVisible();
 }
 
 test("requests a full Reversal from an authenticated Payment detail page", async ({ page }) => {

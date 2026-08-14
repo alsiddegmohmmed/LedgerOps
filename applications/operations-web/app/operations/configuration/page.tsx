@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { getTenant, getTenantConfiguration } from "../../../lib/core";
+import { DEFAULT_OPERATIONS_TIMEZONE, formatOperationsDateTime } from "../../../lib/formatting";
 import { redis } from "../../../lib/redis";
 import { isSessionExpired, readSession, SESSION_COOKIE } from "../../../lib/session";
 import { ConfigurationForm } from "./configuration-form";
@@ -60,6 +61,8 @@ export default async function TenantConfigurationPage() {
   }
 
   const configuration = configurationResult.kind === "ok" ? configurationResult.configuration : null;
+  const displayLocale = configuration?.defaultLocale ?? tenantResult.tenant.defaultLocale;
+  const displayTimezone = configuration?.timezone ?? DEFAULT_OPERATIONS_TIMEZONE;
   const initial = configuration
     ? {
         allowedCurrencies: configuration.allowedCurrencies,
@@ -83,7 +86,7 @@ export default async function TenantConfigurationPage() {
         <p>{tenantResult.tenant.name}. Changes are versioned and audited by Core.</p>
         {configuration ? (
           <div className="panel status">
-            Current version: <strong>{configuration.version}</strong> · saved {new Date(configuration.createdAt).toLocaleString()}
+            Current version: <strong>{configuration.version}</strong> · saved {formatOperationsDateTime(configuration.createdAt, displayLocale, displayTimezone)}
           </div>
         ) : (
           <div className="panel status">

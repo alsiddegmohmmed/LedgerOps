@@ -9,6 +9,7 @@ if (!baseWebServer || Array.isArray(baseWebServer)) {
 export default defineConfig({
   ...baseConfig,
   testMatch: "reversal.spec.ts",
+  testIgnore: [],
   webServer: {
     ...baseWebServer,
     env: {

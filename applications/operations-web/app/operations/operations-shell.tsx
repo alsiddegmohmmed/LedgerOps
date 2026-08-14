@@ -7,7 +7,6 @@ import type { ReactNode } from "react";
 type NavItem = {
   href: string;
   label: string;
-  glyph: string;
 };
 
 type NavGroup = {
@@ -19,40 +18,34 @@ const NAV_GROUPS: NavGroup[] = [
   {
     label: "Workspace",
     items: [
-      { href: "/operations", label: "Overview", glyph: "⌂" },
-      { href: "/operations/summary", label: "Operational summary", glyph: "▥" },
+      { href: "/operations", label: "Overview" },
+      { href: "/operations/summary", label: "Operational summary" },
     ],
   },
   {
-    label: "Work queues",
+    label: "Operations",
     items: [
-      { href: "/operations/payments", label: "Payments", glyph: "↗" },
-      { href: "/operations/risk-reviews", label: "Risk reviews", glyph: "!" },
-      { href: "/operations/cases", label: "Cases", glyph: "◇" },
-      { href: "/operations/reconciliation", label: "Reconciliation", glyph: "≋" },
-      { href: "/operations/settlements", label: "Settlements", glyph: "⇄" },
-    ],
-  },
-  {
-    label: "Control room",
-    items: [
-      { href: "/operations/provider", label: "Provider health", glyph: "◉" },
-      { href: "/operations/audit", label: "Audit trail", glyph: "◫" },
-      { href: "/operations/ledger", label: "Ledger", glyph: "⊞" },
-      { href: "/operations/settlements", label: "Settlement ingestion", glyph: "⇄" },
+      { href: "/operations/payments", label: "Payments" },
+      { href: "/operations/risk-reviews", label: "Risk reviews" },
+      { href: "/operations/cases", label: "Cases" },
+      { href: "/operations/reconciliation", label: "Reconciliation" },
+      { href: "/operations/provider", label: "Provider" },
+      { href: "/operations/ledger", label: "Ledger" },
+      { href: "/operations/settlements", label: "Settlements" },
+      { href: "/operations/audit", label: "Audit trail" },
     ],
   },
   {
     label: "Administration",
     items: [
-      { href: "/operations/merchants", label: "Merchants", glyph: "•" },
-      { href: "/operations/memberships", label: "Memberships", glyph: "◎" },
-      { href: "/operations/credentials", label: "Credentials", glyph: "⌁" },
-      { href: "/operations/configuration", label: "Tenant configuration", glyph: "⚙" },
-      { href: "/operations/risk-configuration", label: "Risk configuration", glyph: "◇" },
-      { href: "/operations/contacts", label: "Operational contacts", glyph: "•" },
-      { href: "/operations/webhooks", label: "Merchant webhooks", glyph: "⌁" },
-      { href: "/operations/support", label: "Support console", glyph: "◎" },
+      { href: "/operations/merchants", label: "Merchants" },
+      { href: "/operations/memberships", label: "Memberships" },
+      { href: "/operations/credentials", label: "Credentials" },
+      { href: "/operations/configuration", label: "Tenant configuration" },
+      { href: "/operations/risk-configuration", label: "Risk configuration" },
+      { href: "/operations/contacts", label: "Operational contacts" },
+      { href: "/operations/webhooks", label: "Merchant webhooks" },
+      { href: "/operations/support", label: "Support console" },
     ],
   },
 ];
@@ -69,6 +62,7 @@ export function OperationsShell({
   supportActive: boolean;
 }) {
   const pathname = usePathname();
+  const tenantIsActive = tenant?.status === "ACTIVE";
 
   return (
     <div className="operations-app">
@@ -77,16 +71,16 @@ export function OperationsShell({
           <span className="brand-mark" aria-hidden="true">L</span>
           <span>
             <strong>LedgerOps</strong>
-            <small>Operations</small>
+            <small>Operations Web</small>
           </span>
         </div>
 
         <div className="workspace-switcher">
-          <span className="sidebar-label">Active workspace</span>
+          <span className="sidebar-label">Active Tenant</span>
           <strong>{tenant?.name ?? "No Tenant selected"}</strong>
           <span className="workspace-status">
-            <span className={`status-dot ${tenant ? "status-dot-live" : "status-dot-muted"}`} />
-            {tenant ? `${tenant.status} · ${tenant.id.slice(0, 8)}` : "Choose a Tenant to begin"}
+            <span className={`status-dot ${tenantIsActive ? "status-dot-live" : "status-dot-muted"}`} />
+            {tenant ? tenant.status : "Select a Tenant on Overview"}
           </span>
         </div>
 
@@ -106,8 +100,7 @@ export function OperationsShell({
                       key={item.href}
                       aria-current={active ? "page" : undefined}
                     >
-                      <span className="nav-glyph" aria-hidden="true">{item.glyph}</span>
-                      <span>{item.label}</span>
+                      {item.label}
                     </Link>
                   );
                 })}
@@ -130,12 +123,17 @@ export function OperationsShell({
       <div className="app-viewport">
         <header className="topbar">
           <div className="topbar-context">
-            <span className="topbar-kicker">Operations workspace</span>
+            <strong>LedgerOps</strong>
             <span className="topbar-separator" aria-hidden="true">/</span>
             <span>{tenant?.name ?? "Tenant selection"}</span>
           </div>
           <div className="topbar-status">
-            <span className="connection-pill"><span className="status-dot status-dot-live" /> Core connected</span>
+            {tenant && (
+              <span className="tenant-status-inline">
+                <span className={`status-dot ${tenantIsActive ? "status-dot-live" : "status-dot-muted"}`} />
+                {tenant.status}
+              </span>
+            )}
             {supportActive && <span className="support-pill">Support mode</span>}
           </div>
         </header>

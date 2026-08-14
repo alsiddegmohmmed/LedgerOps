@@ -1,6 +1,6 @@
 # Release 0.3 Slice 9 - Controlled settlement corrections and complete Case resolution
 
-Status: Verified in isolated extraction; integration into the main worktree pending
+Status: Implemented and integrated in the current branch; release-wide gate pending
 Owner: One implementation owner  
 Release: 0.3
 
@@ -58,6 +58,6 @@ Excluded:
 ## Completion report
 
 - Changed: Controlled settlement-correction lifecycle, reconciliation eligibility and locking API, exact inverse Ledger compensation, Case resolution/closure/reopen gating, Slice 9 API/UI flow, V41 migration, and focused domain/integration/browser tests.
-- Verified: The isolated extraction passed the focused correction and modularity suites, the full root `./gradlew :test --no-daemon --console=plain` task, `./gradlew check --no-daemon --console=plain`, `git diff --check`, frontend typecheck/tests/build/focused lint, and the Slice 9 Playwright casework flow. The full root test task completed successfully in 8m09s.
-- Incomplete: The verified extraction has not been copied, committed, or merged into the user's main worktree. Release-wide closure, Slice 10, and Slice 11 remain separate work. Full frontend lint still has pre-existing failures in unrelated reconciliation and settlement pages and was not changed by Slice 9.
-- Deviations: None from the approved Slice 9 authority. The evidence is explicitly isolated and must not be described as merged or release-complete until integrated and reverified.
+- Verified: The current branch passed `./gradlew clean test --console=plain --stacktrace`, `./gradlew check --console=plain --stacktrace`, `git diff --check`, and the Slice 9 Playwright configuration. The final Operations Web gates also pass under Node 24.18.0.
+- Incomplete: Release-wide closure remains open only for final clean-scope/documentation review. Manual keyboard/accessibility review is explicitly deferred by user decision. The current branch remains uncommitted and is not a clean release snapshot.
+- Deviations: None from the approved Slice 9 authority. Slice 9 is no longer an isolated extraction; its integrated status is supported by the current branch and final command evidence.

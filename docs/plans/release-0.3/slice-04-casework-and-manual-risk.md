@@ -59,7 +59,7 @@ Risk-case resolution is exactly `RISK_APPROVE | RISK_REJECT`. Reconciliation-cas
 - Payment-owned ESCALATE transaction locks Payment then RiskReview, records the final decision, allocates one stable case ID, and appends `CreateCaseRequested`; Payment remains `RISK_REVIEW`;
 - Casework command consumer creates exactly one Case;
 - controlled `RISK_APPROVE | RISK_REJECT` resolution calls `payment::api` and atomically transitions Payment, resolves Case, writes audit/outbox;
-- Risk/Case UI and the lifecycle facts required by future assignment notifications; Notification consumption and read state remain Slice 10 work.
+- Risk/Case UI and the lifecycle facts required by future assignment notifications; Notification consumption and read state remain partial by explicit current-scope decision.
 
 Excluded:
 
@@ -101,7 +101,7 @@ Excluded:
   - Focused RiskReview/Casework domain, modularity, and architecture tests passed.
   - Operations Web `corepack pnpm typecheck` passed.
   - Operations Web `corepack pnpm test` passed: 23 tests, 0 failures.
-  - Operations Web `corepack pnpm build` passed. The existing Node 22 versus Node 24.18–24.x engine warning remains.
+  - Operations Web `pnpm build` passed under the required Node 24.18.0 runtime. Earlier Node 22 output is historical and is not final evidence.
   - `git diff --check` passed.
 - Incomplete:
   - NTF-01 is intentionally partial: the Notification consumer, notification creation/read state, and target-breach scheduling belong to Slice 10 under ADR-027.

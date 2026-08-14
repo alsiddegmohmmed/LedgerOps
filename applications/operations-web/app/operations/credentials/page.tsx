@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { getCredentialPage, getTenant, type CoreCredentialPage } from "../../../lib/core";
+import { getCredentialPage, getTenant, getTenantConfiguration, type CoreCredentialPage } from "../../../lib/core";
+import { DEFAULT_OPERATIONS_TIMEZONE, formatOperationsDateTime } from "../../../lib/formatting";
 import { redis } from "../../../lib/redis";
 import { isSessionExpired, readSession, SESSION_COOKIE } from "../../../lib/session";
 import { CredentialCreateForm, CredentialRowActions } from "./credential-actions";
@@ -45,6 +46,14 @@ export default async function CredentialsPage({ searchParams }: CredentialsPageP
       </main>
     );
   }
+  const configurationResult = await getTenantConfiguration(session.selectedTenantId, session.accessToken);
+  if (configurationResult.kind === "unauthenticated") redirect("/api/auth/login?reason=session");
+  const displayLocale = configurationResult.kind === "ok"
+    ? configurationResult.configuration.defaultLocale
+    : tenantResult.tenant.defaultLocale;
+  const displayTimezone = configurationResult.kind === "ok"
+    ? configurationResult.configuration.timezone
+    : DEFAULT_OPERATIONS_TIMEZONE;
 
   const { cursor } = await searchParams;
   const credentialResult = await getCredentialPage(
@@ -70,7 +79,7 @@ export default async function CredentialsPage({ searchParams }: CredentialsPageP
         {credentialResult.kind === "ok" && (
           <>
             <CredentialCreateForm csrfToken={session.csrfToken} />
-            <CredentialTable page={credentialResult.page} csrfToken={session.csrfToken} />
+            <CredentialTable page={credentialResult.page} csrfToken={session.csrfToken} displayLocale={displayLocale} displayTimezone={displayTimezone} />
           </>
         )}
       </section>
@@ -78,7 +87,7 @@ export default async function CredentialsPage({ searchParams }: CredentialsPageP
   );
 }
 
-function CredentialTable({ page, csrfToken }: { page: CoreCredentialPage; csrfToken: string }) {
+function CredentialTable({ page, csrfToken, displayLocale, displayTimezone }: { page: CoreCredentialPage; csrfToken: string; displayLocale: string; displayTimezone: string }) {
   return (
     <div className="panel">
       {page.items.length === 0 ? (
@@ -104,7 +113,7 @@ function CredentialTable({ page, csrfToken }: { page: CoreCredentialPage; csrfTo
                   </td>
                   <td><span className="status-badge">{credential.status}</span></td>
                   <td className="monospace">{credential.merchantId}</td>
-                  <td>{new Date(credential.createdAt).toLocaleString()}</td>
+                  <td>{formatOperationsDateTime(credential.createdAt, displayLocale, displayTimezone)}</td>
                   <td><CredentialRowActions credential={credential} csrfToken={csrfToken} /></td>
                 </tr>
               ))}

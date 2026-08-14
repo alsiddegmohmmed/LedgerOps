@@ -2,10 +2,16 @@ import { cookies } from "next/headers";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import {
+  getCaseQueue,
   getOperationalSummary,
+  getOperationalSummaryRecords,
+  getPaymentPage,
+  getRiskReviewQueue,
   getTenant,
   getTenantConfiguration,
   type CoreOperationalSummary,
+  type CoreOperationalSummaryRecordPage,
+  type CorePaymentPage,
 } from "../../lib/core";
 import { DEFAULT_OPERATIONS_TIMEZONE, formatOperationsDateTime } from "../../lib/formatting";
 import { redis } from "../../lib/redis";
@@ -14,6 +20,12 @@ import { LiveSummaryStatus } from "./summary/live-summary-status";
 import { TenantSelector } from "./tenant-selector";
 
 export const dynamic = "force-dynamic";
+
+type SummaryResult = Awaited<ReturnType<typeof getOperationalSummary>>;
+type PaymentResult = Awaited<ReturnType<typeof getPaymentPage>>;
+type ProjectionPaymentResult = Awaited<ReturnType<typeof getOperationalSummaryRecords>>;
+type RiskResult = Awaited<ReturnType<typeof getRiskReviewQueue>>;
+type CaseResult = Awaited<ReturnType<typeof getCaseQueue>>;
 
 export default async function OperationsPage() {
   const cookieStore = await cookies();
@@ -28,82 +40,80 @@ export default async function OperationsPage() {
     ? await getTenant(tenantId, session.accessToken, readOptions)
     : null;
 
-  if (tenantResult?.kind === "unauthenticated") {
-    redirect("/api/auth/login?reason=session");
-  }
+  if (tenantResult?.kind === "unauthenticated") redirect("/api/auth/login?reason=session");
 
   if (!tenantResult || tenantResult.kind !== "ok") {
     return (
       <main>
-        <section className="shell dashboard-page">
+        <section className="shell">
           <header className="page-header">
             <div>
-              <div className="eyebrow">Workspace setup</div>
-              <h1>Choose a Tenant</h1>
-              <p>Verify the Tenant you want to operate. Every view stays scoped to that selection.</p>
+              <div className="eyebrow">Tenant selection</div>
+              <h1>Operations</h1>
+              <p>Choose a Tenant to continue.</p>
             </div>
           </header>
           <TenantSelector csrfToken={session.csrfToken} selectedTenantId={session.selectedTenantId} />
-          {tenantResult?.kind === "unavailable" && (
-            <div className="panel status error">This Tenant is unavailable to the signed-in user.</div>
-          )}
-          {tenantResult?.kind === "error" && (
-            <div className="panel status error">Core could not verify this Tenant right now.</div>
-          )}
+          {tenantResult?.kind === "unavailable" && <div className="panel status error">This Tenant is unavailable to the signed-in user.</div>}
+          {tenantResult?.kind === "error" && <div className="panel status error">Core could not verify this Tenant right now.</div>}
         </section>
       </main>
     );
   }
 
-  const from = defaultFrom();
-  const to = new Date().toISOString();
-  const summaryResult = await getOperationalSummary(tenantResult.tenant.id, session.accessToken, {
-    from,
-    to,
-    merchantIds: [],
-  }, readOptions);
-
-  if (summaryResult.kind === "unauthenticated") {
-    redirect("/api/auth/login?reason=session");
-  }
-
   const configurationResult = await getTenantConfiguration(tenantResult.tenant.id, session.accessToken, readOptions);
-  if (configurationResult.kind === "unauthenticated") {
-    redirect("/api/auth/login?reason=session");
-  }
-  const displayLocale = configurationResult.kind === "ok"
+  if (configurationResult.kind === "unauthenticated") redirect("/api/auth/login?reason=session");
+  const locale = configurationResult.kind === "ok"
     ? configurationResult.configuration.defaultLocale
     : tenantResult.tenant.defaultLocale;
-  const displayTimezone = configurationResult.kind === "ok"
+  const timezone = configurationResult.kind === "ok"
     ? configurationResult.configuration.timezone
     : DEFAULT_OPERATIONS_TIMEZONE;
 
+  const from = defaultFrom();
+  const to = new Date().toISOString();
+  const [summaryResult, paymentResult, paymentProjectionResult, riskResult, caseResult] = await Promise.all([
+    getOperationalSummary(tenantResult.tenant.id, session.accessToken, { from, to }, readOptions),
+    getPaymentPage(tenantResult.tenant.id, session.accessToken, { from, to, limit: 8 }, readOptions),
+    getOperationalSummaryRecords(tenantResult.tenant.id, session.accessToken, {
+      metric: "PAYMENT_VOLUME",
+      from,
+      to,
+      limit: 8,
+    }, readOptions),
+    getRiskReviewQueue(tenantResult.tenant.id, session.accessToken, readOptions),
+    getCaseQueue(tenantResult.tenant.id, session.accessToken, readOptions),
+  ]);
+
+  if ([summaryResult, paymentResult, paymentProjectionResult, riskResult, caseResult].some((result) => result.kind === "unauthenticated")) {
+    redirect("/api/auth/login?reason=session");
+  }
+
   return (
     <main>
-      <section className="shell dashboard-page">
-        <header className="page-header">
+      <section className="shell">
+        <header className="page-header overview-header">
           <div>
-            <div className="eyebrow">Workspace overview</div>
-            <h1>Operations overview</h1>
-            <p>One place to see what needs attention across payments, risk, reconciliation, and controls.</p>
+            <div className="eyebrow">Operations</div>
+            <h1>Operations</h1>
+            <p>{tenantResult.tenant.name}</p>
           </div>
           <div className="page-actions">
-            <Link className="button" href="/operations/payments">Open Payments</Link>
-            <Link className="button secondary" href="/operations/summary">View summary</Link>
+            <Link className="button secondary" href="/operations/payments">Payments</Link>
+            <Link className="button secondary" href="/operations/summary">Summary</Link>
           </div>
         </header>
 
-        <section className="tenant-hero">
+        <section className="tenant-context" aria-label="Active Tenant context">
           <div className="tenant-identity">
             <span className="tenant-mark" aria-hidden="true">{tenantResult.tenant.name.slice(0, 1).toUpperCase()}</span>
             <div>
-              <span className="eyebrow">Active Tenant</span>
               <h2>{tenantResult.tenant.name}</h2>
               <p className="monospace">{tenantResult.tenant.id}</p>
             </div>
           </div>
           <div className="tenant-facts">
-            <div><span className="fact-label">Status</span><span className="status-badge">{tenantResult.tenant.status}</span></div>
+            <div><span className="fact-label">Status</span><strong>{tenantResult.tenant.status}</strong></div>
             <div><span className="fact-label">Currency</span><strong>{tenantResult.tenant.defaultCurrency}</strong></div>
             <div><span className="fact-label">Locale</span><strong>{tenantResult.tenant.defaultLocale}</strong></div>
           </div>
@@ -112,192 +122,207 @@ export default async function OperationsPage() {
         {supportActive && (
           <section className="panel status support-context">
             <div>
-              <strong>Support session is active</strong>
+              <strong>Support mode is active.</strong>
               <p>This workspace is read-only and audited.</p>
             </div>
-            <Link className="button secondary" href="/operations/support">Open support console</Link>
+            <Link className="button secondary" href="/operations/support">Support console</Link>
           </section>
         )}
 
         {summaryResult.kind === "ok" ? (
-          <DashboardSummary
-            summary={summaryResult.summary}
-            locale={displayLocale}
-            timezone={displayTimezone}
-            tenantId={tenantResult.tenant.id}
-            supportActive={supportActive}
-          />
+          <SummaryMetrics summary={summaryResult.summary} locale={locale} timezone={timezone} tenantId={tenantResult.tenant.id} />
         ) : (
-          <section className="panel status error">
-            <strong>Overview unavailable</strong>
-            <p>{summaryResult.kind === "unavailable"
-              ? "You cannot read the operational summary for this Tenant."
-              : `Reporting could not load the latest snapshot (${summaryResult.code ?? summaryResult.status}).`}</p>
-            <Link className="button secondary" href="/operations/summary">Open operational summary</Link>
-          </section>
+          <DataError result={summaryResult} label="Operational summary" />
         )}
 
-        <section className="dashboard-grid">
-          <div className="panel">
-            <div className="panel-heading">
-              <div>
-                <div className="eyebrow">Work queues</div>
-                <h2>Operator shortcuts</h2>
-              </div>
-              <span className="panel-kicker">Open a queue</span>
-            </div>
-            <div className="shortcut-grid">
-              <Shortcut href="/operations/payments" label="Payments" description="Search and inspect payment evidence." glyph="↗" />
-              <Shortcut href="/operations/risk-reviews" label="Risk reviews" description="Review items waiting for a decision." glyph="!" />
-              <Shortcut href="/operations/cases" label="Cases" description="Investigate unresolved operational cases." glyph="◇" />
-              <Shortcut href="/operations/reconciliation" label="Reconciliation" description="Inspect runs and discrepancies." glyph="≋" />
-              <Shortcut href="/operations/audit" label="Audit trail" description="Search immutable Tenant evidence." glyph="◫" />
-            </div>
-          </div>
+        <div className="overview-grid">
+          <NeedsAttention summary={summaryResult} riskResult={riskResult} caseResult={caseResult} />
+          <ProviderHealth summary={summaryResult} locale={locale} timezone={timezone} />
+        </div>
 
-          <div className="panel posture-panel">
-            <div className="panel-heading">
-              <div>
-                <div className="eyebrow">System posture</div>
-                <h2>Reporting snapshot</h2>
-              </div>
-              <span className="status-dot status-dot-live" aria-label="Connected" />
-            </div>
-            {summaryResult.kind === "ok" ? (
-              <>
-                <div className="posture-value">Generation {summaryResult.summary.projection.generation}</div>
-                <p>Snapshot composed {formatOperationsDateTime(summaryResult.summary.asOf, displayLocale, displayTimezone)}.</p>
-                <div className="mini-stat"><span>Projection cursor</span><strong>{summaryResult.summary.projection.cursor.toLocaleString()}</strong></div>
-                <div className="mini-stat"><span>Live updates</span><strong>Connected when opened</strong></div>
-              </>
-            ) : (
-              <p>The Reporting projection is unavailable. Open the summary page for the current error details.</p>
-            )}
-            <Link className="text-link" href="/operations/provider">Check provider health <span aria-hidden="true">→</span></Link>
-          </div>
-        </section>
+        <RecentPayments
+          result={paymentResult}
+          projectionResult={paymentProjectionResult}
+          expectedCount={summaryResult.kind === "ok" ? summaryResult.summary.metrics.paymentVolume.paymentCount : null}
+          projectionHref={summaryResult.kind === "ok" ? operationsRecordsHref(summaryResult.summary.metrics.paymentVolume.source.href) : "/operations/summary"}
+          locale={locale}
+          timezone={timezone}
+        />
       </section>
     </main>
   );
 }
 
-function DashboardSummary({
-  summary,
-  locale,
-  timezone,
-  tenantId,
-  supportActive,
-}: {
-  summary: CoreOperationalSummary;
-  locale: string;
-  timezone: string;
-  tenantId: string;
-  supportActive: boolean;
-}) {
+function SummaryMetrics({ summary, locale, timezone, tenantId }: { summary: CoreOperationalSummary; locale: string; timezone: string; tenantId: string }) {
   const { metrics } = summary;
   return (
-    <section className="dashboard-summary">
+    <section aria-labelledby="summary-metrics-heading">
       <div className="section-heading">
         <div>
-          <div className="eyebrow">Last 7 days</div>
-          <h2>Operational pulse</h2>
+          <h2 id="summary-metrics-heading">Last 7 days</h2>
+          <p>Reporting snapshot · {formatOperationsDateTime(summary.asOf, locale, timezone)}</p>
         </div>
-        <div className="snapshot-meta">
-          <span>As of {formatOperationsDateTime(summary.asOf, locale, timezone)}</span>
-          <LiveSummaryStatus tenantId={tenantId} cursor={summary.projection.cursor} merchantIds={[]} />
-        </div>
+        <LiveSummaryStatus tenantId={tenantId} cursor={summary.projection.cursor} merchantIds={[]} />
       </div>
-      <div className="metric-grid">
-        <MetricCard
-          label="Payment volume"
-          value={metrics.paymentVolume.paymentCount.toLocaleString(locale)}
-          meta={metrics.paymentVolume.amountByCurrency.map((item) => formatAmount(item.amount, item.currency, locale)).join(" · ") || "No payments in period"}
-          href={operationsRecordsHref(metrics.paymentVolume.source.href)}
-          tone="accent"
-        />
-        <MetricCard
-          label="Success rate"
-          value={formatRate(metrics.paymentSuccessRate.rate, locale)}
-          meta={`${metrics.paymentSuccessRate.numerator.toLocaleString(locale)} of ${metrics.paymentSuccessRate.denominator.toLocaleString(locale)} definitive outcomes`}
-          href={operationsRecordsHref(metrics.paymentSuccessRate.numeratorSource.href)}
-          tone="positive"
-        />
-        <MetricCard
-          label="Manual reviews"
-          value={metrics.manualReviewCount.count.toLocaleString(locale)}
-          meta="Created in selected period"
-          href={operationsRecordsHref(metrics.manualReviewCount.source.href)}
-          tone="amber"
-        />
-        <MetricCard
-          label="Open discrepancies"
-          value={metrics.openDiscrepancyCount.count.toLocaleString(locale)}
-          meta="Detected and not closed"
-          href={operationsRecordsHref(metrics.openDiscrepancyCount.source.href)}
-          tone="warning"
-        />
-        <MetricCard
-          label="Unresolved Cases"
-          value={metrics.unresolvedCaseCount.count.toLocaleString(locale)}
-          meta="Open, investigating, or reopened"
-          href={operationsRecordsHref(metrics.unresolvedCaseCount.source.href)}
-          tone="warning"
-        />
-        <MetricCard
-          label="Provider health"
-          value={metrics.providerHealth.currentState}
-          meta={`Worst in period: ${metrics.providerHealth.worstState}`}
-          href={operationsRecordsHref(metrics.providerHealth.source.href)}
-          tone="neutral"
-          compact
-        />
-      </div>
-      <div className="summary-footnote">
-        <span>Projection generation {summary.projection.generation} · cursor {summary.projection.cursor.toLocaleString()}</span>
-        {!supportActive && <Link href="/operations/summary">Open the full summary and filters <span aria-hidden="true">→</span></Link>}
+      <div className="metric-strip">
+        <MetricItem label="Payment volume" value={metrics.paymentVolume.paymentCount.toLocaleString(locale)} meta={formatAmounts(metrics.paymentVolume.amountByCurrency, locale)} href={operationsRecordsHref(metrics.paymentVolume.source.href)} />
+        <MetricItem label="Success rate" value={formatRate(metrics.paymentSuccessRate.rate, locale)} meta={`${metrics.paymentSuccessRate.numerator.toLocaleString(locale)} / ${metrics.paymentSuccessRate.denominator.toLocaleString(locale)}`} href={operationsRecordsHref(metrics.paymentSuccessRate.numeratorSource.href)} />
+        <MetricItem label="Failure rate" value={formatRate(metrics.paymentFailureRate.rate, locale)} meta={`${metrics.paymentFailureRate.numerator.toLocaleString(locale)} / ${metrics.paymentFailureRate.denominator.toLocaleString(locale)}`} href={operationsRecordsHref(metrics.paymentFailureRate.numeratorSource.href)} />
+        <MetricItem label="Risk reviews created" value={metrics.manualReviewCount.count.toLocaleString(locale)} meta="In period" href={operationsRecordsHref(metrics.manualReviewCount.source.href)} />
+        <MetricItem label="Open discrepancies" value={metrics.openDiscrepancyCount.count.toLocaleString(locale)} meta="In period" href={operationsRecordsHref(metrics.openDiscrepancyCount.source.href)} />
+        <MetricItem label="Unresolved Cases" value={metrics.unresolvedCaseCount.count.toLocaleString(locale)} meta="Created in period" href={operationsRecordsHref(metrics.unresolvedCaseCount.source.href)} />
       </div>
     </section>
   );
 }
 
-function MetricCard({
-  label,
-  value,
-  meta,
-  href,
-  tone,
-  compact = false,
-}: {
-  label: string;
-  value: string;
-  meta: string;
-  href: string;
-  tone: "accent" | "positive" | "amber" | "warning" | "neutral";
-  compact?: boolean;
-}) {
+function MetricItem({ label, value, meta, href }: { label: string; value: string; meta: string; href: string }) {
   return (
-    <article className={`metric-card metric-card-${tone}`}>
-      <div className="metric-label"><span className="metric-indicator" />{label}</div>
-      <div className={`metric-value${compact ? " metric-value-compact" : ""}`}>{value}</div>
-      <p className="metric-meta">{meta}</p>
-      <Link className="metric-link" href={href}>View records <span aria-hidden="true">→</span></Link>
-    </article>
+    <div className="metric-item">
+      <span className="metric-label">{label}</span>
+      <strong className="metric-value">{value}</strong>
+      <span className="metric-meta">{meta}</span>
+      <Link className="metric-link" href={href}>View records</Link>
+    </div>
   );
 }
 
-function Shortcut({ href, label, description, glyph }: { href: string; label: string; description: string; glyph: string }) {
+function NeedsAttention({ summary, riskResult, caseResult }: { summary: SummaryResult; riskResult: RiskResult; caseResult: CaseResult }) {
+  const rows: Array<{ label: string; detail: string; count: number; href: string }> = [];
+  if (summary.kind === "ok" && summary.summary.metrics.paymentFailureRate.numerator > 0) {
+    rows.push({
+      label: "Failed payment outcomes",
+      detail: "Definitive failures in the selected period",
+      count: summary.summary.metrics.paymentFailureRate.numerator,
+      href: operationsRecordsHref(summary.summary.metrics.paymentFailureRate.numeratorSource.href),
+    });
+  }
+  if (riskResult.kind === "ok") {
+    const activeReviews = riskResult.reviews.filter((review) => review.status !== "DECIDED");
+    if (activeReviews.length > 0) rows.push({ label: "Risk reviews awaiting decision", detail: "Unassigned, assigned, or escalated", count: activeReviews.length, href: "/operations/risk-reviews" });
+  }
+  if (summary.kind === "ok" && summary.summary.metrics.openDiscrepancyCount.count > 0) {
+    rows.push({ label: "Open discrepancies", detail: "Detected and not closed", count: summary.summary.metrics.openDiscrepancyCount.count, href: operationsRecordsHref(summary.summary.metrics.openDiscrepancyCount.source.href) });
+  }
+  if (caseResult.kind === "ok") {
+    const openCases = caseResult.cases.filter((caseFile) => !["RESOLVED", "CLOSED"].includes(caseFile.status));
+    if (openCases.length > 0) rows.push({ label: "Unresolved Cases", detail: "Open, investigating, awaiting information, or reopened", count: openCases.length, href: "/operations/cases" });
+  }
+  if (summary.kind === "ok" && ["DEGRADED", "UNAVAILABLE"].includes(summary.summary.metrics.providerHealth.currentState)) {
+    rows.push({ label: "Provider health", detail: `Current state: ${summary.summary.metrics.providerHealth.currentState}`, count: 1, href: "/operations/provider" });
+  }
+
   return (
-    <Link className="shortcut-card" href={href}>
-      <span className="shortcut-glyph" aria-hidden="true">{glyph}</span>
-      <span><strong>{label}</strong><small>{description}</small></span>
-      <span className="shortcut-arrow" aria-hidden="true">↗</span>
-    </Link>
+    <section className="section-block" aria-labelledby="attention-heading">
+      <div className="section-heading"><div><h2 id="attention-heading">Needs attention</h2><p>Current exceptions and work queues.</p></div></div>
+      <div className="attention-list">
+        {rows.length === 0 ? <p className="attention-empty">No current exceptions are available.</p> : rows.map((row) => (
+          <div className="attention-row" key={`${row.label}-${row.href}`}>
+            <div><strong>{row.label}</strong><small>{row.detail}</small></div>
+            <div><span className="attention-count">{row.count.toLocaleString()}</span><Link className="attention-link" href={row.href}>Review</Link></div>
+          </div>
+        ))}
+        {(riskResult.kind === "unavailable" || caseResult.kind === "unavailable") && <p className="attention-unavailable">Some queues are not available for this Tenant scope.</p>}
+      </div>
+    </section>
   );
 }
 
-function operationsRecordsHref(coreHref: string) {
-  const url = new URL(coreHref, "http://core.internal");
-  return `/operations/summary/records?${url.searchParams.toString()}`;
+function ProviderHealth({ summary, locale, timezone }: { summary: SummaryResult; locale: string; timezone: string }) {
+  return (
+    <section className="section-block" aria-labelledby="provider-heading">
+      <div className="section-heading"><div><h2 id="provider-heading">Provider health</h2><p>Current Reporting projection.</p></div><Link className="table-action" href="/operations/provider">Open provider</Link></div>
+      {summary.kind !== "ok" ? <DataError result={summary} label="Provider health" compact /> : (
+        <div className="provider-panel">
+          <div className="table-wrap">
+            <table className="provider-table">
+              <caption className="sr-only">Provider health summary</caption>
+              <thead><tr><th scope="col">State</th><th scope="col">Worst in period</th><th scope="col">Evaluated</th></tr></thead>
+              <tbody><tr>
+                <td><span className={`provider-state provider-state-${summary.summary.metrics.providerHealth.currentState.toLowerCase()}`}>{summary.summary.metrics.providerHealth.currentState}</span></td>
+                <td>{summary.summary.metrics.providerHealth.worstState}</td>
+                <td>{formatOperationsDateTime(summary.summary.metrics.providerHealth.mostRecentEvaluationAt, locale, timezone)}</td>
+              </tr></tbody>
+            </table>
+          </div>
+          <p className="snapshot-note">Generation {summary.summary.projection.generation} · cursor {summary.summary.projection.cursor.toLocaleString()}</p>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function RecentPayments({ result, projectionResult, expectedCount, projectionHref, locale, timezone }: { result: PaymentResult; projectionResult: ProjectionPaymentResult; expectedCount: number | null; projectionHref: string; locale: string; timezone: string }) {
+  return (
+    <section className="section-block" aria-labelledby="recent-payments-heading">
+      <div className="section-heading"><div><h2 id="recent-payments-heading">Recent payments</h2><p>Latest records in the active Tenant scope.</p></div><Link className="table-action" href="/operations/payments">Open Payments</Link></div>
+      {result.kind === "ok" && result.page.items.length > 0 ? (
+        <div className="recent-panel">
+          <div className="table-wrap">
+            <table className="recent-table">
+              <caption className="sr-only">Recent payments</caption>
+              <thead><tr><th scope="col">Payment</th><th scope="col">Amount</th><th scope="col">State</th><th scope="col">Risk</th><th scope="col">Updated</th><th scope="col"><span className="sr-only">Action</span></th></tr></thead>
+              <tbody>{result.page.items.map((payment) => <RecentPaymentRow key={payment.paymentId} payment={payment} locale={locale} timezone={timezone} />)}</tbody>
+            </table>
+          </div>
+        </div>
+      ) : projectionResult.kind === "ok" && projectionResult.page.items.length > 0 ? (
+        <ProjectionPaymentRecords page={projectionResult.page} href={projectionHref} locale={locale} timezone={timezone} />
+      ) : result.kind !== "ok" ? (
+        <DataError result={result} label="Recent payments" />
+      ) : expectedCount && expectedCount > 0 ? (
+        <p className="attention-unavailable">The Reporting summary lists {expectedCount.toLocaleString(locale)} payments, but no matching source or projection records are available.</p>
+      ) : (
+        <p className="attention-empty">No payments in this period.</p>
+      )}
+    </section>
+  );
+}
+
+function ProjectionPaymentRecords({ page, href, locale, timezone }: { page: CoreOperationalSummaryRecordPage; href: string; locale: string; timezone: string }) {
+  return (
+    <div className="recent-panel">
+      <p className="projection-note">Showing the Reporting projection records. Full payment detail is available from Payments when the source record exists.</p>
+      <div className="table-wrap">
+        <table className="recent-table">
+          <caption className="sr-only">Recent payment projection records</caption>
+          <thead><tr><th scope="col">Payment</th><th scope="col">Merchant</th><th scope="col">Occurred</th><th scope="col"><span className="sr-only">Action</span></th></tr></thead>
+          <tbody>{page.items.map((item) => (
+            <tr key={`${item.sourceType}-${item.sourceId}`}>
+              <th scope="row"><span className="monospace recent-payment-id">{item.sourceId}</span><span className="table-secondary">{item.sourceType}</span></th>
+              <td className="monospace">{item.merchantId ?? "Tenant-wide"}</td>
+              <td>{formatOperationsDateTime(item.occurredAt, locale, timezone)}</td>
+              <td><Link className="table-action" href={href}>View records</Link></td>
+            </tr>
+          ))}</tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function RecentPaymentRow({ payment, locale, timezone }: { payment: CorePaymentPage["items"][number]; locale: string; timezone: string }) {
+  return (
+    <tr>
+      <th scope="row"><Link className="table-action recent-payment-id" href={`/operations/payments/${encodeURIComponent(payment.paymentId)}`}>{payment.paymentId}</Link><span className="table-secondary">{payment.merchantReference}</span></th>
+      <td className="recent-amount">{formatAmount(payment.amount, payment.currency, locale)}</td>
+      <td><span className="status-badge">{payment.state}</span></td>
+      <td>{payment.riskDecision ?? "—"}</td>
+      <td>{formatOperationsDateTime(payment.updatedAt, locale, timezone)}</td>
+      <td><Link className="table-action" href={`/operations/payments/${encodeURIComponent(payment.paymentId)}`}>Open</Link></td>
+    </tr>
+  );
+}
+
+function DataError({ result, label, compact = false }: { result: { kind: string; code?: string; status?: number }; label: string; compact?: boolean }) {
+  const message = result.kind === "unavailable"
+    ? `${label} is not available for this Tenant scope.`
+    : `${label} could not be loaded${result.code ? ` (${result.code})` : result.status ? ` (${result.status})` : ""}.`;
+  return <div className={`panel status error${compact ? " compact-error" : ""}`}><p>{message}</p></div>;
+}
+
+function formatAmounts(items: CoreOperationalSummary["metrics"]["paymentVolume"]["amountByCurrency"], locale: string) {
+  return items.length === 0 ? "No amount" : items.map((item) => formatAmount(item.amount, item.currency, locale)).join(" · ");
 }
 
 function formatAmount(amount: number | string, currency: string, locale: string) {
@@ -306,6 +331,11 @@ function formatAmount(amount: number | string, currency: string, locale: string)
 
 function formatRate(rate: number | string | null, locale: string) {
   return rate === null ? "—" : `${(Number(rate) * 100).toLocaleString(locale, { maximumFractionDigits: 2 })}%`;
+}
+
+function operationsRecordsHref(coreHref: string) {
+  const url = new URL(coreHref, "http://core.internal");
+  return `/operations/summary/records?${url.searchParams.toString()}`;
 }
 
 function defaultFrom() {

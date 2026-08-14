@@ -170,6 +170,10 @@ public record AuthorizedRequestContext(
         return hasPermission(Permission.REPORT_READ);
     }
 
+    public boolean canExportReports() {
+        return hasPermission(Permission.REPORT_EXPORT);
+    }
+
     public boolean canUploadSettlements() {
         return hasPermission(Permission.SETTLEMENT_UPLOAD);
     }

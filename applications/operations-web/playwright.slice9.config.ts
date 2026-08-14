@@ -9,6 +9,7 @@ if (!baseWebServer || Array.isArray(baseWebServer)) {
 export default defineConfig({
   ...baseConfig,
   testMatch: "casework.spec.ts",
+  testIgnore: [],
   webServer: {
     ...baseWebServer,
     env: {

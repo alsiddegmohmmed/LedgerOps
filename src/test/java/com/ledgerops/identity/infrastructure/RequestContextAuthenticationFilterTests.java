@@ -5,6 +5,7 @@ import com.ledgerops.RequestCorrelationFilter;
 import com.ledgerops.identity.application.AuthorizedTenantContext;
 import com.ledgerops.identity.application.RequestContextService;
 import com.ledgerops.identity.api.AuthorizedRequestContext;
+import com.ledgerops.identity.api.AuthorizedRequestContextRequest;
 import com.ledgerops.identity.api.AuthenticatedPrincipal;
 import com.ledgerops.identity.api.SupportSessionPort;
 import com.ledgerops.identity.api.SupportSessionResult;
@@ -214,6 +215,39 @@ class RequestContextAuthenticationFilterTests {
                         "HUMAN", ISSUER, "subject-1"));
         assertThat(request.getAttribute(RequestContextAuthenticationFilter.CONTEXT_ATTRIBUTE))
                 .isNull();
+    }
+
+    @Test
+    void attachesPrincipalButDoesNotCreateTenantContextForProviderScenarioRoutes() throws Exception {
+        UUID tenantId = UUID.randomUUID();
+        RequestContextAuthenticationFilter filter = filter(
+                ApplicationUser.create(ApplicationUserId.newId(),
+                        new KeycloakIdentity(ISSUER, "subject-1")),
+                tenantId
+        );
+
+        for (String methodAndPath : new String[] {
+                "GET /api/v1/platform/provider/scenarios/assignments",
+                "POST /api/v1/platform/provider/scenarios/profiles",
+                "POST /api/v1/platform/provider/scenarios/assignments"
+        }) {
+            String[] parts = methodAndPath.split(" ", 2);
+            MockHttpServletRequest request = new MockHttpServletRequest(parts[0], parts[1]);
+            request.addHeader(HttpHeaders.AUTHORIZATION, "Bearer valid");
+            MockHttpServletResponse response = new MockHttpServletResponse();
+            AtomicBoolean continued = new AtomicBoolean();
+
+            filter.doFilter(request, response,
+                    (ignoredRequest, ignoredResponse) -> continued.set(true));
+
+            assertThat(response.getStatus()).isEqualTo(HttpStatus.OK.value());
+            assertThat(continued).isTrue();
+            assertThat(request.getAttribute(
+                    AuthorizedRequestContextRequest.principalAttribute()))
+                    .isEqualTo(new AuthenticatedPrincipal("HUMAN", ISSUER, "subject-1"));
+            assertThat(request.getAttribute(RequestContextAuthenticationFilter.CONTEXT_ATTRIBUTE))
+                    .isNull();
+        }
     }
 
     @Test

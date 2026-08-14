@@ -22,9 +22,9 @@ Stop only for a real conflict/change to an approved Product requirement, module/
 
 **Active milestone: Release 0.3 - Identity and Financial Operations.**
 
-Slices 0 through 7 are complete for their approved scope. Slice 6's asynchronous Provider completion/retry browser coverage remains outstanding, and Slice 7's live MinIO/browser walkthrough remains an environment-level release check. **Slice 8 is next.** Do not implement later-slice behavior early.
+Slices 0 through 8 are complete for their approved scope. Slice 9 is implemented and integrated in the current branch. Slice 10 is implemented for the approved current scope, with NTF-01 notification read-state/consumer work and Arabic/RTL localization explicitly deferred by project decision. Slice 11 command gates have passed, but final release closure remains pending the non-command evidence listed in its gate plan and this documentation reconciliation. Do not describe Release 0.3 as complete or begin Release 1.0 until those items are closed.
 
-Release 0.3 includes Keycloak/Core authorization, Tenant/Merchant administration, credentials, audited support, Operations Web, Payment/Ledger operations, manual Risk/Provider controls, full Reversal, merchant webhook testing, settlement ingestion, Reconciliation, Cases, narrow corrections, dashboard/live activity/notifications/reports, developer workflows, and Arabic/English parity.
+Release 0.3 includes Keycloak/Core authorization, Tenant/Merchant administration, credentials, audited support, Operations Web, Payment/Ledger operations, manual Risk/Provider controls, full Reversal, merchant webhook testing, settlement ingestion, Reconciliation, Cases, narrow corrections, dashboard/live activity/reports, developer workflows, and the explicitly approved current-scope exclusions recorded in Slice 10. Arabic/RTL parity is deferred by project decision; this is not a silent omission.
 
 Release 0.3 excludes public cloud/Kubernetes/Terraform hardening, final performance/security reports, formal approval chains, real integrations, arbitrary journal administration, partial Reversals, Reconciliation extraction, and applied AI.
 

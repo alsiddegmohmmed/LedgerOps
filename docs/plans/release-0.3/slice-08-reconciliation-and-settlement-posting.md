@@ -117,7 +117,7 @@ Excluded:
   - `./gradlew :test --tests 'com.ledgerops.reconciliation.infrastructure.SettlementSchemaIntegrationTests' --console=plain` — BUILD SUCCESSFUL.
   - Operations Web `corepack pnpm typecheck` — passed.
   - Operations Web `corepack pnpm test` — 6 files and 24 tests passed.
-  - Operations Web `corepack pnpm build` — passed; the existing Node engine warning remains because the machine uses Node 22 while the package requests Node 24.
+  - Operations Web lint, typecheck, tests, and build pass under Node 24.18.0. Earlier Node 22 output is historical and is not final evidence.
   - `git diff --check` — passed for the final Slice 8 diff.
-- Incomplete: The repository-wide `./gradlew :check --console=plain` reached 658 tests but stopped on two Keycloak Testcontainers initialization failures (`KeycloakJwtIntegrationTests` and `KeycloakCredentialProvisioningAdapterIntegrationTests`). Both failed while waiting for `quay.io/keycloak/keycloak:26.3.3` and reported an unexpected end of the HTTP connection. No Slice 8 test failed.
+- Incomplete: The earlier repository-wide check was interrupted by transient Keycloak image startup failures. The current branch has since passed the final `./gradlew clean test --console=plain --stacktrace` and `./gradlew check --console=plain --stacktrace` gates; remaining incomplete items are tracked centrally in Slice 11.
 - Deviations: None from the approved Slice 8 scope. Notification consumption, correction/compensation, and fuzzy reconciliation remain deferred as documented.

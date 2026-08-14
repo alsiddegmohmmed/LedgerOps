@@ -1,9 +1,9 @@
 # Release 0.3 plan: Identity and Financial Operations
 
-Status: Active  
+Status: Active — implementation complete for the current approved scope; Release 0.3 gate remains open
 Owner: One implementation owner per vertical slice  
 Release: 0.3 - Identity and Financial Operations  
-Last updated: 2026-07-27
+Last updated: 2026-08-14
 
 ## Outcome
 
@@ -18,10 +18,30 @@ At exit:
 - one full Reversal per Payment is duplicate-safe and atomically compensates ADR-020;
 - settlement ingestion and immutable Reconciliation produce stable settlement instructions without rerun duplication;
 - Cases control escalation and narrow settlement corrections without arbitrary Ledger mutation;
-- Operations Web supports the critical workflows in English and Arabic; and
-- Release 0.3 verification proves authorization, recovery, accounting, concurrency, batch, UI, and documentation behavior.
+- Operations Web supports the critical workflows in the approved current scope; Arabic/RTL localization is explicitly deferred by project decision; and
+- Release 0.3 verification proves the command gates and closes the remaining evidence before Release 1.0 starts.
 
 Release 1.0 remains deployment/infrastructure hardening, scanning, performance/resilience reports, public demo evidence, product tour/video, and final portfolio presentation.
+
+## Current implementation status (2026-08-14)
+
+The current branch contains implemented Release 0.3 work through Slice 10 for
+the approved current scope. Slices 0 through 8 are complete, Slice 9 is
+integrated, and Slice 10 includes the Reporting summary/SSE/export and
+Operations Web experience. The backend and frontend command gates pass under
+the required runtimes.
+
+Release closure is still pending. The scale, dependency/security, topology,
+demo, and automated browser evidence from Slice 11 now pass. Manual
+keyboard/accessibility review is explicitly deferred by user decision; the
+automated evidence does not prove manual accessibility behavior. The remaining
+work is final clean-scope and documentation review. A destructive clean-reset
+database run was intentionally not performed because the existing local Core
+PostgreSQL volume was preserved; the topology and demo rebuild were verified
+against that preserved data. The current V1–V45 fresh install and V14-to-V45
+upgrade test passed, and the discovered JSON Schema/HMAC fixture tests have
+passed. NTF-01 notification consumer/read state and Arabic/RTL localization are
+explicit project deferrals and must not be reported as implemented.
 
 ## Authority
 

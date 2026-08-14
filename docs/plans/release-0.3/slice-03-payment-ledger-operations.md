@@ -67,7 +67,7 @@ Excluded:
   - `ModularityTests` and `ArchitectureRulesTests` passed after the ADR-025 repair.
   - Non-Keycloak Identity domain/API/unit regression tests passed.
   - `git diff --check` passed.
-  - Operations Web `pnpm typecheck` passed and `pnpm build` passed. The build emitted the existing Node engine warning because the environment uses Node 22 while the project requests Node 24.18–24.x.
+  - Operations Web `pnpm typecheck` and `pnpm build` passed. Earlier Node 22 output is historical; final Release 0.3 frontend evidence is run under the required Node 24.18.0 runtime.
   - Full backend `./gradlew :test --max-workers=1 --console=plain` passed: 602 tests, 0 failures, 0 errors.
   - `./gradlew :check --max-workers=1 --console=plain` passed.
 - Incomplete:

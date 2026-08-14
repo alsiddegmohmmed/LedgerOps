@@ -13,6 +13,7 @@ import com.ledgerops.reporting.api.OperationalSummaryFact;
 import com.ledgerops.reporting.api.OperationalSummaryMetricCode;
 import com.ledgerops.reporting.api.OperationalSummaryProjectionRebuildPort;
 import com.ledgerops.reporting.api.OperationalSummaryProjectionRebuildRequest;
+import com.ledgerops.reporting.api.OperationalSummaryProjectionRebuildUseCase;
 import com.ledgerops.risk.api.RiskOperationalSummaryQuery;
 import com.ledgerops.risk.api.RiskReviewOperationalSummary;
 import org.springframework.stereotype.Service;
@@ -30,7 +31,8 @@ import java.util.UUID;
  * source read cannot leave a partially switched Reporting generation.
  */
 @Service
-public class OperationalSummaryProjectionRebuildService {
+public class OperationalSummaryProjectionRebuildService
+        implements OperationalSummaryProjectionRebuildUseCase {
 
     private static final String SIMULATOR_PROVIDER = "SIMULATOR";
     private static final String RECONCILIATION_CASE_SOURCE = "RECONCILIATION_DISCREPANCY";
@@ -62,6 +64,7 @@ public class OperationalSummaryProjectionRebuildService {
      * Rebuilds all approved Tenant metrics. The caller supplies the latest
      * persisted projection-event cursor represented by the read snapshot.
      */
+    @Override
     public void rebuild(UUID tenantId, Instant fromInclusive, Instant toExclusive,
                         Instant asOf, long cursor) {
         if (!fromInclusive.isBefore(toExclusive)) {

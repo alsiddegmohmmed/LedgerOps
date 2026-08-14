@@ -3,8 +3,10 @@ import { redirect } from "next/navigation";
 import {
   getSettlementBatches,
   getTenant,
+  getTenantConfiguration,
   type CoreSettlementBatch,
 } from "../../../lib/core";
+import { DEFAULT_OPERATIONS_TIMEZONE, formatOperationsDateTime } from "../../../lib/formatting";
 import { redis } from "../../../lib/redis";
 import { isSessionExpired, isSupportSessionActive, readSession, SESSION_COOKIE } from "../../../lib/session";
 import { SettlementUploadForm } from "./settlement-actions";
@@ -23,6 +25,14 @@ export default async function SettlementPage() {
   const tenantResult = await getTenant(session.selectedTenantId, session.accessToken, readOptions);
   if (tenantResult.kind === "unauthenticated") redirect("/api/auth/login?reason=session");
   if (tenantResult.kind !== "ok") return <Unavailable />;
+  const configurationResult = await getTenantConfiguration(session.selectedTenantId, session.accessToken, readOptions);
+  if (configurationResult.kind === "unauthenticated") redirect("/api/auth/login?reason=session");
+  const displayLocale = configurationResult.kind === "ok"
+    ? configurationResult.configuration.defaultLocale
+    : tenantResult.tenant.defaultLocale;
+  const displayTimezone = configurationResult.kind === "ok"
+    ? configurationResult.configuration.timezone
+    : DEFAULT_OPERATIONS_TIMEZONE;
 
   const batches = await getSettlementBatches(session.selectedTenantId, session.accessToken, readOptions);
   if (batches.kind === "unauthenticated") redirect("/api/auth/login?reason=session");
@@ -38,13 +48,13 @@ export default async function SettlementPage() {
         {!supportActive && <SettlementUploadForm csrfToken={session.csrfToken} />}
         {batches.kind === "unavailable" && <div className="panel status error">You cannot read settlement batches for this Tenant.</div>}
         {batches.kind === "error" && <div className="panel status error">Core could not load settlement batches right now.</div>}
-        {batches.kind === "ok" && <SettlementBatchTable batches={batches.page.items} />}
+        {batches.kind === "ok" && <SettlementBatchTable batches={batches.page.items} displayLocale={displayLocale} displayTimezone={displayTimezone} />}
       </section>
     </main>
   );
 }
 
-function SettlementBatchTable({ batches }: { batches: CoreSettlementBatch[] }) {
+function SettlementBatchTable({ batches, displayLocale, displayTimezone }: { batches: CoreSettlementBatch[]; displayLocale: string; displayTimezone: string }) {
   return (
     <section className="panel">
       <div className="eyebrow">Batch history</div>
@@ -59,7 +69,7 @@ function SettlementBatchTable({ batches }: { batches: CoreSettlementBatch[] }) {
                 <td>{batch.settlementPeriodStart} → {batch.settlementPeriodEnd}</td>
                 <td><span className="status-badge">{batch.status}</span>{batch.structuralErrorCode && <span className="table-secondary">{batch.structuralErrorCode}</span>}</td>
                 <td>{batch.validRows}/{batch.totalRows} valid{batch.invalidRows > 0 ? ` · ${batch.invalidRows} quarantined` : ""}</td>
-                <td>{formatDate(batch.createdAt)}</td>
+                <td>{formatOperationsDateTime(batch.createdAt, displayLocale, displayTimezone)}</td>
                 <td><a className="button secondary" href={`/operations/settlements/${batch.batchVersionId}`}>Inspect</a></td>
               </tr>
             ))}</tbody>
@@ -70,6 +80,5 @@ function SettlementBatchTable({ batches }: { batches: CoreSettlementBatch[] }) {
   );
 }
 
-function formatDate(value: string) { return new Date(value).toLocaleString(); }
 function MissingTenant() { return <main><section className="shell"><a href="/operations">← Operations</a><div className="panel status error">Choose and verify a Tenant first.</div></section></main>; }
 function Unavailable() { return <main><section className="shell"><a href="/operations">← Operations</a><div className="panel status error">This Tenant is unavailable or Core could not verify it right now.</div></section></main>; }

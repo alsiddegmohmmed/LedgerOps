@@ -66,6 +66,18 @@ dependencyManagement {
 	}
 }
 
-tasks.withType<Test> {
-	useJUnitPlatform()
+tasks.named<Test>("test") {
+	useJUnitPlatform {
+		excludeTags("release-gate-scale")
+	}
+}
+
+tasks.register<Test>("releaseScaleTest") {
+	description = "Run the Release 0.3 100,000-record ingestion/reconciliation evidence tests."
+	group = "verification"
+	testClassesDirs = sourceSets["test"].output.classesDirs
+	classpath = sourceSets["test"].runtimeClasspath
+	useJUnitPlatform {
+		includeTags("release-gate-scale")
+	}
 }

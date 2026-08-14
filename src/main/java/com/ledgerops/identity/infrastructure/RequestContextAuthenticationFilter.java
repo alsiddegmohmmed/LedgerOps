@@ -59,6 +59,8 @@ final class RequestContextAuthenticationFilter extends OncePerRequestFilter {
             "^/api/v1/tenants/[0-9a-fA-F-]{36}/(?:activate|suspend|archive)$");
     private static final Pattern SUPPORT_SESSION_PATH = Pattern.compile(
             "^/api/v1/platform/support-sessions(?:/.*)?$");
+    private static final Pattern PLATFORM_PROVIDER_SCENARIO_PATH = Pattern.compile(
+            "^/api/v1/platform/provider/scenarios(?:/.*)?$");
     private static final String TENANT_ONBOARDING_PATH = "/api/v1/tenants";
     private static final String PAYMENT_PATH = "/api/v1/payments";
     static final String TENANT_SELECTION_HEADER = "X-Tenant-Id";
@@ -117,7 +119,7 @@ final class RequestContextAuthenticationFilter extends OncePerRequestFilter {
                             principal.keycloakIdentity().subject(),
                             principal.authenticationTime()
                     ));
-            if (isPlatformTenantOperationPath(request)
+            if (isPlatformOperationPath(request)
                     || SUPPORT_SESSION_PATH.matcher(request.getRequestURI()).matches()) {
                 filterChain.doFilter(request, response);
                 return;
@@ -205,8 +207,7 @@ final class RequestContextAuthenticationFilter extends OncePerRequestFilter {
                 && TENANT_REVERSALS_PATH.matcher(request.getRequestURI()).matches())
                 || (("GET".equals(request.getMethod()) || "POST".equals(request.getMethod()))
                 && TENANT_SETTLEMENT_BATCHES_PATH.matcher(request.getRequestURI()).matches())
-                || ("POST".equals(request.getMethod())
-                && isPlatformTenantOperationPath(request))
+                || isPlatformOperationPath(request)
                 || ("POST".equals(request.getMethod()) && PAYMENT_PATH.equals(request.getRequestURI()));
     }
 
@@ -214,6 +215,11 @@ final class RequestContextAuthenticationFilter extends OncePerRequestFilter {
         return "POST".equals(request.getMethod())
                 && (TENANT_ONBOARDING_PATH.equals(request.getRequestURI())
                 || TENANT_ACTIVATION_PATH.matcher(request.getRequestURI()).matches());
+    }
+
+    private boolean isPlatformOperationPath(HttpServletRequest request) {
+        return isPlatformTenantOperationPath(request)
+                || PLATFORM_PROVIDER_SCENARIO_PATH.matcher(request.getRequestURI()).matches();
     }
 
     private UUID parseUuid(String value) {

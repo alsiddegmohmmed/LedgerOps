@@ -58,5 +58,7 @@ Scenario profiles use the ADR-027 submission/webhook/settlement dimensions, scop
 - SSE disconnect/stale/reconnect;
 - assignment/target-breach notifications;
 - audited CSV export with formula-like data;
-- English/Arabic/RTL/mixed identifier flow;
 - keyboard-only Payment investigation and Case resolution.
+
+Arabic/RTL localization and mixed-identifier layout are explicitly deferred by
+project decision and are not part of the Release 0.3 scenario evidence.

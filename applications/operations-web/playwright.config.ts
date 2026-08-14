@@ -9,6 +9,8 @@ const webServerEnv = Object.fromEntries(Object.entries(process.env).filter((entr
 
 export default defineConfig({
   testDir: "./tests/e2e",
+  testIgnore: ["casework.spec.ts", "reversal.spec.ts"],
+  workers: 1,
   globalTeardown: "./tests/e2e/global-teardown.mjs",
   use: {
     ...devices["Desktop Chrome"],

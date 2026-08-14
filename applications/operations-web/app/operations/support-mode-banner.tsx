@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 
-export function SupportModeBanner({ csrfToken, expiresAt }: { csrfToken: string; expiresAt: number }) {
+export function SupportModeBanner({ csrfToken, expiresAt, expiresAtLabel }: { csrfToken: string; expiresAt: number; expiresAtLabel: string }) {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState(false);
 
@@ -32,7 +32,7 @@ export function SupportModeBanner({ csrfToken, expiresAt }: { csrfToken: string;
         <div className="eyebrow">Support mode active</div>
         <strong>READ-ONLY ACCESS</strong>
         <p>Every read is audited. Business mutations are unavailable.</p>
-        <p>Expires {new Date(expiresAt).toLocaleString()}</p>
+        <p>Expires {expiresAtLabel}</p>
         {error && <p role="alert">Support mode could not be exited.</p>}
       </div>
       <button className="danger" type="button" onClick={exit} disabled={pending}>

@@ -58,7 +58,7 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Sea
           <div>
             <div className="eyebrow">Payment operations</div>
             <h1>Payments</h1>
-            <p>{tenantResult.tenant.name}. Results are filtered by the Core authorization context.</p>
+            <p>{tenantResult.tenant.name}. Payment records for the active Tenant.</p>
           </div>
           <div className="page-actions"><Link className="button secondary" href="/operations">← Overview</Link></div>
         </header>

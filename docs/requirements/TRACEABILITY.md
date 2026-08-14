@@ -2,90 +2,102 @@
 
 Authority: Product Definition v1.7, Technical Specification v1.7, ADR-022 through ADR-027.
 
+## Current branch reconciliation (2026-08-13)
+
+This matrix is reconciled against the current `release-0.3-clean-foundation`
+branch and its verified working-tree evidence. `Implemented` means that the
+corresponding code, tests, and slice evidence exist in the current branch; it
+does not mean that the Release 0.3 gate is closed. The final backend and
+frontend command gates pass, while the non-command evidence listed in Slice 11
+remains open. NTF-01 notification consumer/read state and LOC-01/LOC-02
+Arabic/RTL localization are explicit project deferrals and are not reported
+as complete. The working tree remains a development snapshot, not a release
+tag.
+
 | Requirement | Release 0.3 owner | Exit evidence | Status |
 |---|---|---|---|
-| TEN-01 | Slice 2 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Planned |
-| TEN-02 | Slice 2 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Planned |
-| TEN-03 | Slice 2 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Planned |
-| TEN-04 | Slice 2 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Planned |
+| TEN-01 | Slice 2 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Implemented in Slice 2; release-wide regression required |
+| TEN-02 | Slice 2 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Implemented in Slice 2; release-wide regression required |
+| TEN-03 | Slice 2 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Implemented in Slice 2; release-wide regression required |
+| TEN-04 | Slice 2 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Implemented in Slice 2; release-wide regression required |
 | IAM-01 | Slice 1 | ApplicationUser lifecycle, Keycloak JWT/OIDC validation, opaque Redis session, Secure HttpOnly cookie, CSRF, login/logout, and invalid-session tests in `src/test/java/com/ledgerops/identity` and `applications/operations-web/tests`. | Implemented for Slice 1; administration bootstrap remains outside this slice |
-| IAM-02 | Slices 1-2 | Closed Tenant roles/permissions, PostgreSQL membership and Merchant scope resolution, and protected-path permission tests in `src/test/java/com/ledgerops/identity` and `src/test/java/com/ledgerops/protectedpaths`. | Implemented for Slice 1 foundation; administration coverage remains in Slice 2 |
+| IAM-02 | Slices 1-2 | Closed Tenant roles/permissions, PostgreSQL membership and Merchant scope resolution, and protected-path permission tests in `src/test/java/com/ledgerops/identity` and `src/test/java/com/ledgerops/protectedpaths`. | Implemented across Slices 1-2; release-wide regression required |
 | IAM-03 | Slice 1 | Explicit Tenant selection, PostgreSQL-owned `AuthorizedRequestContext`, stale/revoked/scope denial, and protected Tenant/Payment path tests. | Implemented |
 | IAM-04 | Slices 2, 4, 5, 6, 8, 9, 10 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Slice 6 reversal authorization and denial evidence implemented; remaining slice evidence required |
-| PAY-01 | Slice 2 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Planned |
+| PAY-01 | Slice 2 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Implemented in Slice 2; release-wide regression required |
 | PAY-02 | Preserved R0.1 | Existing executable evidence remains required. | Implemented |
 | PAY-03 | Preserved R0.1/R0.2 + Slices 4/6 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Slice 6 reversal state transition and Payment REVERSED evidence verified; release-wide regression remains |
-| PAY-04 | Slices 3, 6, 8 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Planned |
-| PAY-05 | Slice 3 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Planned |
-| PAY-06 | Slice 6 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Implemented; backend/frontend verification and authenticated request/persistence browser coverage passed; asynchronous Provider completion/retry browser coverage remains |
-| PAY-07 | Slice 3 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Planned |
-| PAY-08 | Slice 6 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Implemented; backend/frontend verification and authenticated request/persistence browser coverage passed; asynchronous Provider completion/retry browser coverage remains |
+| PAY-04 | Slices 3, 6, 8 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Implemented in current branch; release-wide regression required |
+| PAY-05 | Slice 3 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Implemented in Slice 3; release-wide regression required |
+| PAY-06 | Slice 6 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Implemented; Slice 6 backend/frontend and authenticated asynchronous browser coverage passed; release-wide regression required |
+| PAY-07 | Slice 3 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Implemented in Slice 3; release-wide regression required |
+| PAY-08 | Slice 6 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Implemented; Slice 6 backend/frontend and authenticated asynchronous browser coverage passed; release-wide regression required |
 | RSK-01 | Preserved R0.1 | Existing executable evidence remains required. | Implemented |
-| RSK-02 | Preserved R0.1 + Slice 4 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Planned |
-| RSK-03 | Slice 4 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Planned |
-| RSK-04 | Slice 4 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Planned |
+| RSK-02 | Preserved R0.1 + Slice 4 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Implemented in Slice 4; release-wide regression required |
+| RSK-03 | Slice 4 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Implemented in Slice 4; release-wide regression required |
+| RSK-04 | Slice 4 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Implemented in Slice 4; release-wide regression required |
 | RSK-05 | Slice 5 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Verified in Slice 5; regression remains required |
 | PRV-01 | Slice 5/7 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Scenario control/pinning verified in Slice 5; deterministic settlement-file generation and simulator isolation verified in Slice 7 |
 | PRV-02 | Slices 3/6 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Slice 6 typed operation identity and Reversal Provider flow verified; Slice 3/release regression remains |
 | PRV-03 | Slices 3/5/6 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Slice 6 ambiguity-safe Reversal result/recovery evidence verified; cross-slice regression remains |
 | PRV-04 | Slices 5/6 (ADR-026/ADR-023) | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Payment retry-now verified in Slice 5; Reversal safe retry implemented and verified in Slice 6 |
-| PRV-05 | Slice 5/10 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Provider health verified in Slice 5; Slice 10 projection regression remains required |
+| PRV-05 | Slice 5/10 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Provider health and current Reporting projection are implemented; release-wide regression required |
 | LED-01 | Preserved + Slices 6/8/9 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Slice 6 exact inverse compensation verified; later settlement/correction evidence remains |
 | LED-02 | Preserved + ADR-023/024 clarification | Existing executable evidence remains required. | Implemented |
 | LED-03 | Slices 3/6/8/9 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Slice 6 compensation source/link and atomic completion verified; later correction/reconciliation evidence remains |
-| LED-04 | Slice 9 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Verified in isolated Slice 9 extraction; integration pending |
-| LED-05 | Slice 3 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Planned |
+| LED-04 | Slice 9 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Implemented and integrated in current branch; release-wide regression required |
+| LED-05 | Slice 3 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Implemented in Slice 3; release-wide regression required |
 | REC-01 | Slice 7 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Implemented; V36 PostgreSQL/Testcontainers constraints, content-addressed storage, duplicate/correction identity, streaming validation, Spring Batch canonicalization, protected API, audit/outbox, and Operations Web evidence verified |
-| REC-02 | Slice 8 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Planned |
-| REC-03 | Slice 8 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Planned |
-| REC-04 | Slice 8 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Planned |
-| REC-05 | Slices 8/9 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Slice 9 isolated evidence verified; release-wide integration pending |
-| CAS-01 | Slices 4/8 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Planned |
-| CAS-02 | Slice 4 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Planned |
-| CAS-03 | Slices 4/9 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Slice 9 isolated evidence verified; release-wide integration pending |
-| CAS-04 | Slices 4/9 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Slice 9 isolated evidence verified; release-wide integration pending |
-| CAS-05 | Slice 4 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Planned |
-| OPS-01 | Slice 10 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Planned |
-| OPS-02 | Slice 10 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Planned |
-| OPS-03 | Slices 4/5/10 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Planned |
-| OPS-04 | Slices 3/10 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Planned |
-| NTF-01 | Slices 4/5/10 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Partial by design; lifecycle facts and webhook foundation exist, Notification consumer/read state remains Slice 10 |
+| REC-02 | Slice 8 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Implemented in Slice 8; release-wide regression required |
+| REC-03 | Slice 8 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Implemented in Slice 8; release-wide regression required |
+| REC-04 | Slice 8 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Implemented in Slice 8; release-wide regression required |
+| REC-05 | Slices 8/9 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Implemented and integrated in current branch; release-wide regression required |
+| CAS-01 | Slices 4/8 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Implemented in current branch; release-wide regression required |
+| CAS-02 | Slice 4 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Implemented in Slice 4; release-wide regression required |
+| CAS-03 | Slices 4/9 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Implemented and integrated in current branch; release-wide regression required |
+| CAS-04 | Slices 4/9 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Implemented and integrated in current branch; release-wide regression required |
+| CAS-05 | Slice 4 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Implemented in Slice 4; release-wide regression required |
+| OPS-01 | Slice 10 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Implemented for approved current scope; final release evidence pending |
+| OPS-02 | Slice 10 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Implemented for approved current scope; final release evidence pending |
+| OPS-03 | Slices 4/5/10 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Implemented for approved current scope; final release evidence pending |
+| OPS-04 | Slices 3/10 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Implemented for approved current scope; final release evidence pending |
+| NTF-01 | Slices 4/5/10 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Partial by explicit project decision; lifecycle facts and recipient foundations exist, Notification consumer/read state is deferred |
 | NTF-02 | Deferred SHOULD | Product SHOULD; not release-blocking. | Deferred |
 | NTF-03 | Deferred SHOULD | Product SHOULD; not release-blocking. | Deferred |
 | AUD-01 | Slices 1-10 | Immutable Audit domain/persistence, append-only database protection, actor/principal/Tenant/correlation fields, and transactional Payment-create audit evidence in `src/test/java/com/ledgerops/audit` and `src/test/java/com/ledgerops/protectedpaths`. | Implemented for Slice 1 foundation; remaining sensitive actions are covered by later slices |
-| AUD-02 | Slice 3 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Planned |
-| AUD-03 | Slice 10 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Planned |
-| AUD-04 | Slice 10 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Planned |
+| AUD-02 | Slice 3 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Implemented in Slice 3; release-wide regression required |
+| AUD-03 | Slice 10 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Implemented for approved current scope; final release evidence pending |
+| AUD-04 | Slice 10 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Implemented for approved current scope; final release evidence pending |
 | DEV-01 | Slices 2/5/6/10 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Slice 5 Provider/webhook fixtures and reference verified; later contract coverage remains required |
 | DEV-02 | Slice 5 (ADR-026) | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Verified in Slice 5 |
-| DEV-03 | Slices 5/10 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Slice 5 Platform scenario controls verified; Slice 10 complete scenario walkthrough remains required |
-| DEV-04 | Slice 10 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Planned |
-| LOC-01 | Slice 10 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Planned |
-| LOC-02 | Slice 10 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Planned |
-| LOC-03 | Slices 3/4/6/8/9/10 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Planned |
+| DEV-03 | Slices 5/10 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Implemented for approved current scope; final scenario evidence pending |
+| DEV-04 | Slice 10 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Implemented for approved current scope; final scenario evidence pending |
+| LOC-01 | Slice 10 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Deferred by explicit project decision |
+| LOC-02 | Slice 10 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Deferred by explicit project decision |
+| LOC-03 | Slices 3/4/6/8/9/10 | Domain, PostgreSQL/Testcontainers, authorization, failure/recovery, API/UI, and documentation evidence from the named slice. | Implemented for current UI scope; manual accessibility evidence pending |
 
 ## Release-wide business rules
 
 | Rule | Owner/evidence | Status |
 |---|---|---|
 | BR-01 | Tenant ownership and platform-wide exceptions across Slices 1-11. | Implemented for Slice 1 protected paths; regression required |
-| BR-02 | Existing Money evidence plus Reversal/settlement/correction precision in Slices 6-9. | Planned regression |
-| BR-03 | Existing immutability plus exact Reversal/correction compensation in Slices 6/9. | Slice 6 exact Reversal compensation and Slice 9 isolated correction evidence verified; release-wide integration pending |
+| BR-02 | Existing Money evidence plus Reversal/settlement/correction precision in Slices 6-9. | Release-wide regression evidence pending |
+| BR-03 | Existing immutability plus exact Reversal/correction compensation in Slices 6/9. | Reversal and correction evidence is implemented/integrated in current branch; release-wide regression required |
 | BR-04 | Existing tenant-wide Payment idempotency plus authenticated context in Slice 2. | Implemented; regression required |
 | BR-05 | Existing Provider/result duplicate safety plus Reversal result tests in Slice 6. | Slice 6 duplicate/conflict evidence and root check verified; release-wide regression remains |
 | BR-06 | Existing retry safety plus manual Payment/Reversal controls in Slices 5/6. | Payment and Reversal retry controls verified in Slices 5/6; release-wide regression remains |
 | BR-07 | Current actor and atomic audit across Slices 1-10. | Implemented for Slice 1 sensitive write; regression required |
 | BR-08 | Exact role/permission/scope negative matrices across Slices 1-11. | Implemented for Slice 1 representative paths; regression required |
-| BR-09 | Source-specific controlled Case resolution/closure in Slices 4/9. | Planned |
-| BR-10 | Tenant/Merchant suspension versus committed recovery across Slices 2-11. | Planned |
+| BR-09 | Source-specific controlled Case resolution/closure in Slices 4/9. | Implemented and integrated in current branch; release-wide regression required |
+| BR-10 | Tenant/Merchant suspension versus committed recovery across Slices 2-11. | Implemented in current branch; release-wide regression required |
 | BR-11 | ACTIVE/DEACTIVATED application user and immutable authorship in Slices 1-3. | Implemented for Slice 1; regression required |
-| BR-12 | Injected Clock, UTC persistence, locale/timezone display across Slices 1-11. | Implemented for Slice 1 time-dependent evidence; regression required |
-| BR-13 | Separate Payment/Reversal/Reconciliation/Provider histories in Slices 3/6/8. | Slice 6 Payment/Reversal/Provider histories verified; Reconciliation Slice 8 evidence remains |
+| BR-12 | Injected Clock, UTC persistence, locale/timezone display across Slices 1-11. | Implemented for current approved scope; Arabic/RTL display is explicitly deferred; regression required |
+| BR-13 | Separate Payment/Reversal/Reconciliation/Provider histories in Slices 3/6/8. | Implemented in current branch; release-wide regression required |
 | BR-14 | Full-only atomic Reversal completion in Slice 6. | Implemented and verified in Slice 6 |
-| BR-15 | Immutable reruns and one locked current pointer in Slice 8. | Planned |
-| BR-16 | Platform/support authority boundary in Slices 1/2. | Implemented for Slice 1 authorization boundary; administration/support coverage remains in Slice 2 |
-| BR-17 | Stable settlement instruction/application and exact templates in Slice 8. | Planned |
-| BR-18 | Narrow settlement-adjustment correction in Slice 9. | Verified in isolated Slice 9 extraction; integration pending |
+| BR-15 | Immutable reruns and one locked current pointer in Slice 8. | Implemented in Slice 8; release-wide regression required |
+| BR-16 | Platform/support authority boundary in Slices 1/2. | Implemented across current branch; release-wide regression required |
+| BR-17 | Stable settlement instruction/application and exact templates in Slice 8. | Implemented in current branch; release-wide regression required |
+| BR-18 | Narrow settlement-adjustment correction in Slice 9. | Implemented and integrated in current branch; release-wide regression required |
 
 ## Cross-cutting closure evidence
 

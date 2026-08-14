@@ -70,11 +70,11 @@ Excluded:
   - `GRADLE_USER_HOME=/Users/Siddegx/.gradle ./gradlew :test --console=plain` passed: 621 tests, 0 failures, with the documented PostgreSQL, Kafka, Redis, and Keycloak Compose services healthy.
   - `GRADLE_USER_HOME=/Users/Siddegx/.gradle ./gradlew :check --console=plain` passed.
   - `GRADLE_USER_HOME=/Users/Siddegx/.gradle ./gradlew :applications:provider-simulator:test --console=plain` passed.
-  - Operations Web `corepack pnpm exec tsc --noEmit` passed; `corepack pnpm test` passed with 23 tests and 0 failures; `corepack pnpm lint` passed; and `corepack pnpm build` passed. The pinned package still reports the existing Node 22 versus Node 24.18–24.x engine warning in this environment.
+  - Operations Web typecheck, unit tests, lint, and build passed under the required Node 24.18.0 runtime. Earlier Node 22 output is historical and is not final evidence.
   - Provider health boundary, scenario validation/pinning, webhook encryption/URL/retry/64 KiB response bound, Risk persistence, Provider persistence, modularity, and Simulator contract tests passed within the root or focused suites.
   - `git diff --check` passed.
 - Incomplete:
-  - NTF-01 remains partial by design. Slice 5 supplies webhook delivery infrastructure and does not implement the Notification consumer, in-product notification creation/read state, or target-breach scheduling; those remain Slice 10 work under ADR-027.
+  - NTF-01 remains partial by explicit project decision. Slice 5 supplies webhook delivery infrastructure and does not implement the Notification consumer, in-product notification creation/read state, or target-breach scheduling; those capabilities remain deferred in the current approved scope.
   - Reversal retry remains Slice 6 work. Slice 5 implements only Payment retry acceleration.
   - Production business-event producers beyond the synthetic Merchant webhook test events remain excluded by this plan.
   - Authenticated browser Playwright/e2e verification and the documented two-second demo-read measurement were not run in this slice.
