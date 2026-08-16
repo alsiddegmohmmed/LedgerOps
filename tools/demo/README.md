@@ -66,3 +66,72 @@ and prevents the separate Provider Simulator application from starting as
 part of the same command. The process exits after the complete generation is switched. The exact
 `from`, `to`, and `asOf` values should cover the seeded source timestamps and
 the period you want to inspect in Operations Web.
+
+## Realistic browser demo
+
+For a persistent local browser environment with multiple Tenants, Merchants,
+roles, Payments, risk reviews, Cases, Provider evidence, Ledger postings, and
+Reconciliation history, run the additive seed below. It never drops or
+truncates data and is guarded by an explicit local-only confirmation:
+
+```bash
+LEDGEROPS_DEMO_CONFIRM=YES \
+LEDGEROPS_DEMO_POSTGRES_CONTAINER=ledgerops-core-postgres-1 \
+  bash tools/demo/seed-release-0.3-realistic-environment.sh
+```
+
+The current local realm has these browser users. Passwords are intentionally
+simple local-only values; do not reuse them outside this environment.
+
+| Username | Password | Role | Tenant scope |
+| --- | --- | --- | --- |
+| `slice1-human` | `slice1-password` | Tenant Admin | Acme Commerce |
+| `tenant-admin` | `tenant-admin-password` | Tenant Admin | Acme Commerce |
+| `merchant-admin` | `merchant-admin-password` | Merchant Admin | Acme Online, Acme Retail |
+| `operations-agent` | `operations-agent-password` | Operations Agent | Acme Online, Acme Retail |
+| `risk-analyst` | `risk-analyst-password` | Risk Analyst | Acme Commerce |
+| `reconciliation-analyst` | `reconciliation-analyst-password` | Reconciliation Analyst | Acme Commerce |
+| `auditor` | `auditor-password` | Auditor | Acme Commerce |
+| `viewer` | `viewer-password` | Viewer | Acme Commerce |
+| `tenant-two-admin` | `tenant-two-admin-password` | Tenant Admin | Northstar Payments |
+
+The seed creates three active Tenants, six Merchants, 38 Payments, 36
+Customers, 36 Payment Attempts, balanced Ledger postings, 26 manual risk
+reviews, Cases, Provider health history, and two Reconciliation runs. The
+Reporting schema is still rebuilt through Core so the dashboard remains
+derived from authoritative source data.
+
+Because another local project may already occupy port 5432, the commands below
+use the documented Core database port 55432. Keep the existing `cinepick-db`
+container untouched.
+
+Rebuild Reporting for each seeded Tenant after starting the infrastructure:
+
+```bash
+for tenant in \
+  00000000-0000-4000-8000-000000000001 \
+  00000000-0000-4000-8000-000000000002 \
+  00000000-0000-4000-8000-000000000003; do
+  LEDGEROPS_DEMO_REBUILD_TENANT_ID="$tenant" \
+  LEDGEROPS_DEMO_REBUILD_FROM=2026-08-01T00:00:00Z \
+  LEDGEROPS_DEMO_REBUILD_TO=2026-08-15T00:00:00Z \
+  LEDGEROPS_DEMO_REBUILD_AS_OF=2026-08-15T00:00:00Z \
+  SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:55432/ledgerops \
+  SPRING_DATASOURCE_USERNAME=ledgerops \
+  SPRING_DATASOURCE_PASSWORD=local-ledgerops \
+  SPRING_PROFILES_ACTIVE=demo \
+  LEDGEROPS_OBSERVABILITY_KAFKA_LAG_ENABLED=false \
+  LEDGEROPS_MESSAGING_PUBLISHER_ENABLED=false \
+  LEDGEROPS_PROVIDER_COMMAND_CONSUMER_ENABLED=false \
+  LEDGEROPS_PAYMENT_RESULT_CONSUMER_ENABLED=false \
+  LEDGEROPS_PAYMENT_RETRY_CONSUMER_ENABLED=false \
+  LEDGEROPS_PROVIDER_EXECUTION_ENABLED=false \
+  LEDGEROPS_PROVIDER_WEBHOOK_ENABLED=false \
+  LEDGEROPS_PROVIDER_WEBHOOK_PROCESSING_ENABLED=false \
+    ./gradlew :bootRun --no-daemon || exit 1
+done
+```
+
+Then start Core and Operations Web using the startup commands in the local
+guide. The browser is at `http://localhost:3001`; select the Tenant shown for
+the user after login. Reporting is intentionally not inserted by the seed.

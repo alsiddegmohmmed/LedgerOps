@@ -51,6 +51,86 @@
           "temporary": false
         }
       ]
+    },
+    {
+      "username": "tenant-admin",
+      "enabled": true,
+      "emailVerified": true,
+      "email": "tenant-admin@example.com",
+      "firstName": "Tenant",
+      "lastName": "Administrator",
+      "requiredActions": [],
+      "credentials": [{ "type": "password", "value": "tenant-admin-password", "temporary": false }]
+    },
+    {
+      "username": "merchant-admin",
+      "enabled": true,
+      "emailVerified": true,
+      "email": "merchant-admin@example.com",
+      "firstName": "Merchant",
+      "lastName": "Administrator",
+      "requiredActions": [],
+      "credentials": [{ "type": "password", "value": "merchant-admin-password", "temporary": false }]
+    },
+    {
+      "username": "operations-agent",
+      "enabled": true,
+      "emailVerified": true,
+      "email": "operations-agent@example.com",
+      "firstName": "Operations",
+      "lastName": "Agent",
+      "requiredActions": [],
+      "credentials": [{ "type": "password", "value": "operations-agent-password", "temporary": false }]
+    },
+    {
+      "username": "risk-analyst",
+      "enabled": true,
+      "emailVerified": true,
+      "email": "risk-analyst@example.com",
+      "firstName": "Risk",
+      "lastName": "Analyst",
+      "requiredActions": [],
+      "credentials": [{ "type": "password", "value": "risk-analyst-password", "temporary": false }]
+    },
+    {
+      "username": "reconciliation-analyst",
+      "enabled": true,
+      "emailVerified": true,
+      "email": "reconciliation-analyst@example.com",
+      "firstName": "Reconciliation",
+      "lastName": "Analyst",
+      "requiredActions": [],
+      "credentials": [{ "type": "password", "value": "reconciliation-analyst-password", "temporary": false }]
+    },
+    {
+      "username": "auditor",
+      "enabled": true,
+      "emailVerified": true,
+      "email": "auditor@example.com",
+      "firstName": "LedgerOps",
+      "lastName": "Auditor",
+      "requiredActions": [],
+      "credentials": [{ "type": "password", "value": "auditor-password", "temporary": false }]
+    },
+    {
+      "username": "viewer",
+      "enabled": true,
+      "emailVerified": true,
+      "email": "viewer@example.com",
+      "firstName": "Read Only",
+      "lastName": "Viewer",
+      "requiredActions": [],
+      "credentials": [{ "type": "password", "value": "viewer-password", "temporary": false }]
+    },
+    {
+      "username": "tenant-two-admin",
+      "enabled": true,
+      "emailVerified": true,
+      "email": "tenant-two-admin@example.com",
+      "firstName": "Northstar",
+      "lastName": "Administrator",
+      "requiredActions": [],
+      "credentials": [{ "type": "password", "value": "tenant-two-admin-password", "temporary": false }]
     }
   ]
 }
