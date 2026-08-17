@@ -1,153 +1,412 @@
 # LedgerOps
 
-**A production-style, multi-tenant transaction-processing and financial-operations platform built with Java and Spring Boot.**
+**A multi-tenant transaction processing and financial operations platform built with Java and Spring Boot.**
 
-LedgerOps is a portfolio project about financial backend correctness: transactional consistency, double-entry accounting, idempotency, concurrency, tenant isolation, failure recovery, and evidence-driven architecture.
+LedgerOps coordinates payment processing across risk evaluation, provider execution, immutable financial accounting, reconciliation, investigation, and operational controls.
 
-The project is being delivered incrementally as a modular monolith. Each capability is completed as a vertical slice with domain rules, PostgreSQL persistence, migrations, failure behaviour, tests, observability, and documentation.
+The system is designed around the failure modes that make transactional platforms difficult to build correctly: concurrent requests, duplicate delivery, ambiguous provider outcomes, partial failures, financial consistency, tenant isolation, recovery after process crashes, and traceable operational intervention.
 
-> LedgerOps is a simulation and learning project. It does not process real money, store real card credentials, or claim regulatory certification.
+## System overview
 
-## Why this project exists
+A payment entering LedgerOps moves through a controlled lifecycle:
 
-LedgerOps demonstrates how a financial backend behaves when correctness matters:
+```text
+Payment request
+      │
+      ▼
+Validation + Idempotency
+      │
+      ▼
+Risk Evaluation
+      │
+      ▼
+Provider Processing
+      │
+      ▼
+Provider Result
+      │
+      ├── failure / recovery
+      │
+      ▼
+Atomic Payment Completion
+      │
+      ▼
+Double-Entry Ledger
+      │
+      ▼
+Settlement Reconciliation
+      │
+      ▼
+Operational Investigation
+```
 
-- Can two concurrent retries create only one payment?
-- Can a payment become completed only when its ledger posting succeeds?
-- Can every financial posting be proven to balance?
-- Can tenant-owned data remain isolated at every layer?
-- Can ambiguous provider outcomes be recovered without inventing a false result?
-- Can architectural claims be traced to executable tests and database constraints?
-
-Every component must solve a documented business or failure problem. Technology choices follow those needs.
-
-## Current status
-
-**Current branch status:** Release 0.3 Slices 0–9 are implemented for their approved scope; Slice 10 is implemented for the approved current scope; and the Slice 11 backend/frontend, scale, dependency, topology/demo, migration, contract, and browser gates pass. Manual accessibility review is explicitly deferred; final clean-scope/documentation closure remains pending.
-
-**Next milestone:** Reconcile the final scope and documentation, then produce a clean release snapshot. Release 1.0 remains blocked until then.
-
-Selected verified foundations:
-
-- Java 21 and Spring Boot application foundation
-- explicit Spring Modulith module verification
-- plain-Java `Tenant` domain model and lifecycle rules
-- isolated `tenancy` PostgreSQL schema managed by Flyway
-- explicit mapping between the domain model and JPA persistence model
-- optimistic versioning and database constraints
-- PostgreSQL integration tests using Testcontainers
-- immutable Payment domain aggregate with the exact approved lifecycle and exhaustive transition tests
-- tenant-wide Payment creation idempotency enforced by PostgreSQL, including coordinated concurrency and cross-merchant conflict tests
-- validated tenant and Payment HTTP/OpenAPI contracts with stable RFC 7807 failures and request correlation
-- safe fallback API errors, health smoke checks, structured operational logs, and executable OpenAPI/architecture contracts
-- reproducible local PostgreSQL demo data and a step-by-step Release 0.1 walkthrough
-- Codex operating rules, implementation plans, ADR workflow, review checklist, and requirement traceability
-
-ADR-016 reconciles the Payment lifecycle documentation. ADR-017 establishes the tenant-wide Payment API idempotency boundary. ADR-018 defines the minimal deterministic synchronous Risk model for Release 0.1. ADR-019 defines the Release 0.1 Ledger account model. Accepted ADR-020 defines the exact Payment-success posting and replay boundary. All nine Release 0.1 implementation slices are complete, including API and evidence hardening.
-
-Release 0.2 is complete under [accepted ADR-021](docs/adr/ADR-021-define-release-0.2-provider-and-messaging-semantics.md) and the [completed Release 0.2 implementation plan](docs/plans/release-0.2-distributed-processing.md). All seven implementation slices are complete. The repository now has immutable Payment Attempts; atomic Payment submission; at-least-once Kafka command and result delivery; fenced outbox, inbox, and Provider work; a separate Provider Simulator and database; signed submission, status-query, and webhook HTTP contracts; immutable Provider and webhook evidence; Payment-owned accepted-final evidence; exact Provider-result application; bounded status recovery; evidence-gated safe retries; OpenTelemetry trace propagation; Prometheus metrics; two Grafana dashboards; alerts; runbooks; and a reproducible local topology. `SUCCESS` still uses the unchanged ADR-020 completion boundary.
-
-Release 0.3 Slices 1 through 9 are implemented for their approved scope in the current branch. Slice 7 adds deterministic Provider settlement generation, immutable content-addressed raw-file storage, strict streaming validation, duplicate/correction version identity, quarantined row evidence, restartable Spring Batch canonicalization, authenticated settlement APIs, audit/outbox lifecycle facts, and Operations Web upload/validation/processing screens. Slices 8 and 9 add matching, current-run promotion, discrepancy handling, Ledger posting, controlled corrections, and Case resolution. Slice 10 adds the approved Reporting/Operations Web experience; notification read state and Arabic/RTL localization remain explicit deferrals. Release-wide closure remains the Slice 11 evidence task.
-
-The completed Release 0.1 baseline includes the immutable journal and account domains, V6/V7 persistence, atomic account validation, append-only postings, duplicate-source prevention, deferred database balance verification, tenant-scoped balance and statement queries, and the joined ADR-020 Payment-success transaction. Exact replay validation, inconsistency detection, forced-failure rollback, concurrency, tenant isolation, and Modulith boundary tests remain part of the Release 0.2 gate.
-
-See the [Release 0.1 implementation plan](docs/plans/release-0.1-transactional-core.md) and [Release 0.2 implementation plan](docs/plans/release-0.2-distributed-processing.md) for completed evidence.
-The signed Simulator endpoints and HMAC bytes are documented in the [Provider Simulator HTTP contract v1](docs/api/provider-simulator-v1.md).
-The [Provider flow](docs/architecture/diagrams/release-0.2-provider-flow.md), [operations runbook](docs/runbooks/release-0.2-operations.md), and [Release 0.2 demo](docs/demo/release-0.2.md) document the distributed runtime and its operational evidence.
+The platform preserves the evidence required to explain that lifecycle: payment state, risk decisions, provider attempts and results, ledger movements, settlement records, discrepancies, cases, and audit history.
 
 ## Architecture
 
-LedgerOps starts as a Spring Boot modular monolith backed by one PostgreSQL database. Each module owns its schema and communicates through published interfaces instead of reading another module's tables.
+LedgerOps uses a **Spring Boot modular monolith** for the transactional core.
 
-```mermaid
-flowchart LR
-    Client["API client"] --> API["Module API layer"]
-    API --> Application["Application use cases"]
-    Application --> Domain["Plain Java domain model"]
-    Application --> Port["Domain repository port"]
-    Port --> Adapter["JPA persistence adapter"]
-    Adapter --> PostgreSQL[("PostgreSQL")]
-
-    Tests["JUnit + Testcontainers"] --> Domain
-    Tests --> PostgreSQL
-```
-
-Each module follows this dependency direction:
+Modules own their domain model and PostgreSQL schema and communicate through explicit published interfaces rather than directly accessing another module's persistence.
 
 ```text
-api ───────────→ application ─→ domain
-infrastructure ─→ application / domain ports
+                         ┌───────────────────────┐
+                         │    Operations Web     │
+                         │       Next.js         │
+                         └───────────┬───────────┘
+                                     │ HTTPS
+                                     ▼
+┌──────────────────────────────────────────────────────────────┐
+│                    LedgerOps Core Platform                   │
+│                                                              │
+│  tenancy   merchant   payment   risk   ledger   provider     │
+│                                                              │
+│  identity  audit      reconciliation  casework  reporting    │
+└──────────────┬─────────────────┬─────────────────┬───────────┘
+               │                 │                 │
+               ▼                 ▼                 ▼
+          PostgreSQL           Kafka          Redis / MinIO
+               ▲
+               │
+               │ signed HTTP / webhooks / settlement files
+               │
+       ┌───────┴────────┐
+       │ Provider System │
+       └─────────────────┘
 ```
 
-The domain layer does not depend on Spring Web, JPA, messaging, or infrastructure implementations. Spring Modulith and architecture tests will enforce module and dependency boundaries as the system grows.
+The Provider Simulator is deployed as a separate Spring Boot application with its own PostgreSQL database. It exercises the external-provider boundary through signed HTTP requests, asynchronous webhooks, status recovery, duplicate delivery, delayed results, failures, and settlement records without sharing Core persistence.
 
-## Financial correctness rules
+### Internal module structure
 
-These are release-blocking invariants, not optional design preferences:
+Modules follow the same dependency direction:
 
-1. A payment may become `COMPLETED` only when exactly one corresponding ledger transaction is posted in the same PostgreSQL transaction.
-2. Every posted ledger transaction contains debit and credit entries and balances by currency.
-3. Posted ledger entries are immutable; corrections use compensating transactions.
-4. Duplicate requests must not create duplicate payments or financial effects.
-   The Payment API namespace is tenant-wide: `tenantId + idempotencyKey` identifies one logical request. Reusing that pair with materially different content, including a different merchant, produces an explicit idempotency conflict.
-5. PostgreSQL is the source of transactional truth.
-6. Tenant context is mandatory for tenant-owned data.
-7. Money uses `BigDecimal` with an explicit currency—never floating point.
-8. Provider timeouts are ambiguous outcomes, not automatic failures.
-9. Release 0.1 Risk evaluation uses only `PAYMENT_AMOUNT_THRESHOLD`, versioned tenant profiles, integer scores capped at 100, and the exact ADR-018 decision boundaries. Missing or invalid configuration cannot silently approve or reject a Payment.
-10. Release 0.1 Ledger accounts are tenant-owned, use exactly `ACTIVE`, and are unique by `tenantId + accountCode + currency`. Posting rejects a missing, cross-tenant, currency-mismatched, or non-`ACTIVE` account atomically.
+```text
+api
+ │
+ ▼
+application
+ │
+ ▼
+domain
 
-The [requirement traceability matrix](docs/requirements/TRACEABILITY.md) records how each implemented requirement is verified.
+infrastructure ──► application/domain ports
+```
 
-## Release roadmap
+The domain layer remains independent of Spring Web, JPA, Kafka, and infrastructure implementations.
 
-| Release | Outcome | Status |
-|---|---|---|
-| 0.1 | Transactional core: tenancy, payments, idempotency, synchronous risk, ledger, and atomic completion | Completed |
-| 0.2 | Distributed processing with Kafka, transactional outbox, and idempotent consumers | Completed |
-| 0.3 | Identity, authorization, audit, tenant administration, reconciliation, corrections, and financial operations | Slices 0-10 approved scope implemented; Slice 11 automated evidence passed, clean-scope/documentation closure pending; manual accessibility review explicitly deferred |
-| 1.0 | Security hardening and release evidence: deployment controls, scanning, secrets, operational verification, documentation, observability, and portfolio release | Planned |
-| Post-1.0 | Advisory applied-AI capabilities outside critical financial decisions | Deferred |
+Spring Modulith and architecture tests enforce module ownership and dependency boundaries.
 
-Later-release technology remains excluded until the approved release sequence introduces it.
+## Transactional correctness
+
+Financial correctness is enforced at both the application and database boundaries.
+
+### Payment idempotency
+
+Payment creation uses a tenant-wide idempotency namespace:
+
+```text
+tenantId + idempotencyKey
+```
+
+Equivalent repeated requests resolve to one logical Payment.
+
+Reusing the same identity with materially different content produces an explicit idempotency conflict.
+
+PostgreSQL enforces the uniqueness boundary so correctness does not depend solely on application-level checks.
+
+### Atomic payment completion
+
+A Payment reaches `COMPLETED` only after definitive provider success.
+
+Completion and its financial effect share one PostgreSQL transaction:
+
+```text
+Lock Payment
+    │
+    ▼
+Validate Payment + existing Ledger state
+    │
+    ▼
+Post balanced Ledger transaction
+    │
+    ▼
+Payment.complete()
+    │
+    ▼
+COMMIT
+```
+
+For a successful payment, Ledger posts exactly:
+
+```text
+DEBIT   PROVIDER_CLEARING
+CREDIT  MERCHANT_PAYABLE
+```
+
+for the complete Payment amount and currency.
+
+If any part of the operation fails, the Payment transition and Ledger posting roll back together.
+
+Database uniqueness on the financial source prevents duplicate postings:
+
+```text
+UNIQUE (tenant_id, source_type, source_id)
+```
+
+A replay is accepted only when the complete existing posting matches the expected financial transaction. Finding a record with the correct identifier is not considered sufficient evidence.
+
+### Immutable ledger
+
+Ledger transactions and entries are append-only.
+
+Every posted transaction:
+
+* belongs to one tenant;
+* uses valid tenant-owned accounts;
+* contains debit and credit entries;
+* balances by currency;
+* has immutable financial history; and
+* retains the source responsible for the movement.
+
+Corrections create new compensating transactions rather than modifying previously posted financial records.
+
+## Distributed provider processing
+
+Provider processing uses **at-least-once delivery**.
+
+LedgerOps does not depend on exactly-once messaging guarantees.
+
+Instead, duplicate-safe processing is built from:
+
+* transactional outbox records;
+* Kafka;
+* consumer inbox records;
+* stable business identities;
+* database uniqueness constraints;
+* fenced worker leases;
+* immutable Provider evidence; and
+* idempotent consumers.
+
+```text
+Payment transaction
+      │
+      ├── Payment Attempt
+      ├── Payment -> PROCESSING
+      └── Outbox command
+                │
+                ▼
+              Kafka
+                │
+                ▼
+       Provider work record
+                │
+                ▼
+     External HTTP interaction
+                │
+                ▼
+      Provider result evidence
+                │
+                └── Outbox result
+                          │
+                          ▼
+                        Kafka
+                          │
+                          ▼
+                 Payment result handling
+```
+
+External provider calls occur outside database transactions.
+
+Committed work is persisted before the network boundary so a process crash cannot silently lose the operation.
+
+## Ambiguous provider outcomes
+
+A timeout after request transmission is not treated as a definitive failure.
+
+LedgerOps distinguishes:
+
+```text
+Definitive success
+Definitive decline
+Permanent failure
+Safe-to-resubmit failure
+Pending / accepted state
+Unknown outcome
+```
+
+An unknown outcome enters status recovery instead of blindly submitting another financial operation.
+
+Automatic retries are permitted only when durable evidence establishes that another provider-side transaction cannot be created.
+
+Attempt limits, status-recovery limits, retry schedules, and provider-work leases are explicit and tested.
+
+If recovery is exhausted without a trustworthy final result, the Payment remains `PROCESSING` and the unresolved condition remains visible for operational intervention.
+
+## Risk processing
+
+Risk evaluation occurs before Provider processing.
+
+Risk configuration is versioned per tenant and every evaluation preserves:
+
+* profile identity and version;
+* rules evaluated;
+* triggered rules;
+* score contributions;
+* uncapped score;
+* final score;
+* decision; and
+* evaluation timestamp.
+
+The current deterministic scoring model supports:
+
+```text
+APPROVE
+MANUAL_REVIEW
+REJECT
+```
+
+A configuration or processing failure cannot silently approve or reject a Payment.
+
+The Payment remains in its durable validation state and the failure is surfaced explicitly.
+
+## Multi-tenancy and authorization
+
+Tenant ownership is mandatory throughout the system.
+
+Tenant-owned records include a non-null `tenant_id`, and repositories and business operations are tenant-scoped.
+
+Cross-module persistence access is prohibited.
+
+Identity and authorization use Keycloak with OAuth 2.0 / OpenID Connect. Application membership, permissions, merchant scope, and authorization data remain under LedgerOps ownership.
+
+The Operations Web uses a backend-for-frontend boundary so browser clients do not directly own backend access tokens.
+
+Redis may support session or derived operational state, but never financial or authorization truth.
+
+## Reconciliation and financial operations
+
+Settlement data is ingested independently from the transactional Payment flow.
+
+LedgerOps preserves raw settlement evidence and performs reconciliation against internal records to identify:
+
+* matched transactions;
+* missing records;
+* amount differences;
+* status differences; and
+* other settlement discrepancies.
+
+Reconciliation never directly edits Payment or Ledger persistence.
+
+Discrepancies move through controlled operational workflows, and corrections create new financial evidence rather than rewriting history.
+
+## Failure and recovery model
+
+Failures are represented explicitly rather than hidden behind generic retry behaviour.
+
+The platform covers scenarios including:
+
+* concurrent duplicate Payment requests;
+* duplicate Kafka delivery;
+* duplicate and out-of-order Provider webhooks;
+* conflicting Provider results;
+* Provider timeouts;
+* Kafka outages;
+* publisher crashes after Kafka acknowledgement;
+* expired worker leases;
+* stale workers;
+* poison messages;
+* incomplete Provider recovery;
+* Ledger consistency violations; and
+* transactional rollback failures.
+
+Recovery mechanisms preserve stable identities and durable evidence so that retries do not create duplicate business or financial effects.
+
+## Observability
+
+LedgerOps exposes operational evidence through:
+
+* structured logs with correlation identifiers;
+* OpenTelemetry trace propagation;
+* Prometheus metrics;
+* Grafana dashboards;
+* Provider health measurements;
+* messaging backlog and failure measurements;
+* dead-letter visibility; and
+* documented operational runbooks.
+
+Business identifiers are not used as unbounded metric labels.
+
+PostgreSQL remains the transactional source of truth; telemetry is observational only.
+
+## Operations Web
+
+The Operations Web provides a tenant-scoped operational view across the platform.
+
+Current capabilities include:
+
+* payment volume and outcome metrics;
+* success and failure rates;
+* manual-review workload;
+* reconciliation discrepancies;
+* unresolved investigation cases;
+* Provider health;
+* source-record drill-down;
+* merchant filtering;
+* tenant timezone presentation; and
+* authenticated Core access through the server-side BFF.
+
+The interface is intentionally operational: dashboard values link back to the records responsible for them instead of existing as isolated metrics.
 
 ## Technology
 
-Current implemented stack through the current Release 0.3 branch (Slices 0–10 approved scope):
+### Backend
 
-- Java 21
-- Spring Boot 4
-- Spring Modulith
-- Spring Data JPA
-- PostgreSQL
-- Flyway
-- Apache Kafka
-- Resilience4j
-- OpenTelemetry
-- Prometheus
-- Grafana
-- Gradle Kotlin DSL
-- JUnit 5
-- Testcontainers
-- Keycloak OIDC/OAuth
-- Redis session storage
-- Spring Batch
-- S3-compatible MinIO object storage
-- Node.js 24.18.0 LTS
-- pnpm 11.4.0
-- Next.js 16.3.1 and React 19.2.0
+* Java 21
+* Spring Boot
+* Spring Modulith
+* Spring Data JPA
+* PostgreSQL
+* Flyway
+* Apache Kafka
+* Spring Batch
+* Resilience4j
 
-Local BFF development requires the approved Keycloak realm/client and Redis instance in addition to Core PostgreSQL. Tokens remain server-side; Redis is session storage only and PostgreSQL remains authorization truth.
+### Identity and platform
 
-Use the [Release 0.3 local Operations Web guide](docs/demo/release-0.3-slice-2-local.md) to start the approved PostgreSQL, Kafka, Redis, and Keycloak dependencies, then run Core and Operations Web with matching issuer and port configuration.
+* Keycloak
+* Redis
+* S3-compatible object storage / MinIO
 
-The approved technology baseline is documented in the [Technical Design and Architecture Specification](docs/architecture/LedgerOps_Technical_Design_and_Architecture_Specification_v1.7.docx). Technologies are introduced only by their implementation slice. The current Release 0.3 completion evidence and remaining gate gaps are recorded in the active release plan and Slice 11 gate plan.
+### Observability
 
-## Key repository paths
+* OpenTelemetry
+* Prometheus
+* Grafana
+
+### Frontend
+
+* Next.js
+* React
+* TypeScript
+* pnpm
+
+### Verification
+
+* JUnit 5
+* Testcontainers
+* architecture and module-boundary tests
+* PostgreSQL integration tests
+* Kafka integration tests
+* concurrency and recovery tests
+* API and contract verification
+* browser-level operational workflow tests
+
+## Repository structure
 
 ```text
 .
 ├── src/main/java/com/ledgerops
+│   ├── identity
 │   ├── tenancy
 │   ├── merchant
 │   ├── customer
@@ -156,41 +415,71 @@ The approved technology baseline is documented in the [Technical Design and Arch
 │   ├── provider
 │   ├── risk
 │   ├── ledger
-│   ├── identity
-│   └── audit
-├── applications/provider-simulator
-├── applications/operations-web
+│   ├── reconciliation
+│   ├── casework
+│   ├── audit
+│   └── reporting
+│
+├── applications
+│   ├── provider-simulator
+│   └── operations-web
+│
+├── packages
+│   ├── event-contracts
+│   └── provider-contracts
+│
 ├── observability
 │   ├── prometheus
 │   └── grafana
-├── packages/event-contracts
-├── packages/provider-contracts
+│
 ├── src/main/resources/db/migration
 ├── src/test/java/com/ledgerops
-├── docs
-│   ├── product
-│   ├── architecture
-│   ├── plans
-│   ├── requirements
-│   ├── adr
-│   ├── api
-│   ├── demo
-│   ├── runbooks
-│   └── reviews
-├── AGENTS.md
-└── CONTRIBUTING.md
+│
+└── docs
+    ├── product
+    ├── architecture
+    ├── adr
+    ├── api
+    ├── plans
+    ├── requirements
+    ├── runbooks
+    └── reviews
 ```
 
-## Run the verified test suite
+## Engineering guarantees
+
+The architecture is built around a small set of system-wide guarantees:
+
+1. PostgreSQL is the authoritative source of transactional and financial state.
+2. Every completed Payment has exactly one corresponding valid financial posting.
+3. Every posted Ledger transaction balances.
+4. Posted financial history is immutable.
+5. Duplicate requests, events, and webhooks cannot create duplicate financial effects.
+6. Provider ambiguity is recovered before another potentially unsafe submission is allowed.
+7. External network calls are separated from database transaction boundaries.
+8. Tenant ownership is mandatory for tenant-scoped data.
+9. Module persistence remains private to its owning module.
+10. Operational corrections preserve the original evidence.
+
+These guarantees are enforced through domain rules, PostgreSQL constraints, transaction boundaries, idempotency identities, concurrency controls, architecture verification, and integration tests.
+
+## Release status
+
+| Release | Capability                                                                      | Status                            |
+| ------- | ------------------------------------------------------------------------------- | --------------------------------- |
+| 0.1     | Transactional Core                                                              | Complete                          |
+| 0.2     | Distributed Provider Processing                                                 | Complete                          |
+| 0.3     | Identity, financial operations, reconciliation, audit, and Operations Web       | Final release closure in progress |
+| 1.0     | Deployment, security hardening, operational verification, and release packaging | Planned                           |
+
+## Running the verification suite
 
 Prerequisites:
 
-- Java 21
-- Docker running locally
+* Java 21
+* Docker
 
-The Gradle wrapper downloads the approved Gradle version. Testcontainers starts real Core and Simulator PostgreSQL databases and Kafka where the selected tests require them.
-
-macOS or Linux:
+macOS / Linux:
 
 ```bash
 ./gradlew test
@@ -204,40 +493,22 @@ Windows:
 .\gradlew.bat check
 ```
 
-For the transactional baseline, follow the [Release 0.1 demo](docs/demo/release-0.1.md). For Kafka, the separate Provider Simulator, Prometheus, Grafana, signed Provider traffic, failure scenarios, and reset instructions, follow the [Release 0.2 demo](docs/demo/release-0.2.md). The executable client HTTP contract is [OpenAPI v0.1](docs/api/ledgerops-openapi-v0.1.yaml). The existing local demos remain unauthenticated and must not be exposed to an untrusted network; protected identity and authorization are proven by the Slice 1 representative paths and BFF shell.
+Testcontainers provisions the real infrastructure required by integration tests, including PostgreSQL and Kafka where applicable.
 
-## Engineering workflow
+## Documentation
 
-Every meaningful change should connect four kinds of evidence:
+The repository maintains explicit engineering evidence for system behaviour and architectural decisions:
 
-```text
-Requirement → design decision → implementation → executable verification
-```
+* [Product Definition](docs/product/LedgerOps_Product_Definition_Official_v1.6.docx)
+* [Technical Design and Architecture Specification](docs/architecture/LedgerOps_Technical_Design_and_Architecture_Specification_v1.6.docx)
+* [Architecture Decision Records](docs/adr)
+* [Requirement Traceability](docs/requirements/TRACEABILITY.md)
+* [API Contracts](docs/api)
+* [Operational Runbooks](docs/runbooks)
+* [Implementation Plans](docs/plans)
 
-- [Product Definition](docs/product/LedgerOps_Product_Definition_Official_v1.6.docx) — approved product baseline
-- [Technical Specification](docs/architecture/LedgerOps_Technical_Design_and_Architecture_Specification_v1.6.docx) — approved design
-- [ADR-021](docs/adr/ADR-021-define-release-0.2-provider-and-messaging-semantics.md) — accepted distributed-processing decision
-- [Release 0.2 plan](docs/plans/release-0.2-distributed-processing.md) — completed implementation evidence
-- [Release 0.1 plan](docs/plans/release-0.1-transactional-core.md) — completed implementation evidence
-- [Requirement traceability](docs/requirements/TRACEABILITY.md) — requirements mapped to evidence
-- [ADR process](docs/adr/README.md) — controlled architectural change
-- [Code review checklist](docs/reviews/CODE_REVIEW_CHECKLIST.md) — correctness-first review standard
-- [Contributing guide](CONTRIBUTING.md) — contribution and verification workflow
+Material changes to approved product behaviour, ownership boundaries, consistency guarantees, security architecture, or technology decisions are recorded through ADRs.
 
-## What this repository demonstrates
-
-- production-quality Java rather than framework-driven CRUD
-- domain-driven design with explicit aggregates and value objects
-- a modular monolith with enforceable ownership boundaries
-- PostgreSQL constraints and transactions protecting critical invariants
-- deterministic handling of idempotency and concurrency
-- financial history that is balanced, immutable, and traceable
-- tests that exercise real infrastructure and failure cases
-- documentation that stays synchronized with implementation
-- disciplined release sequencing without premature distribution
-
-## Project principles
+---
 
 **Correctness before throughput. Modularity before distribution. Evidence over claims.**
-
-LedgerOps is built in public-sized, reviewable increments so every architectural decision and financial guarantee can be understood, tested, and defended.
